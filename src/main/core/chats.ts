@@ -1,80 +1,59 @@
-// Chats with Claude: one Claude Code session per chat, run through the Agent
-// SDK (which runs the official Claude Code binary under the user's own login).
-// Electron-free; the SDK's query() is passed in so tests can fake it.
-import type {
-  CanUseTool,
-  Options,
-  PermissionMode,
-  PermissionResult,
-  PermissionUpdate,
-  SDKMessage,
-  SDKUserMessage,
-} from "@anthropic-ai/claude-agent-sdk";
+// Chats: one agent session per chat tab (Claude Code or GitHub Copilot).
+// This engine owns the transcript, the queue, approvals and questions; the
+// agent adapters in ./agents translate their SDKs. Electron-free.
 import { randomUUID } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import type { Chat, ChatEvent, Effort, LastingEvent, Mode, Model, Question } from "../../shared/chat.ts";
-import type { Result, Workspace } from "../../shared/types.ts";
+import type { Agent, Chat, ChatEvent, Effort, LastingEvent, Mode, Model, ModelOption } from "../../shared/chat.ts";
+import type { Result } from "../../shared/types.ts";
+import type { AgentHost, AgentProvider, AgentSession, PermissionAnswer, QuestionAnswer } from "./agents/types.ts";
 import type { Store } from "./store.ts";
 
-/** The part of the SDK's Query that Caboose uses. */
-export type QueryLike = AsyncIterable<SDKMessage> & {
-  interrupt(): Promise<unknown>;
-  setModel(model?: string): Promise<void>;
-  setPermissionMode(mode: PermissionMode): Promise<void>;
-  applyFlagSettings(settings: { effortLevel?: Effort | null }): Promise<void>;
-  close(): void;
-};
-export type QueryFn = (args: { prompt: AsyncIterable<SDKUserMessage>; options: Options }) => QueryLike;
-
-type Pending = { input: Record<string, unknown>; suggestions?: PermissionUpdate[]; resolve: (r: PermissionResult) => void };
-/** Extra query options per chat: Caboose's MCP tools and system prompt. */
-export type ExtraOptions = (chat: Chat, ws: Workspace) => Partial<Options>;
-
 type Live = {
-  q: QueryLike;
-  inbox: Inbox<SDKUserMessage>;
+  session: AgentSession;
   running: boolean;
   queue: string[];
   draft?: { kind: "text" | "thinking"; text: string };
-  /** Open permission prompts and AskUserQuestion cards, by event id. */
-  permissions: Map<string, Pending>;
-  questions: Map<string, Pending>;
+  /** Open approval and question cards, by event id. */
+  permissions: Map<string, (a: PermissionAnswer) => void>;
+  questions: Map<string, (a: QuestionAnswer) => void>;
 };
 
-const DEFAULTS = { model: "default" as Model, effort: "high" as Effort, mode: "acceptEdits" as Mode };
-const MAX_RESULT_CHARS = 20_000;
+const DEFAULTS = { model: "default", effort: "high" as Effort, mode: "acceptEdits" as Mode };
+
+export const agentOf = (chat: Chat): Agent => chat.agent ?? "claude";
 
 export class Chats {
   private store: Store;
   private dir: string;
-  private query: QueryFn;
+  private providers: Record<Agent, AgentProvider>;
   private emit: (chatId: string, e: ChatEvent) => void;
-  private extras: ExtraOptions;
   private live = new Map<string, Live>();
 
   constructor(
     store: Store,
     dataDir: string,
-    query: QueryFn,
+    providers: Partial<Record<Agent, AgentProvider>>,
     emit: (chatId: string, e: ChatEvent) => void,
-    extras: ExtraOptions = () => ({}),
   ) {
     this.store = store;
     this.dir = join(dataDir, "chats");
-    this.query = query;
+    this.providers = providers as Record<Agent, AgentProvider>;
     this.emit = emit;
-    this.extras = extras;
   }
 
-  /** A new chat, with the settings of the workspace's most recent one. */
-  create(workspaceId: string): Result<Chat> {
+  /** A new chat; settings come from the workspace's most recent chat with the same agent. */
+  create(workspaceId: string, agent?: Agent): Result<Chat> {
     const ws = this.store.get().workspaces.find((w) => w.id === workspaceId);
     if (!ws) return { ok: false, error: "Unknown workspace." };
-    const last = this.store.get().chats.filter((c) => c.workspaceId === workspaceId).at(-1);
+    const inWs = this.store.get().chats.filter((c) => c.workspaceId === workspaceId);
+    const kind = agent ?? (inWs.length ? agentOf(inWs.at(-1)!) : "claude");
+    if (!this.providers[kind]) return { ok: false, error: `${kind} is not available.` };
+    const last = inWs.filter((c) => agentOf(c) === kind).at(-1);
     const chat: Chat = {
       id: randomUUID(),
       workspaceId,
+      agent: kind,
       title: "New chat",
       model: last?.model ?? DEFAULTS.model,
       effort: last?.effort ?? DEFAULTS.effort,
@@ -83,6 +62,10 @@ export class Chats {
     };
     this.store.update((s) => ({ ...s, chats: [...s.chats, chat] }));
     return { ok: true, value: chat };
+  }
+
+  models(agent: Agent): Promise<ModelOption[]> {
+    return this.providers[agent]?.models() ?? Promise.resolve([]);
   }
 
   /** The saved transcript plus the live state, for (re)opening a chat. */
@@ -112,15 +95,12 @@ export class Chats {
       if (!started.ok) return started;
       live = started.value;
     }
-    const [questionId, question] = [...live.questions][0] ?? [];
-    if (questionId && question) {
-      // Replying in the chat while Claude asks something answers it in words.
+    const [questionId, answer] = [...live.questions][0] ?? [];
+    if (questionId && answer) {
+      // Replying in the chat while the agent asks something answers it in words.
       this.record(chatId, { t: "user", id: randomUUID(), text, at: new Date().toISOString() });
       this.settleQuestion(chatId, live, questionId, null);
-      question.resolve({
-        behavior: "deny",
-        message: `The user did not pick an option and replied instead: ${JSON.stringify(text)}`,
-      });
+      answer({ repliedInChat: text });
     } else if (live.running) {
       live.queue.push(text);
       this.status(chatId, live);
@@ -135,53 +115,35 @@ export class Chats {
     const live = this.live.get(chatId);
     if (!live) return;
     live.queue = [];
-    this.denyAll(chatId, live, "The user stopped this turn.");
+    this.denyAll(chatId, live);
     this.status(chatId, live);
-    await live.q.interrupt().catch(() => {});
+    await live.session.interrupt().catch(() => {});
   }
 
-  answerPermission(chatId: string, id: string, answer: "allow" | "always" | "deny"): void {
+  answerPermission(chatId: string, id: string, answer: PermissionAnswer): void {
     const live = this.live.get(chatId);
-    const p = live?.permissions.get(id);
-    if (!live || !p) return;
+    const resolve = live?.permissions.get(id);
+    if (!live || !resolve) return;
     live.permissions.delete(id);
     this.record(chatId, { t: "permission_answer", id, allowed: answer !== "deny" });
-    p.resolve(
-      answer === "deny"
-        ? { behavior: "deny", message: "The user said no." }
-        : {
-            behavior: "allow",
-            updatedInput: p.input,
-            ...(answer === "always" && p.suggestions ? { updatedPermissions: p.suggestions } : {}),
-          },
-    );
+    resolve(answer);
   }
 
   answerQuestion(chatId: string, id: string, answers: Record<string, string> | null): void {
     const live = this.live.get(chatId);
-    const q = live?.questions.get(id);
-    if (!live || !q) return;
+    const resolve = live?.questions.get(id);
+    if (!live || !resolve) return;
     this.settleQuestion(chatId, live, id, answers);
-    q.resolve(
-      answers
-        ? { behavior: "allow", updatedInput: { ...q.input, answers } }
-        : { behavior: "deny", message: "The user dismissed the question without answering." },
-    );
-  }
-
-  private settleQuestion(chatId: string, live: Live, id: string, answers: Record<string, string> | null): void {
-    live.questions.delete(id);
-    this.record(chatId, { t: "question_answer", id, answers });
+    resolve(answers);
   }
 
   async configure(chatId: string, patch: { model?: Model; effort?: Effort; mode?: Mode }): Promise<void> {
     if (!this.chat(chatId)) return;
     this.patch(chatId, patch);
-    const live = this.live.get(chatId);
-    if (!live) return;
-    if (patch.model) await live.q.setModel(patch.model === "default" ? undefined : patch.model).catch(() => {});
-    if (patch.mode) await live.q.setPermissionMode(patch.mode).catch(() => {});
-    if (patch.effort) await live.q.applyFlagSettings({ effortLevel: patch.effort }).catch(() => {});
+    await this.live
+      .get(chatId)
+      ?.session.configure(patch)
+      .catch(() => {});
   }
 
   /** Closes the tab: ends its session and forgets the transcript. */
@@ -204,10 +166,9 @@ export class Chats {
     const live = this.live.get(chatId);
     if (!live) return;
     this.live.delete(chatId);
-    this.denyAll(chatId, live, "The session was closed.");
-    live.inbox.end();
+    this.denyAll(chatId, live);
     try {
-      live.q.close();
+      live.session.close();
     } catch {
       // already gone
     }
@@ -216,33 +177,100 @@ export class Chats {
   private start(chat: Chat): Result<Live> {
     const ws = this.store.get().workspaces.find((w) => w.id === chat.workspaceId);
     if (!ws || ws.archived) return { ok: false, error: "This workspace is archived." };
-    const inbox = new Inbox<SDKUserMessage>();
+    const provider = this.providers[agentOf(chat)];
+    if (!provider) return { ok: false, error: `${agentOf(chat)} is not available.` };
     const live: Live = {
-      q: undefined as unknown as QueryLike,
-      inbox,
+      session: undefined as unknown as AgentSession,
       running: false,
       queue: [],
       permissions: new Map(),
       questions: new Map(),
     };
-    live.q = this.query({
-      prompt: inbox,
-      options: {
-        ...this.extras(chat, ws),
-        cwd: ws.path,
-        resume: chat.sessionId,
-        model: chat.model === "default" ? undefined : chat.model,
-        effort: chat.effort,
-        permissionMode: chat.mode,
-        allowDangerouslySkipPermissions: true, // lets the user switch to bypass mid-session
-        includePartialMessages: true,
-        thinking: { type: "adaptive", display: "summarized" },
-        canUseTool: this.canUseTool(chat.id),
-      },
-    });
     this.live.set(chat.id, live);
-    void this.consume(chat.id, live);
+    try {
+      live.session = provider.start(chat, ws, this.host(chat.id, live));
+    } catch (e) {
+      this.live.delete(chat.id);
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
     return { ok: true, value: live };
+  }
+
+  /** The callbacks one live session reports through. Ignored once the session is replaced. */
+  private host(chatId: string, live: Live): AgentHost {
+    const current = () => this.live.get(chatId) === live;
+    return {
+      sessionId: (id) => {
+        if (current() && this.chat(chatId)?.sessionId !== id) this.patch(chatId, { sessionId: id });
+      },
+      draft: (kind, text) => {
+        if (!current()) return;
+        live.draft = { kind, text };
+        this.emit(chatId, { t: "draft", kind, text });
+      },
+      text: (id, text) => this.block(chatId, live, { t: "text", id, text }),
+      thinking: (id, text) => this.block(chatId, live, { t: "thinking", id, text }),
+      tool: (id, name, input) => this.block(chatId, live, { t: "tool", id, name, input }),
+      toolResult: (id, content, isError) => {
+        if (current()) this.record(chatId, { t: "tool_result", id, content, isError });
+      },
+      turnEnd: ({ ok, durationMs, turns, error }) => {
+        if (!current()) return;
+        live.draft = undefined;
+        this.record(chatId, { t: "result", id: randomUUID(), ok, durationMs, turns, ...(error ? { error } : {}) });
+        live.running = false;
+        const next = live.queue.shift();
+        const chat = this.chat(chatId);
+        if (next !== undefined && chat) this.deliver(chat, live, next);
+        else this.status(chatId, live);
+      },
+      ended: (error) => {
+        if (!current()) return;
+        if (error) this.record(chatId, { t: "error", id: randomUUID(), text: error });
+        this.live.delete(chatId);
+        this.denyAll(chatId, live);
+        if (live.draft) this.emit(chatId, { t: "draft_clear" });
+        this.emit(chatId, { t: "status", running: false, queued: [] });
+      },
+      askPermission: (tool, input, signal) => {
+        if (!current()) return Promise.resolve("deny");
+        const id = randomUUID();
+        return new Promise((resolve) => {
+          live.permissions.set(id, resolve);
+          this.record(chatId, { t: "permission", id, tool, input });
+          signal?.addEventListener("abort", () => {
+            if (live.permissions.delete(id)) {
+              this.record(chatId, { t: "permission_answer", id, allowed: false });
+              resolve("deny");
+            }
+          });
+        });
+      },
+      askQuestions: (questions, signal) => {
+        if (!current()) return Promise.resolve(null);
+        const id = randomUUID();
+        return new Promise((resolve) => {
+          live.questions.set(id, resolve);
+          this.record(chatId, { t: "question", id, questions });
+          signal?.addEventListener("abort", () => {
+            if (live.questions.has(id)) {
+              this.settleQuestion(chatId, live, id, null);
+              resolve(null);
+            }
+          });
+        });
+      },
+    };
+  }
+
+  /** A finished block of output replaces the streaming draft. */
+  private block(chatId: string, live: Live, e: LastingEvent): void {
+    if (this.live.get(chatId) !== live) return;
+    if (live.draft) {
+      live.draft = undefined;
+      this.emit(chatId, { t: "draft_clear" });
+    }
+    this.record(chatId, e);
   }
 
   private deliver(chat: Chat, live: Live, text: string): void {
@@ -250,139 +278,24 @@ export class Chats {
     this.record(chat.id, { t: "user", id: randomUUID(), text, at: new Date().toISOString() });
     live.running = true;
     this.status(chat.id, live);
-    live.inbox.push({ type: "user", message: { role: "user", content: text }, parent_tool_use_id: null });
+    live.session.send(text);
   }
 
-  private async consume(chatId: string, live: Live): Promise<void> {
-    try {
-      for await (const m of live.q) this.handle(chatId, live, m);
-    } catch (e) {
-      if (this.live.get(chatId) === live) this.record(chatId, { t: "error", id: randomUUID(), text: errorText(e) });
-    }
-    // The Claude Code process has ended (closed, crashed or logged out).
-    if (this.live.get(chatId) === live) {
-      this.live.delete(chatId);
-      this.denyAll(chatId, live, "The session ended.");
-      if (live.running) this.emit(chatId, { t: "draft_clear" });
-      this.emit(chatId, { t: "status", running: false, queued: [] });
-    }
+  private settleQuestion(chatId: string, live: Live, id: string, answers: Record<string, string> | null): void {
+    live.questions.delete(id);
+    this.record(chatId, { t: "question_answer", id, answers });
   }
 
-  private handle(chatId: string, live: Live, m: SDKMessage): void {
-    // Subagents' own messages stay out of the main transcript; their report
-    // comes back as the Agent tool's result.
-    if ("parent_tool_use_id" in m && m.parent_tool_use_id) return;
-
-    switch (m.type) {
-      case "system":
-        if (m.subtype === "init" && this.chat(chatId)?.sessionId !== m.session_id) {
-          this.patch(chatId, { sessionId: m.session_id });
-        }
-        return;
-
-      case "stream_event": {
-        const ev = m.event;
-        if (ev.type === "content_block_start" && (ev.content_block.type === "text" || ev.content_block.type === "thinking")) {
-          live.draft = { kind: ev.content_block.type, text: "" };
-        } else if (ev.type === "content_block_delta" && live.draft) {
-          if (ev.delta.type === "text_delta") live.draft.text += ev.delta.text;
-          else if (ev.delta.type === "thinking_delta") live.draft.text += ev.delta.thinking;
-          else return;
-          this.emit(chatId, { t: "draft", ...live.draft });
-        }
-        return;
-      }
-
-      case "assistant":
-        live.draft = undefined;
-        m.message.content.forEach((b, i) => {
-          const id = `${m.uuid}:${i}`;
-          if (b.type === "text" && b.text) this.record(chatId, { t: "text", id, text: b.text });
-          else if (b.type === "thinking" && b.thinking) this.record(chatId, { t: "thinking", id, text: b.thinking });
-          else if (b.type === "tool_use") this.record(chatId, { t: "tool", id: b.id, name: b.name, input: b.input });
-        });
-        this.emit(chatId, { t: "draft_clear" });
-        return;
-
-      case "user": {
-        const content = m.message.content;
-        if (typeof content === "string") return;
-        for (const b of content) {
-          if (b.type === "tool_result") {
-            this.record(chatId, {
-              t: "tool_result",
-              id: b.tool_use_id,
-              content: resultText(b.content),
-              isError: Boolean(b.is_error),
-            });
-          }
-        }
-        return;
-      }
-
-      case "result": {
-        const ok = m.subtype === "success" && !m.is_error;
-        const error = ok ? undefined : m.subtype === "success" ? m.result : m.errors?.join("\n") || m.subtype;
-        live.draft = undefined;
-        this.record(chatId, {
-          t: "result",
-          id: m.uuid,
-          ok,
-          durationMs: m.duration_ms,
-          turns: m.num_turns,
-          ...(error ? { error } : {}),
-        });
-        live.running = false;
-        const next = live.queue.shift();
-        const chat = this.chat(chatId);
-        if (next !== undefined && chat) this.deliver(chat, live, next);
-        else this.status(chatId, live);
-        return;
-      }
-    }
-  }
-
-  private canUseTool(chatId: string): CanUseTool {
-    return (tool, input, { signal, suggestions }) => {
-      // Caboose's own tools only read the diff or write review comments.
-      if (tool.startsWith("mcp__caboose__")) return Promise.resolve({ behavior: "allow", updatedInput: input });
-      const live = this.live.get(chatId);
-      if (!live) return Promise.resolve({ behavior: "deny", message: "The session was closed." });
-      const id = randomUUID();
-      if (tool === "AskUserQuestion") {
-        return new Promise<PermissionResult>((resolve) => {
-          live.questions.set(id, { input, resolve });
-          this.record(chatId, { t: "question", id, questions: (input.questions ?? []) as Question[] });
-          signal.addEventListener("abort", () => {
-            if (live.questions.has(id)) {
-              this.settleQuestion(chatId, live, id, null);
-              resolve({ behavior: "deny", message: "Cancelled." });
-            }
-          });
-        });
-      }
-      return new Promise<PermissionResult>((resolve) => {
-        live.permissions.set(id, { input, suggestions, resolve });
-        this.record(chatId, { t: "permission", id, tool, input });
-        signal.addEventListener("abort", () => {
-          if (live.permissions.delete(id)) {
-            this.record(chatId, { t: "permission_answer", id, allowed: false });
-            resolve({ behavior: "deny", message: "Cancelled." });
-          }
-        });
-      });
-    };
-  }
-
-  private denyAll(chatId: string, live: Live, message: string): void {
-    for (const [id, p] of live.permissions) {
+  /** Answers every open card with "no" (the turn was stopped or the session ended). */
+  private denyAll(chatId: string, live: Live): void {
+    for (const [id, resolve] of live.permissions) {
       this.record(chatId, { t: "permission_answer", id, allowed: false });
-      p.resolve({ behavior: "deny", message, interrupt: true });
+      resolve("deny");
     }
     live.permissions.clear();
-    for (const [id, q] of [...live.questions]) {
+    for (const [id, resolve] of [...live.questions]) {
       this.settleQuestion(chatId, live, id, null);
-      q.resolve({ behavior: "deny", message, interrupt: true });
+      resolve(null);
     }
   }
 
@@ -410,54 +323,7 @@ export class Chats {
   }
 }
 
-/** An async iterable that is fed by push() and finished by end(). */
-export class Inbox<T> implements AsyncIterable<T> {
-  private items: T[] = [];
-  private waiting: ((r: IteratorResult<T>) => void) | null = null;
-  private ended = false;
-
-  push(item: T): void {
-    if (this.ended) return;
-    if (this.waiting) {
-      const w = this.waiting;
-      this.waiting = null;
-      w({ value: item, done: false });
-    } else {
-      this.items.push(item);
-    }
-  }
-
-  end(): void {
-    this.ended = true;
-    this.waiting?.({ value: undefined, done: true });
-    this.waiting = null;
-  }
-
-  [Symbol.asyncIterator](): AsyncIterator<T> {
-    return {
-      next: () => {
-        if (this.items.length) return Promise.resolve({ value: this.items.shift()!, done: false });
-        if (this.ended) return Promise.resolve({ value: undefined, done: true });
-        return new Promise((r) => (this.waiting = r));
-      },
-    };
-  }
-}
-
 function titleFrom(text: string): string {
   const line = text.trim().split("\n")[0];
   return line.length > 40 ? `${line.slice(0, 39)}…` : line;
-}
-
-function resultText(content: unknown): string {
-  let s: string;
-  if (typeof content === "string") s = content;
-  else if (Array.isArray(content)) {
-    s = content.map((c) => (c?.type === "text" ? c.text : c?.type === "image" ? "[image]" : "")).join("\n");
-  } else s = content == null ? "" : JSON.stringify(content);
-  return s.length > MAX_RESULT_CHARS ? `${s.slice(0, MAX_RESULT_CHARS)}\n… (${s.length - MAX_RESULT_CHARS} more characters)` : s;
-}
-
-function errorText(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
 }

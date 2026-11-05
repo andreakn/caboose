@@ -409,3 +409,10 @@ table.diff { border-collapse: collapse; width: 100%; font: 12px/1.55 var(--mono)
 .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .doctor, .commits { list-style: none; padding: 0; margin: 12px 0; display: grid; gap: 6px; font-size: 13px; }
 .doctor .hint { margin-left: 18px; color: var(--warn); }
+
+/* Agent picker on the chat tabs */
+.agent-chip { font-size: 10.5px; font-weight: 600; padding: 0 5px; border-radius: 4px; background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--text); }
+.tab-new-wrap { position: relative; }
+.menu { position: fixed; z-index: 10; display: flex; flex-direction: column; min-width: 200px; padding: 4px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25); }
+.menu button { border: none; background: none; text-align: left; padding: 6px 10px; border-radius: 6px; }
+.menu button:hover { background: var(--accent-soft); }

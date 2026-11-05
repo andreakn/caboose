@@ -6,7 +6,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { applyEvent, type ChatEvent, emptyView } from "../src/shared/chat.ts";
-import { Chats, type QueryLike } from "../src/main/core/chats.ts";
+import { ClaudeProvider, type QueryLike } from "../src/main/core/agents/claude.ts";
+import { Chats } from "../src/main/core/chats.ts";
 import { Store } from "../src/main/core/store.ts";
 
 const tmp = mkdtempSync(join(tmpdir(), "caboose-chats-"));
@@ -112,7 +113,7 @@ function setup() {
   }));
   const fake = fakeQuery();
   const events: ChatEvent[] = [];
-  const chats = new Chats(store, join(tmp, `${Math.random()}`), fake.fn, (_id, e) => events.push(e));
+  const chats = new Chats(store, join(tmp, `${Math.random()}`), { claude: new ClaudeProvider(fake.fn) }, (_id, e) => events.push(e));
   const chat = chats.create("w1");
   assert.ok(chat.ok);
   return { store, chats, fake, events, chatId: chat.value.id };
@@ -228,7 +229,12 @@ test("extra options reach the query", () => {
     workspaces: [{ id: "w1", repoId: "r1", name: "finse", branch: "b", path: tmp, baseRef: "main", createdAt: "", archived: false, setup: "none" }],
   }));
   const fake = fakeQuery();
-  const chats = new Chats(store, join(tmp, `${Math.random()}`), fake.fn, () => {}, (_c, ws) => ({ allowedTools: [`x-${ws.name}`] }));
+  const chats = new Chats(
+    store,
+    join(tmp, `${Math.random()}`),
+    { claude: new ClaudeProvider(fake.fn, (_c, ws) => ({ allowedTools: [`x-${ws.name}`] })) },
+    () => {},
+  );
   const c = chats.create("w1");
   assert.ok(c.ok);
   chats.send(c.value.id, "hi");

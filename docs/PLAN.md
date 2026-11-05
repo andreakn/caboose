@@ -1,14 +1,14 @@
 # Caboose plan
 
 A personal (and maybe team-internal) desktop app, macOS, Windows and Linux, for running
-Claude Code agents in parallel git worktrees. Not for sale.
+coding agents (Claude Code, GitHub Copilot) in parallel git worktrees. Not for sale.
 
 ## Stack
 
 | Part | Choice |
 | --- | --- |
 | Shell | Electron + React + TypeScript (electron-vite) |
-| Agent | `@anthropic-ai/claude-agent-sdk` in the main process |
+| Agents | `@anthropic-ai/claude-agent-sdk` and `@github/copilot-sdk` in the main process |
 | Git | the `git` CLI via `execFile`, one worktree per workspace |
 | GitHub | the `gh` CLI |
 | Terminal | `node-pty` + `xterm.js` |
@@ -40,7 +40,8 @@ Status: ✅ done · 🟡 started · blank = not started. Decisions: `docs/DECISI
 7. ✅ **GitHub** — create PR, status, checks, merge, rename branch.
 8. ✅ **Polish** — notifications, multiple tabs, shortcuts, settings, theme,
    updates by `git pull`.
-9. **Later** — other agents via ACP, checkpoints, remote access.
+9. 🟡 **Later** — ✅ GitHub Copilot as a second agent (official SDK); other agents
+   via ACP, checkpoints, remote access.
 
 ## Windows from day one
 

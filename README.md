@@ -1,13 +1,15 @@
 # Caboose 🚃
 
-Run Claude Code agents side by side, each in its own git worktree.
+Run coding agents (Claude Code, GitHub Copilot) side by side, each in its own
+git worktree.
 macOS, Windows and Linux, run straight from a clone.
 
 ## Prerequisites
 
 - Node 22.12+ (developed on Node 26) and npm
 - git (on Windows: Git for Windows, which Claude Code needs too)
-- Claude Code, logged in (`claude` then `/login`)
+- Claude Code, logged in (`claude` then `/login`), for Claude chats
+- A GitHub Copilot plan and `gh auth login`, for Copilot chats (optional)
 - `gh`, logged in (`gh auth login`), for PRs
 
 ## Run

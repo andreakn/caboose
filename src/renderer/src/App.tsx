@@ -42,7 +42,8 @@ export function App() {
         const chat = s.chats.find((c) => c.id === chatId);
         const w = chat && s.workspaces.find((x) => x.id === chat.workspaceId);
         if (!chat || !w) return;
-        const n = new Notification(kind === "done" ? `${w.name}: Claude is done` : `${w.name}: Claude needs you`, {
+        const who = chat.agent === "copilot" ? "Copilot" : "Claude";
+        const n = new Notification(kind === "done" ? `${w.name}: ${who} is done` : `${w.name}: ${who} needs you`, {
           body: chat.title,
           silent: kind === "done",
         });
@@ -214,13 +215,13 @@ function RepoGroup(props: {
 
 function WorkspaceRow(props: { w: Workspace; activity?: Activity; active: boolean; onClick: () => void }) {
   const { w, active, onClick, activity: a } = props;
-  // Most urgent first: Claude waiting for you, working, finished unseen; else the setup state.
+  // Most urgent first: an agent waiting for you, working, finished unseen; else the setup state.
   const [cls, title] = a?.waiting
-    ? ["act-waiting", "Claude needs you"]
+    ? ["act-waiting", "Needs you"]
     : a?.running
-      ? ["act-running", "Claude is working"]
+      ? ["act-running", "Working"]
       : a?.unread
-        ? ["act-unread", "Claude is done"]
+        ? ["act-unread", "Done"]
         : [`setup-${w.setup}`, `Setup: ${w.setup}`];
   return (
     <button className={`ws-row${active ? " active" : ""}${w.archived ? " is-archived" : ""}`} onClick={onClick}>

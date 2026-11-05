@@ -8,7 +8,11 @@ import { findBash } from "./scripts.ts";
 
 const first = (s: string) => s.trim().split(/\r?\n/)[0];
 
-export async function doctor(opts: { bashPath?: string; claudeAccount: () => Promise<string> }): Promise<DoctorCheck[]> {
+export async function doctor(opts: {
+  bashPath?: string;
+  claudeAccount: () => Promise<string>;
+  copilotAccount: () => Promise<string>;
+}): Promise<DoctorCheck[]> {
   const check = async (name: string, fn: () => Promise<string>, hint: string): Promise<DoctorCheck> => {
     try {
       return { name, ok: true, detail: await fn() };
@@ -31,6 +35,11 @@ export async function doctor(opts: { bashPath?: string; claudeAccount: () => Pro
       async () => `${claudeCodeVersion()} (bundled with the Agent SDK) · ${await opts.claudeAccount()}`,
       "Run `claude` in a terminal and log in with /login.",
     ),
+    check(
+      "GitHub Copilot",
+      async () => `${copilotVersion()} (bundled with the Copilot SDK) · ${await opts.copilotAccount()}`,
+      "Optional. Needs a Copilot plan; log in with `gh auth login` (or the Copilot CLI's /login).",
+    ),
     check("GitHub CLI", async () => first(await run("gh", ["--version"])), "Install gh from https://cli.github.com."),
     check(
       "GitHub login",
@@ -44,13 +53,28 @@ export async function doctor(opts: { bashPath?: string; claudeAccount: () => Pro
   ]);
 }
 
+export function copilotVersion(): string {
+  return packageJson("@github/copilot-sdk")?.copilotCliVersion ?? "unknown";
+}
+
 export function claudeCodeVersion(): string {
+  return packageJson("@anthropic-ai/claude-agent-sdk")?.claudeCodeVersion ?? "unknown";
+}
+
+/** A dependency's package.json, found by walking up from its entry point (exports hide it). */
+function packageJson(name: string): Record<string, string> | undefined {
   try {
-    const require = createRequire(import.meta.url);
-    // The package's exports hide package.json, so find it next to the entry point.
-    const pkg = join(dirname(require.resolve("@anthropic-ai/claude-agent-sdk")), "package.json");
-    return JSON.parse(readFileSync(pkg, "utf8")).claudeCodeVersion ?? "unknown";
+    let dir = dirname(createRequire(import.meta.url).resolve(name));
+    for (let i = 0; i < 5; i++, dir = dirname(dir)) {
+      try {
+        const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
+        if (pkg.name === name) return pkg;
+      } catch {
+        // keep walking up
+      }
+    }
   } catch {
-    return "unknown";
+    // not installed
   }
+  return undefined;
 }

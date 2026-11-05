@@ -1,5 +1,5 @@
 // Shapes shared by the main process, the preload bridge and the renderer.
-import type { Chat, ChatEvent, Effort, Mode, Model } from "./chat.ts";
+import type { Agent, Chat, ChatEvent, Effort, Mode, Model, ModelOption } from "./chat.ts";
 import type { DiffComment, WorkspaceChanges } from "./diff.ts";
 import type { GitHubStatus, MergeMethod } from "./github.ts";
 
@@ -130,7 +130,8 @@ export type CabooseApi = {
   setupLog(workspaceId: string): Promise<string>;
   onStateChanged(listener: (state: State) => void): () => void;
 
-  createChat(workspaceId: string): Promise<Result<Chat>>;
+  createChat(workspaceId: string, agent?: Agent): Promise<Result<Chat>>;
+  models(agent: Agent): Promise<Result<ModelOption[]>>;
   removeChat(chatId: string): Promise<void>;
   chatEvents(chatId: string): Promise<ChatEvent[]>;
   send(chatId: string, text: string): Promise<Result<void>>;

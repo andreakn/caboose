@@ -68,7 +68,7 @@ export function ChangesView(props: {
         <button onClick={props.refresh}>Refresh</button>
         {unsent.length > 0 && (
           <button className="primary" onClick={props.onSendComments}>
-            Send {unsent.length} comment{unsent.length === 1 ? "" : "s"} to Claude
+            Send {unsent.length} comment{unsent.length === 1 ? "" : "s"} to the chat
           </button>
         )}
       </div>
@@ -231,10 +231,10 @@ function CommentCard({ c, showLine }: { c: DiffComment; showLine?: boolean }) {
   return (
     <div className={`comment by-${c.author}${c.resolved ? " resolved" : ""}`}>
       <div className="comment-head">
-        <b>{c.author === "claude" ? "Claude" : "You"}</b>
+        <b>{c.author === "claude" ? "Agent" : "You"}</b>
         {showLine && <code>line {c.line}</code>}
         <span className="muted">
-          {c.resolved ? "resolved" : c.author === "user" ? (c.sentAt ? "sent to Claude" : "not sent yet") : ""}
+          {c.resolved ? "resolved" : c.author === "user" ? (c.sentAt ? "sent to the chat" : "not sent yet") : ""}
         </span>
         <span className="spacer" />
         <button className="link" onClick={() => api.resolveComment(c.id, !c.resolved)}>
@@ -258,7 +258,7 @@ function CommentComposer({ onSave, onCancel }: { onSave: (body: string) => void;
         autoFocus
         rows={3}
         value={body}
-        placeholder="Comment for Claude…  (Cmd/Ctrl+Enter saves)"
+        placeholder="Comment for the agent…  (Cmd/Ctrl+Enter saves)"
         onChange={(e) => setBody(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && body.trim()) onSave(body.trim());

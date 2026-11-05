@@ -193,6 +193,41 @@ questions at the bottom are the ones that need an answer.
 54. **The window opens where it was closed**, unless that place is no longer
     on a screen.
 
+## GitHub Copilot as a second agent (2026-11-05)
+
+55. **Copilot runs through GitHub's official Copilot SDK** (`@github/copilot-sdk`),
+    which runs the Copilot CLI runtime that npm installs per OS (like the
+    Claude SDK; macOS, Windows, Linux x64/arm64 incl. musl). It uses the
+    user's own GitHub login and Copilot plan; Caboose keeps no tokens.
+56. **Login: the GitHub CLI's** (`gh auth login`) or the Copilot CLI's own.
+    Classic personal access tokens (`ghp_…`) in `GH_TOKEN`/`GITHUB_TOKEN` are
+    hidden from the Copilot runtime: Copilot rejects them, and they hid
+    Andreas's real gh login on this Mac. Other tokens pass through.
+57. **One engine, two adapters.** `core/chats.ts` owns transcripts, queue,
+    approvals and questions; `core/agents/claude.ts` and
+    `core/agents/copilot.ts` translate their SDKs (`core/agents/types.ts` is
+    the seam). A third agent (ACP, Codex…) is another adapter.
+58. **The agent is chosen per chat tab** ("+" → Claude Code / GitHub Copilot);
+    a new tab otherwise uses the open tab's agent. Old chats are Claude.
+59. **Copilot's models come from the user's plan** (disabled ones hidden);
+    effort is offered per model where Copilot supports it.
+60. **Permission modes map onto Copilot**: reads inside the worktree are
+    allowed; "Accept edits" also allows writes inside it; "Bypass" allows
+    everything; "Plan only" switches Copilot to its plan mode; everything else
+    shows the approval card ("Always allow" = for this session).
+61. **Copilot's questions** (`ask_user`) use the same question card; a reply in
+    the chat answers in words.
+62. **Caboose's tools for Copilot** are SDK tools (`caboose_get_workspace_diff`,
+    `caboose_diff_comment`, `caboose_get_diff_comments`,
+    `caboose_get_terminal_output`), same handlers as Claude's MCP tools, run
+    without asking.
+63. **koffi's install script is denied**: the Copilot SDK only needs it for its
+    experimental in-process mode, which Caboose does not use.
+64. Size: the Copilot runtime adds ~160 MB to `node_modules` per machine.
+65. **Tested for real** with Claude Haiku 4.5 through Copilot: Caboose's diff
+    tool, a question answered on the card, a shell command approved, the
+    answer; and a Claude chat afterwards, to check nothing broke.
+
 ## Answered (2026-11-05)
 
 - Private GitHub repo `andreakn/caboose`: yes.

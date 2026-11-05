@@ -1,12 +1,16 @@
 # Caboose — working notes for Claude
 
-Desktop app (macOS + Windows) that runs Claude Code agents in parallel git
-worktrees. Personal/team-internal, never commercial. Plan and status: `docs/PLAN.md`.
+Desktop app (macOS, Windows, Linux) that runs coding agents (Claude Code,
+GitHub Copilot) in parallel git worktrees. Personal/team-internal, never commercial. Plan and status: `docs/PLAN.md`.
 
-- **Auth belongs to Claude Code.** Agents run through the Agent SDK, which runs
-  the official Claude Code binary under the user's own login. Never read, copy,
-  store or forward its credentials, and never call the Anthropic API directly
-  with them.
+- **Auth belongs to the agents.** Claude runs through the Claude Agent SDK (the
+  official Claude Code binary), Copilot through GitHub's Copilot SDK (the
+  official Copilot CLI runtime), each under the user's own login. Never read,
+  copy, store or forward their credentials, and never call the model APIs
+  directly with them.
+- **One chat engine, one adapter per agent** (`src/main/core/chats.ts`,
+  `src/main/core/agents/`). Agent-specific code stays in its adapter; the
+  transcript format (`src/shared/chat.ts`) is Caboose's own.
 - **Every feature must work on macOS, Windows and Linux.** No POSIX-only shell
   commands, paths or signals in app code; spawn `git`/`gh` with `execFile` and
   argument arrays. Linux is not tested yet: **tell Andreas whenever a choice

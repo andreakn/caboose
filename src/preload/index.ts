@@ -17,7 +17,8 @@ const api: CabooseApi = {
     return () => ipcRenderer.removeListener("state:changed", handler);
   },
 
-  createChat: (workspaceId) => ipcRenderer.invoke("chat:create", workspaceId),
+  createChat: (workspaceId, agent) => ipcRenderer.invoke("chat:create", workspaceId, agent),
+  models: (agent) => ipcRenderer.invoke("chat:models", agent),
   removeChat: (chatId) => ipcRenderer.invoke("chat:remove", chatId),
   chatEvents: (chatId) => ipcRenderer.invoke("chat:events", chatId),
   send: (chatId, text) => ipcRenderer.invoke("chat:send", chatId, text),

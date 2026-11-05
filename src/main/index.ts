@@ -3,15 +3,18 @@ import { query, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, screen, shell } from "electron";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import type { Effort, Mode, Model } from "../shared/chat.ts";
+import type { Agent, Effort, Mode, Model } from "../shared/chat.ts";
 import type { LocalConfig, State, Theme } from "../shared/types.ts";
-import { Chats, Inbox } from "./core/chats.ts";
+import { CopilotClient } from "@github/copilot-sdk";
+import { ClaudeProvider, Inbox } from "./core/agents/claude.ts";
+import { copilotEnv, CopilotProvider } from "./core/agents/copilot.ts";
+import { Chats } from "./core/chats.ts";
 import { doctor } from "./core/doctor.ts";
 import { checkForUpdate, update } from "./core/updater.ts";
 import { installMenu } from "./menu.ts";
 import { Comments } from "./core/comments.ts";
 import { changes, filePatch } from "./core/diff.ts";
-import { cabooseInstructions, cabooseMcp } from "./core/mcp.ts";
+import { cabooseCopilotTools, cabooseInstructions, cabooseMcp } from "./core/mcp.ts";
 import { commentsMessage } from "../shared/diff.ts";
 import { loadLocalConfig, loadRepoConfig, readLocalConfig, saveLocalConfig } from "./core/config.ts";
 import { GitHub } from "./core/github.ts";
@@ -50,16 +53,18 @@ const terminals = new Terminals({
   onChange: () => win?.webContents.send("term:list", terminals.list()),
 });
 const workspaceById = (id: string) => store.get().workspaces.find((w) => w.id === id);
-const chats = new Chats(
-  store,
-  dataDir,
-  query,
-  (chatId, e) => win?.webContents.send("chat:event", chatId, e),
+const claude = new ClaudeProvider(query, (_chat, ws) => ({
+  mcpServers: { caboose: cabooseMcp(() => workspaceById(ws.id) ?? ws, comments, terminals) },
+  systemPrompt: { type: "preset", preset: "claude_code", append: cabooseInstructions(ws, "claude") },
+}));
+const copilot = new CopilotProvider(
+  () => new CopilotClient({ logLevel: "error", env: copilotEnv() }),
   (_chat, ws) => ({
-    mcpServers: { caboose: cabooseMcp(() => workspaceById(ws.id) ?? ws, comments, terminals) },
-    systemPrompt: { type: "preset", preset: "claude_code", append: cabooseInstructions(ws) },
+    tools: cabooseCopilotTools(() => workspaceById(ws.id) ?? ws, comments, terminals),
+    instructions: cabooseInstructions(ws, "copilot"),
   }),
 );
+const chats = new Chats(store, dataDir, { claude, copilot }, (chatId, e) => win?.webContents.send("chat:event", chatId, e));
 
 // The window opens where it was last closed, if that place is still on a screen.
 const boundsFile = join(dataDir, "window.json");
@@ -149,7 +154,8 @@ ipcMain.handle("shell:openPath", (_e, path: string) => {
   if (s.repos.some((r) => r.path === path) || s.workspaces.some((w) => w.path === path)) return shell.openPath(path);
 });
 
-ipcMain.handle("chat:create", (_e, workspaceId: string) => chats.create(workspaceId));
+ipcMain.handle("chat:create", (_e, workspaceId: string, agent?: Agent) => chats.create(workspaceId, agent));
+ipcMain.handle("chat:models", (_e, agent: Agent) => attempt(() => chats.models(agent)));
 ipcMain.handle("chat:remove", (_e, chatId: string) => chats.remove(chatId));
 // Synchronous on purpose: chat events sent after this reply are newer than the file it read.
 ipcMain.handle("chat:events", (_e, chatId: string) => chats.events(chatId));
@@ -264,7 +270,17 @@ ipcMain.handle("settings:save", (_e, local: LocalConfig) =>
     terminals.setPaths(localConfig.bashPath, localConfig.shellPath);
   }),
 );
-ipcMain.handle("app:doctor", () => doctor({ bashPath: localConfig.bashPath, claudeAccount }));
+ipcMain.handle("app:doctor", () =>
+  doctor({
+    bashPath: localConfig.bashPath,
+    claudeAccount,
+    copilotAccount: async () => {
+      const a = await copilot.auth();
+      if (!a.ok) throw new Error(a.detail);
+      return a.detail;
+    },
+  }),
+);
 ipcMain.handle("app:checkForUpdate", () => attempt(() => checkForUpdate(app.getAppPath())));
 ipcMain.handle("app:update", (e) =>
   attempt(async () => {
@@ -347,6 +363,7 @@ app.whenReady().then(() => {
 });
 
 app.on("before-quit", () => {
+  void copilot.stop();
   chats.stopAll();
   terminals.closeAll();
 });

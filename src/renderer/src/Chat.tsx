@@ -8,7 +8,9 @@ import {
   type ChatView,
   EFFORTS,
   emptyView,
-  MODELS,
+  AGENTS,
+  type Agent,
+  type ModelOption,
   MODES,
   type Question,
 } from "../../shared/chat.ts";
@@ -17,6 +19,25 @@ import { activityOf, setVisibleChat, useActivityVersion } from "./activity.ts";
 import { useCommand } from "./commands.ts";
 
 const api = window.caboose;
+
+const agentOf = (chat: Chat): Agent => chat.agent ?? "claude";
+export const agentName = (chat: Chat) => (agentOf(chat) === "copilot" ? "Copilot" : "Claude");
+
+/** Each agent's models, fetched once per window (Copilot's depend on the user's plan). */
+const modelCache = new Map<Agent, Promise<ModelOption[]>>();
+function useModels(agent: Agent): ModelOption[] {
+  const [models, setModels] = useState<ModelOption[]>([]);
+  useEffect(() => {
+    let p = modelCache.get(agent);
+    if (!p) {
+      p = api.models(agent).then((r) => (r.ok ? r.value : []));
+      modelCache.set(agent, p);
+      void p.then((list) => list.length || modelCache.delete(agent)); // retry later if it failed
+    }
+    void p.then(setModels);
+  }, [agent]);
+  return models;
+}
 
 const activeKey = (ws: Workspace) => `caboose-chat-${ws.id}`;
 
@@ -37,10 +58,14 @@ export function ChatArea({ ws, chats, hidden }: { ws: Workspace; chats: Chat[]; 
     localStorage.setItem(key, id);
   };
 
-  async function newChat() {
+  // Where the agent menu opens (fixed, so the scrolling tab strip does not clip it).
+  const [picking, setPicking] = useState<{ x: number; y: number } | null>(null);
+
+  async function newChat(agent?: Agent) {
     if (creating.current) return;
     creating.current = true;
-    const r = await api.createChat(ws.id);
+    setPicking(null);
+    const r = await api.createChat(ws.id, agent ?? (active ? agentOf(active) : undefined));
     creating.current = false;
     if (r.ok) select(r.value.id);
   }
@@ -76,6 +101,7 @@ export function ChatArea({ ws, chats, hidden }: { ws: Workspace; chats: Chat[]; 
         {chats.map((c) => (
           <div key={c.id} className={`tab${c.id === active?.id ? " active" : ""}`} onClick={() => select(c.id)}>
             <TabState chatId={c.id} />
+            {agentOf(c) === "copilot" && <span className="agent-chip">Copilot</span>}
             <span className="tab-title">{c.title}</span>
             <button
               className="tab-close"
@@ -90,9 +116,27 @@ export function ChatArea({ ws, chats, hidden }: { ws: Workspace; chats: Chat[]; 
           </div>
         ))}
         {!ws.archived && (
-          <button className="tab-new" title="New chat" onClick={newChat}>
-            +
-          </button>
+          <div className="tab-new-wrap">
+            <button
+              className="tab-new"
+              title="New chat"
+              onClick={(e) => {
+                const r = e.currentTarget.getBoundingClientRect();
+                setPicking(picking ? null : { x: r.left, y: r.bottom });
+              }}
+            >
+              +
+            </button>
+            {picking && (
+              <div className="menu" style={{ left: picking.x, top: picking.y }} onMouseLeave={() => setPicking(null)}>
+                {AGENTS.map((a) => (
+                  <button key={a.value} onClick={() => newChat(a.value)}>
+                    New {a.label} chat
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         )}
       </div>
       {active ? <ChatPanel key={active.id} chat={active} ws={ws} /> : <div className="chat-empty muted">No chats.</div>}
@@ -102,9 +146,9 @@ export function ChatArea({ ws, chats, hidden }: { ws: Workspace; chats: Chat[]; 
 
 function TabState({ chatId }: { chatId: string }) {
   const a = activityOf([chatId]);
-  if (a.waiting) return <span className="dot act-waiting" title="Claude needs you" />;
-  if (a.running) return <span className="dot act-running" title="Claude is working" />;
-  if (a.unread) return <span className="dot act-unread" title="Claude is done" />;
+  if (a.waiting) return <span className="dot act-waiting" title="Needs you" />;
+  if (a.running) return <span className="dot act-running" title="Working" />;
+  if (a.unread) return <span className="dot act-unread" title="Done" />;
   return null;
 }
 
@@ -146,11 +190,11 @@ function ChatPanel({ chat, ws }: { chat: Chat; ws: Workspace }) {
       >
         {view.items.length === 0 && !view.draft && (
           <div className="chat-hello muted">
-            Claude works in <code>{ws.path}</code> on <code>{ws.branch}</code>.
+            {agentName(chat)} works in <code>{ws.path}</code> on <code>{ws.branch}</code>.
           </div>
         )}
         {view.items.map((item) => (
-          <Item key={`${item.kind}:${item.id}`} item={item} chatId={chat.id} rel={rel} />
+          <Item key={`${item.kind}:${item.id}`} item={item} chatId={chat.id} agent={agentName(chat)} rel={rel} />
         ))}
         {view.draft &&
           (view.draft.kind === "text" ? (
@@ -160,7 +204,7 @@ function ChatPanel({ chat, ws }: { chat: Chat; ws: Workspace }) {
           ) : (
             <div className="thinking live">{view.draft.text || "Thinking…"}</div>
           ))}
-        {view.running && !view.draft && <div className="working">Claude is working…</div>}
+        {view.running && !view.draft && <div className="working">{agentName(chat)} is working…</div>}
         {view.queued.map((q, i) => (
           <div key={i} className="msg-user queued" title="Sent when the current turn ends">
             {q}
@@ -177,7 +221,8 @@ function ChatPanel({ chat, ws }: { chat: Chat; ws: Workspace }) {
   );
 }
 
-function Item({ item, chatId, rel }: { item: ChatItem; chatId: string; rel: (p: string) => string }) {
+function Item(props: { item: ChatItem; chatId: string; agent: string; rel: (p: string) => string }) {
+  const { item, chatId, agent, rel } = props;
   switch (item.kind) {
     case "user":
       return <div className="msg-user">{item.text}</div>;
@@ -200,7 +245,7 @@ function Item({ item, chatId, rel }: { item: ChatItem; chatId: string; rel: (p: 
       return (
         <div className={`permission${item.answer === undefined ? " open" : ""}`}>
           <div>
-            Claude wants to use <b>{toolName(item.tool)}</b>
+            {agent} wants to use <b>{toolName(item.tool)}</b>
             {toolSummary(item.input, rel) && (
               <>
                 : <code>{toolSummary(item.input, rel)}</code>
@@ -223,7 +268,7 @@ function Item({ item, chatId, rel }: { item: ChatItem; chatId: string; rel: (p: 
         </div>
       );
     case "question":
-      return <QuestionCard item={item} chatId={chatId} />;
+      return <QuestionCard item={item} chatId={chatId} agent={agent} />;
     case "result":
       return (
         <div className={`turn-end${item.ok ? "" : " failed"}`}>
@@ -235,7 +280,7 @@ function Item({ item, chatId, rel }: { item: ChatItem; chatId: string; rel: (p: 
   }
 }
 
-function QuestionCard({ item, chatId }: { item: Extract<ChatItem, { kind: "question" }>; chatId: string }) {
+function QuestionCard({ item, chatId, agent }: { item: Extract<ChatItem, { kind: "question" }>; chatId: string; agent: string }) {
   // question text -> chosen labels, plus free text for "Other"
   const [picked, setPicked] = useState<Record<string, string[]>>({});
   const [other, setOther] = useState<Record<string, string>>({});
@@ -257,7 +302,7 @@ function QuestionCard({ item, chatId }: { item: Extract<ChatItem, { kind: "quest
             </div>
           ))
         ) : (
-          <div className="muted">Claude asked: {item.questions.map((q) => q.question).join(" / ")} (answered in the chat or dismissed)</div>
+          <div className="muted">{agent} asked: {item.questions.map((q) => q.question).join(" / ")} (answered in the chat or dismissed)</div>
         )}
       </div>
     );
@@ -355,6 +400,10 @@ function toolSummary(input: unknown, rel: (p: string) => string): string {
 
 function Composer(props: { chat: Chat; running: boolean; asking: boolean; disabled: boolean }) {
   const { chat, running, disabled } = props;
+  const models = useModels(agentOf(chat));
+  // Copilot models list the efforts they support; the chosen one stays visible either way.
+  const supported = models.find((m) => m.value === chat.model)?.efforts?.filter((e) => EFFORTS.includes(e));
+  const efforts = supported?.length ? [...new Set([...supported, chat.effort])] : undefined;
   const [text, setText] = useState("");
   const input = useRef<HTMLTextAreaElement>(null);
 
@@ -388,28 +437,30 @@ function Composer(props: { chat: Chat; running: boolean; asking: boolean; disabl
         rows={Math.min(10, Math.max(2, text.split("\n").length))}
         placeholder={
           props.asking
-            ? "Answer Claude's question in your own words…"
+            ? `Answer ${agentName(chat)}'s question in your own words…`
             : running
-              ? "Queue a message for when Claude is done…"
-              : "Ask Claude…  (Enter sends, Shift+Enter for a new line)"
+              ? `Queue a message for when ${agentName(chat)} is done…`
+              : `Ask ${agentName(chat)}…  (Enter sends, Shift+Enter for a new line)`
         }
         onChange={(e) => setText(e.target.value)}
         onKeyDown={onKey}
       />
       <div className="composer-bar">
-        <select value={chat.model} onChange={(e) => api.configureChat(chat.id, { model: e.target.value as Chat["model"] })}>
-          {MODELS.map((m) => (
-            <option key={m.value} value={m.value}>
-              {m.label}
-            </option>
-          ))}
+        <select value={chat.model} onChange={(e) => api.configureChat(chat.id, { model: e.target.value })}>
+          {(models.some((m) => m.value === chat.model) ? models : [...models, { value: chat.model, label: chat.model }]).map(
+            (m) => (
+              <option key={m.value} value={m.value}>
+                {m.label}
+              </option>
+            ),
+          )}
         </select>
         <select
           value={chat.effort}
           title="Effort"
           onChange={(e) => api.configureChat(chat.id, { effort: e.target.value as Chat["effort"] })}
         >
-          {EFFORTS.map((x) => (
+          {(efforts ?? EFFORTS).map((x) => (
             <option key={x} value={x}>
               Effort: {x}
             </option>

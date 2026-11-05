@@ -2,11 +2,21 @@
 // events, saves the lasting ones as JSONL, and the renderer folds them into
 // items with `applyEvent`. One format for live streaming and for replay.
 
-export type Model = "default" | "opus" | "sonnet" | "haiku";
+/** Which coding agent runs a chat. */
+export type Agent = "claude" | "copilot";
+export const AGENTS: { value: Agent; label: string }[] = [
+  { value: "claude", label: "Claude Code" },
+  { value: "copilot", label: "GitHub Copilot" },
+];
+
+/** "default", or a model id/alias the chat's agent understands. */
+export type Model = string;
+export type ModelOption = { value: Model; label: string; efforts?: Effort[] };
 export type Effort = "low" | "medium" | "high" | "xhigh" | "max";
 export type Mode = "default" | "acceptEdits" | "plan" | "bypassPermissions";
 
-export const MODELS: { value: Model; label: string }[] = [
+/** Claude Code's model aliases. Copilot's come from the user's plan at runtime. */
+export const CLAUDE_MODELS: ModelOption[] = [
   { value: "default", label: "Default model" },
   { value: "opus", label: "Opus" },
   { value: "sonnet", label: "Sonnet" },
@@ -23,8 +33,10 @@ export const MODES: { value: Mode; label: string }[] = [
 export type Chat = {
   id: string;
   workspaceId: string;
+  /** Missing on chats from before Copilot support: those are Claude. */
+  agent?: Agent;
   title: string;
-  /** Claude Code's session id, set once the first turn starts; used to resume. */
+  /** The agent's session id, set once the first turn starts; used to resume. */
   sessionId?: string;
   model: Model;
   effort: Effort;
