@@ -6,6 +6,10 @@ import { dirname, join } from "node:path";
 import type { Effort, Mode, Model } from "../shared/chat.ts";
 import type { State } from "../shared/types.ts";
 import { Chats } from "./core/chats.ts";
+import { Comments } from "./core/comments.ts";
+import { changes, filePatch } from "./core/diff.ts";
+import { cabooseInstructions, cabooseMcp } from "./core/mcp.ts";
+import { commentsMessage } from "../shared/diff.ts";
 import { loadLocalConfig } from "./core/config.ts";
 import { Store } from "./core/store.ts";
 import { Workspaces } from "./core/workspaces.ts";
@@ -20,7 +24,18 @@ const store = new Store(join(dataDir, "state.json"));
 const workspaces = new Workspaces(store, loadLocalConfig(app.getAppPath()), join(dataDir, "logs"));
 
 let win: BrowserWindow | null = null;
-const chats = new Chats(store, dataDir, query, (chatId, e) => win?.webContents.send("chat:event", chatId, e));
+const comments = new Comments(store);
+const workspaceById = (id: string) => store.get().workspaces.find((w) => w.id === id);
+const chats = new Chats(
+  store,
+  dataDir,
+  query,
+  (chatId, e) => win?.webContents.send("chat:event", chatId, e),
+  (_chat, ws) => ({
+    mcpServers: { caboose: cabooseMcp(() => workspaceById(ws.id) ?? ws, comments) },
+    systemPrompt: { type: "preset", preset: "claude_code", append: cabooseInstructions(ws) },
+  }),
+);
 
 function createWindow() {
   win = new BrowserWindow({
@@ -37,8 +52,10 @@ function createWindow() {
       nodeIntegration: false,
     },
   });
-  if (process.env.ELECTRON_RENDERER_URL) win.loadURL(process.env.ELECTRON_RENDERER_URL);
-  else win.loadFile(join(import.meta.dirname, "../renderer/index.html"));
+  // CABOOSE_VIEW=changes opens on the Changes view (for screenshots).
+  const hash = process.env.CABOOSE_VIEW ?? "";
+  if (process.env.ELECTRON_RENDERER_URL) win.loadURL(`${process.env.ELECTRON_RENDERER_URL}#${hash}`);
+  else win.loadFile(join(import.meta.dirname, "../renderer/index.html"), { hash });
 
   // Never navigate the app window away; links open in the browser.
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -98,6 +115,45 @@ ipcMain.handle("chat:interrupt", (_e, chatId: string) => chats.interrupt(chatId)
 ipcMain.handle("chat:answerPermission", (_e, chatId: string, id: string, answer: "allow" | "always" | "deny") =>
   chats.answerPermission(chatId, id, answer),
 );
+ipcMain.handle("chat:answerQuestion", (_e, chatId: string, id: string, answers: Record<string, string> | null) =>
+  chats.answerQuestion(chatId, id, answers),
+);
+
+ipcMain.handle("diff:changes", async (_e, workspaceId: string) => {
+  const ws = workspaceById(workspaceId);
+  if (!ws || ws.archived) return { ok: false, error: "No such workspace." };
+  try {
+    return { ok: true, value: await changes(ws.path, ws.baseRef) };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+});
+ipcMain.handle("diff:patch", async (_e, workspaceId: string, path: string) => {
+  const ws = workspaceById(workspaceId);
+  if (!ws || ws.archived) return { ok: false, error: "No such workspace." };
+  try {
+    const c = await changes(ws.path, ws.baseRef);
+    const file = c.files.find((f) => f.path === path);
+    return file ? { ok: true, value: await filePatch(ws.path, c.base, file) } : { ok: true, value: "" };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+});
+ipcMain.handle(
+  "comments:add",
+  (_e, c: { workspaceId: string; file: string; line: number; side: "new" | "old"; lineText: string; body: string }) =>
+    void comments.add({ ...c, author: "user" }),
+);
+ipcMain.handle("comments:remove", (_e, id: string) => comments.remove(id));
+ipcMain.handle("comments:resolve", (_e, id: string, resolved: boolean) => comments.setResolved(id, resolved));
+ipcMain.handle("comments:send", (_e, workspaceId: string, chatId: string) => {
+  const unsent = comments.unsent(workspaceId);
+  if (!unsent.length) return { ok: false, error: "No unsent comments." };
+  const r = chats.send(chatId, commentsMessage(unsent));
+  if (r.ok) comments.markSent(unsent.map((c) => c.id));
+  return r;
+});
+
 ipcMain.handle("chat:configure", (_e, chatId: string, patch: { model?: Model; effort?: Effort; mode?: Mode }) =>
   chats.configure(chatId, patch),
 );

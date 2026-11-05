@@ -17,9 +17,9 @@ export class Store {
   private static load(file: string): State {
     try {
       const s = JSON.parse(readFileSync(file, "utf8")) as Partial<State>;
-      return { repos: s.repos ?? [], workspaces: s.workspaces ?? [], chats: s.chats ?? [] };
+      return { repos: s.repos ?? [], workspaces: s.workspaces ?? [], chats: s.chats ?? [], comments: s.comments ?? [] };
     } catch {
-      return { repos: [], workspaces: [], chats: [] };
+      return { repos: [], workspaces: [], chats: [], comments: [] };
     }
   }
 

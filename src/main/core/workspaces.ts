@@ -54,6 +54,7 @@ export class Workspaces {
       repos: s.repos.filter((r) => r.id !== repoId),
       workspaces: s.workspaces.filter((w) => w.repoId !== repoId),
       chats: s.chats.filter((c) => !gone.has(c.workspaceId)),
+      comments: s.comments.filter((c) => !gone.has(c.workspaceId)),
     }));
     return ok(undefined);
   }

@@ -10,14 +10,22 @@ import {
   emptyView,
   MODELS,
   MODES,
+  type Question,
 } from "../../shared/chat.ts";
 import type { Workspace } from "../../shared/types.ts";
 
 const api = window.caboose;
 
+const activeKey = (ws: Workspace) => `caboose-chat-${ws.id}`;
+
+/** The chat tab the user last had open in a workspace. */
+export function activeChat(ws: Workspace, chats: Chat[]): Chat | undefined {
+  return chats.find((c) => c.id === localStorage.getItem(activeKey(ws))) ?? chats.at(-1);
+}
+
 /** Tabs for a workspace's chats, and the active chat below them. */
-export function ChatArea({ ws, chats }: { ws: Workspace; chats: Chat[] }) {
-  const key = `caboose-chat-${ws.id}`;
+export function ChatArea({ ws, chats, hidden }: { ws: Workspace; chats: Chat[]; hidden?: boolean }) {
+  const key = activeKey(ws);
   const [activeId, setActiveId] = useState<string | null>(() => localStorage.getItem(key));
   const active = chats.find((c) => c.id === activeId) ?? chats.at(-1);
   const creating = useRef(false);
@@ -41,7 +49,7 @@ export function ChatArea({ ws, chats }: { ws: Workspace; chats: Chat[] }) {
   }, [ws.id, ws.archived, chats.length]);
 
   return (
-    <div className="chat-area">
+    <div className="chat-area" hidden={hidden}>
       <div className="tabs">
         {chats.map((c) => (
           <div key={c.id} className={`tab${c.id === active?.id ? " active" : ""}`} onClick={() => select(c.id)}>
@@ -128,7 +136,12 @@ function ChatPanel({ chat, ws }: { chat: Chat; ws: Workspace }) {
           </div>
         ))}
       </div>
-      <Composer chat={chat} running={view.running} disabled={ws.archived} />
+      <Composer
+        chat={chat}
+        running={view.running}
+        asking={view.items.some((i) => i.kind === "question" && !i.answered)}
+        disabled={ws.archived}
+      />
     </div>
   );
 }
@@ -156,7 +169,7 @@ function Item({ item, chatId, rel }: { item: ChatItem; chatId: string; rel: (p: 
       return (
         <div className={`permission${item.answer === undefined ? " open" : ""}`}>
           <div>
-            Claude wants to use <b>{item.tool}</b>
+            Claude wants to use <b>{toolName(item.tool)}</b>
             {toolSummary(item.input, rel) && (
               <>
                 : <code>{toolSummary(item.input, rel)}</code>
@@ -178,6 +191,8 @@ function Item({ item, chatId, rel }: { item: ChatItem; chatId: string; rel: (p: 
           )}
         </div>
       );
+    case "question":
+      return <QuestionCard item={item} chatId={chatId} />;
     case "result":
       return (
         <div className={`turn-end${item.ok ? "" : " failed"}`}>
@@ -189,19 +204,112 @@ function Item({ item, chatId, rel }: { item: ChatItem; chatId: string; rel: (p: 
   }
 }
 
+function QuestionCard({ item, chatId }: { item: Extract<ChatItem, { kind: "question" }>; chatId: string }) {
+  // question text -> chosen labels, plus free text for "Other"
+  const [picked, setPicked] = useState<Record<string, string[]>>({});
+  const [other, setOther] = useState<Record<string, string>>({});
+
+  const answerFor = (q: Question) => {
+    const labels = picked[q.question] ?? [];
+    const free = other[q.question]?.trim();
+    return [...labels, ...(free ? [free] : [])].join(", ");
+  };
+  const complete = item.questions.every((q) => answerFor(q));
+
+  if (item.answered) {
+    return (
+      <div className="question done">
+        {item.answers ? (
+          item.questions.map((q) => (
+            <div key={q.question}>
+              <span className="muted">{q.question}</span> <b>{item.answers?.[q.question] ?? "—"}</b>
+            </div>
+          ))
+        ) : (
+          <div className="muted">Claude asked: {item.questions.map((q) => q.question).join(" / ")} (answered in the chat or dismissed)</div>
+        )}
+      </div>
+    );
+  }
+
+  const toggle = (q: Question, label: string) =>
+    setPicked((p) => {
+      const cur = p[q.question] ?? [];
+      const next = q.multiSelect ? (cur.includes(label) ? cur.filter((l) => l !== label) : [...cur, label]) : [label];
+      return { ...p, [q.question]: next };
+    });
+
+  return (
+    <div className="question open">
+      {item.questions.map((q) => (
+        <div key={q.question} className="q">
+          <div className="q-title">
+            <span className="chip">{q.header}</span> {q.question}
+            {q.multiSelect && <span className="muted"> (pick any)</span>}
+          </div>
+          <div className="q-options">
+            {q.options.map((o) => (
+              <button
+                key={o.label}
+                className={`q-option${(picked[q.question] ?? []).includes(o.label) ? " picked" : ""}`}
+                onClick={() => {
+                  toggle(q, o.label);
+                  if (!q.multiSelect) setOther((x) => ({ ...x, [q.question]: "" }));
+                }}
+              >
+                <b>{o.label}</b>
+                {o.description && <span className="muted">{o.description}</span>}
+              </button>
+            ))}
+            <input
+              className="q-other"
+              placeholder="Other…"
+              value={other[q.question] ?? ""}
+              onChange={(e) => {
+                const v = e.target.value;
+                setOther((x) => ({ ...x, [q.question]: v }));
+                if (!q.multiSelect && v) setPicked((p) => ({ ...p, [q.question]: [] }));
+              }}
+            />
+          </div>
+        </div>
+      ))}
+      <div className="permission-actions">
+        <button
+          className="primary"
+          disabled={!complete}
+          onClick={() =>
+            api.answerQuestion(chatId, item.id, Object.fromEntries(item.questions.map((q) => [q.question, answerFor(q)])))
+          }
+        >
+          Answer
+        </button>
+        <button onClick={() => api.answerQuestion(chatId, item.id, null)}>Dismiss</button>
+        <span className="muted">or just reply below</span>
+      </div>
+    </div>
+  );
+}
+
 function ToolRow({ item, rel }: { item: Extract<ChatItem, { kind: "tool" }>; rel: (p: string) => string }) {
   const state = !item.result ? "running" : item.result.isError ? "failed" : "ok";
   return (
     <details className={`tool ${state}`}>
       <summary>
         <span className="tool-state" />
-        <span className="tool-name">{item.name}</span>
+        <span className="tool-name">{toolName(item.name)}</span>
         <span className="tool-summary">{toolSummary(item.input, rel)}</span>
       </summary>
       <pre className="tool-io">{JSON.stringify(item.input, null, 2)}</pre>
       {item.result && <pre className="tool-io result">{item.result.content || "(no output)"}</pre>}
     </details>
   );
+}
+
+/** "mcp__caboose__GetWorkspaceDiff" → "caboose · GetWorkspaceDiff" */
+function toolName(name: string): string {
+  const m = /^mcp__(.+?)__(.+)$/.exec(name);
+  return m ? `${m[1]} · ${m[2]}` : name;
 }
 
 function toolSummary(input: unknown, rel: (p: string) => string): string {
@@ -214,7 +322,8 @@ function toolSummary(input: unknown, rel: (p: string) => string): string {
   return s.length > 120 ? `${s.slice(0, 119)}…` : s;
 }
 
-function Composer({ chat, running, disabled }: { chat: Chat; running: boolean; disabled: boolean }) {
+function Composer(props: { chat: Chat; running: boolean; asking: boolean; disabled: boolean }) {
+  const { chat, running, disabled } = props;
   const [text, setText] = useState("");
   const input = useRef<HTMLTextAreaElement>(null);
 
@@ -243,7 +352,13 @@ function Composer({ chat, running, disabled }: { chat: Chat; running: boolean; d
         ref={input}
         value={text}
         rows={Math.min(10, Math.max(2, text.split("\n").length))}
-        placeholder={running ? "Queue a message for when Claude is done…" : "Ask Claude…  (Enter sends, Shift+Enter for a new line)"}
+        placeholder={
+          props.asking
+            ? "Answer Claude's question in your own words…"
+            : running
+              ? "Queue a message for when Claude is done…"
+              : "Ask Claude…  (Enter sends, Shift+Enter for a new line)"
+        }
         onChange={(e) => setText(e.target.value)}
         onKeyDown={onKey}
       />
@@ -280,7 +395,7 @@ function Composer({ chat, running, disabled }: { chat: Chat; running: boolean; d
           </button>
         )}
         <button className="primary" onClick={send} disabled={!text.trim()}>
-          {running ? "Queue" : "Send"}
+          {running && !props.asking ? "Queue" : "Send"}
         </button>
       </div>
     </div>

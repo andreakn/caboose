@@ -78,6 +78,37 @@ questions at the bottom are the ones that need an answer.
 22. **Tabs arrived early** (planned for Phase 8). Closing a tab deletes its
     transcript, after a confirm.
 
+## Phases 4–5: questions, Caboose tools, changes (2026-11-05)
+
+23. **Claude's multiple-choice questions** (Claude Code's own AskUserQuestion
+    tool) are answered in a card in the chat: pick options, or type "Other".
+    Typing a normal message while a question is open answers it in words
+    instead (Claude is told you replied in the chat).
+24. **Caboose's own tools for Claude** are an in-process MCP server named
+    `caboose`: `GetWorkspaceDiff`, `DiffComment`, `GetDiffComments`. They run
+    without asking (they only read the diff or write review comments).
+    `GetTerminalOutput` waits for the terminal in Phase 6.
+25. **A short note is appended to Claude Code's system prompt** in every
+    chat: that it runs in Caboose, which worktree/branch/base, `.context/`,
+    and the tools above. Claude Code's own prompt stays as is.
+26. **"Changes" means everything a PR would show once committed**: committed
+    on the branch since the merge-base with the base ref, plus staged,
+    unstaged and untracked files.
+27. **The Changes view polls** (every 4 s while the window is visible, and on
+    focus) instead of watching files: file watchers behave differently on
+    macOS, Windows and Linux (inotify limits), and a few git commands are
+    cheap. *(Linux-relevant: avoids inotify.)*
+28. **Our own unified diff view** instead of a diff library: it was the
+    simplest way to put comments under lines. Side-by-side may come later.
+    Diffs over 4000 lines and binary files are not shown.
+29. **Review comments live in the app state** (`comments` in `state.json`),
+    per workspace, on a line of the new file (or the old file for removed
+    lines). "Send N comments to Claude" sends one message to the open chat tab
+    and marks them sent; Claude can also read them with `GetDiffComments`.
+    Claude's own comments show with a green edge.
+30. **Chat and Changes are two views** of a workspace (switch at the top),
+    not side by side: a side-by-side split was too tight at laptop widths.
+
 ## Answered (2026-11-05)
 
 - Private GitHub repo `andreakn/caboose`: yes.

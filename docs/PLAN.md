@@ -31,10 +31,11 @@ Status: ✅ done · 🟡 started · blank = not started. Decisions: `docs/DECISI
    placeholder name, copy files, `.context/`, setup script, archive/restore.
 3. ✅ **Chat** — one session per tab; stream text, thinking, tool calls/results;
    stop, queue, resume by session ID; model/effort/permission pickers; transcripts.
-4. 🟡 **Permissions and Caboose tools** — ✅ `canUseTool` → approval prompt; in-process
-   MCP server with AskUserQuestion, GetWorkspaceDiff, GetTerminalOutput, DiffComment.
-5. **Diff and review** — `git diff origin/main...` + untracked, live via
-   chokidar; inline comments sent to the agent.
+4. ✅ **Permissions and Caboose tools** — `canUseTool` → approval prompt; in-process
+   MCP server with AskUserQuestion, GetWorkspaceDiff, DiffComment, GetDiffComments
+   (GetTerminalOutput comes with Phase 6).
+5. ✅ **Diff and review** — `git diff origin/main...` + untracked, polled
+   while visible; inline comments sent to the agent.
 6. **Terminal and run script** — a pty per workspace; a unique port per workspace.
 7. **GitHub** — create PR, status, checks, merge, rename branch.
 8. 🟡 **Polish** — notifications, ✅ multiple tabs, shortcuts, settings, theme,

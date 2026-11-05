@@ -41,6 +41,9 @@ export type LastingEvent =
   | { t: "tool_result"; id: string; content: string; isError: boolean }
   | { t: "permission"; id: string; tool: string; input: unknown }
   | { t: "permission_answer"; id: string; allowed: boolean }
+  | { t: "question"; id: string; questions: Question[] }
+  /** null: the user dismissed the questions or replied in the chat instead. */
+  | { t: "question_answer"; id: string; answers: Record<string, string> | null }
   | { t: "result"; id: string; ok: boolean; durationMs: number; turns: number; error?: string }
   | { t: "error"; id: string; text: string };
 
@@ -52,12 +55,21 @@ export type LiveEvent =
 
 export type ChatEvent = LastingEvent | LiveEvent;
 
+/** One question from Claude Code's AskUserQuestion tool. */
+export type Question = {
+  question: string;
+  header: string;
+  options: { label: string; description: string }[];
+  multiSelect: boolean;
+};
+
 export type ChatItem =
   | { kind: "user"; id: string; text: string }
   | { kind: "text"; id: string; text: string }
   | { kind: "thinking"; id: string; text: string }
   | { kind: "tool"; id: string; name: string; input: unknown; result?: { content: string; isError: boolean } }
   | { kind: "permission"; id: string; tool: string; input: unknown; answer?: boolean }
+  | { kind: "question"; id: string; questions: Question[]; answered: boolean; answers: Record<string, string> | null }
   | { kind: "result"; id: string; ok: boolean; durationMs: number; turns: number; error?: string }
   | { kind: "error"; id: string; text: string };
 
@@ -92,6 +104,16 @@ export function applyEvent(v: ChatView, e: ChatEvent): ChatView {
       return {
         ...v,
         items: v.items.map((i) => (i.kind === "permission" && i.id === e.id ? { ...i, answer: e.allowed } : i)),
+      };
+    case "question":
+      return {
+        ...v,
+        items: upsert(v.items, { kind: "question", id: e.id, questions: e.questions, answered: false, answers: null }),
+      };
+    case "question_answer":
+      return {
+        ...v,
+        items: v.items.map((i) => (i.kind === "question" && i.id === e.id ? { ...i, answered: true, answers: e.answers } : i)),
       };
     case "result":
       return {

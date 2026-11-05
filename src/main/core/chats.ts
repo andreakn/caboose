@@ -13,8 +13,8 @@ import type {
 import { randomUUID } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import type { Chat, ChatEvent, Effort, LastingEvent, Mode, Model } from "../../shared/chat.ts";
-import type { Result } from "../../shared/types.ts";
+import type { Chat, ChatEvent, Effort, LastingEvent, Mode, Model, Question } from "../../shared/chat.ts";
+import type { Result, Workspace } from "../../shared/types.ts";
 import type { Store } from "./store.ts";
 
 /** The part of the SDK's Query that Caboose uses. */
@@ -28,6 +28,8 @@ export type QueryLike = AsyncIterable<SDKMessage> & {
 export type QueryFn = (args: { prompt: AsyncIterable<SDKUserMessage>; options: Options }) => QueryLike;
 
 type Pending = { input: Record<string, unknown>; suggestions?: PermissionUpdate[]; resolve: (r: PermissionResult) => void };
+/** Extra query options per chat: Caboose's MCP tools and system prompt. */
+export type ExtraOptions = (chat: Chat, ws: Workspace) => Partial<Options>;
 
 type Live = {
   q: QueryLike;
@@ -35,7 +37,9 @@ type Live = {
   running: boolean;
   queue: string[];
   draft?: { kind: "text" | "thinking"; text: string };
+  /** Open permission prompts and AskUserQuestion cards, by event id. */
   permissions: Map<string, Pending>;
+  questions: Map<string, Pending>;
 };
 
 const DEFAULTS = { model: "default" as Model, effort: "high" as Effort, mode: "acceptEdits" as Mode };
@@ -46,13 +50,21 @@ export class Chats {
   private dir: string;
   private query: QueryFn;
   private emit: (chatId: string, e: ChatEvent) => void;
+  private extras: ExtraOptions;
   private live = new Map<string, Live>();
 
-  constructor(store: Store, dataDir: string, query: QueryFn, emit: (chatId: string, e: ChatEvent) => void) {
+  constructor(
+    store: Store,
+    dataDir: string,
+    query: QueryFn,
+    emit: (chatId: string, e: ChatEvent) => void,
+    extras: ExtraOptions = () => ({}),
+  ) {
     this.store = store;
     this.dir = join(dataDir, "chats");
     this.query = query;
     this.emit = emit;
+    this.extras = extras;
   }
 
   /** A new chat, with the settings of the workspace's most recent one. */
@@ -100,7 +112,16 @@ export class Chats {
       if (!started.ok) return started;
       live = started.value;
     }
-    if (live.running) {
+    const [questionId, question] = [...live.questions][0] ?? [];
+    if (questionId && question) {
+      // Replying in the chat while Claude asks something answers it in words.
+      this.record(chatId, { t: "user", id: randomUUID(), text, at: new Date().toISOString() });
+      this.settleQuestion(chatId, live, questionId, null);
+      question.resolve({
+        behavior: "deny",
+        message: `The user did not pick an option and replied instead: ${JSON.stringify(text)}`,
+      });
+    } else if (live.running) {
       live.queue.push(text);
       this.status(chatId, live);
     } else {
@@ -134,6 +155,23 @@ export class Chats {
             ...(answer === "always" && p.suggestions ? { updatedPermissions: p.suggestions } : {}),
           },
     );
+  }
+
+  answerQuestion(chatId: string, id: string, answers: Record<string, string> | null): void {
+    const live = this.live.get(chatId);
+    const q = live?.questions.get(id);
+    if (!live || !q) return;
+    this.settleQuestion(chatId, live, id, answers);
+    q.resolve(
+      answers
+        ? { behavior: "allow", updatedInput: { ...q.input, answers } }
+        : { behavior: "deny", message: "The user dismissed the question without answering." },
+    );
+  }
+
+  private settleQuestion(chatId: string, live: Live, id: string, answers: Record<string, string> | null): void {
+    live.questions.delete(id);
+    this.record(chatId, { t: "question_answer", id, answers });
   }
 
   async configure(chatId: string, patch: { model?: Model; effort?: Effort; mode?: Mode }): Promise<void> {
@@ -179,10 +217,18 @@ export class Chats {
     const ws = this.store.get().workspaces.find((w) => w.id === chat.workspaceId);
     if (!ws || ws.archived) return { ok: false, error: "This workspace is archived." };
     const inbox = new Inbox<SDKUserMessage>();
-    const live: Live = { q: undefined as unknown as QueryLike, inbox, running: false, queue: [], permissions: new Map() };
+    const live: Live = {
+      q: undefined as unknown as QueryLike,
+      inbox,
+      running: false,
+      queue: [],
+      permissions: new Map(),
+      questions: new Map(),
+    };
     live.q = this.query({
       prompt: inbox,
       options: {
+        ...this.extras(chat, ws),
         cwd: ws.path,
         resume: chat.sessionId,
         model: chat.model === "default" ? undefined : chat.model,
@@ -298,16 +344,23 @@ export class Chats {
 
   private canUseTool(chatId: string): CanUseTool {
     return (tool, input, { signal, suggestions }) => {
-      if (tool === "AskUserQuestion") {
-        // Phase 4 gives this a real UI.
-        return Promise.resolve({
-          behavior: "deny",
-          message: "Caboose cannot show multiple-choice questions yet. Ask in plain text and end your turn.",
-        });
-      }
+      // Caboose's own tools only read the diff or write review comments.
+      if (tool.startsWith("mcp__caboose__")) return Promise.resolve({ behavior: "allow", updatedInput: input });
       const live = this.live.get(chatId);
       if (!live) return Promise.resolve({ behavior: "deny", message: "The session was closed." });
       const id = randomUUID();
+      if (tool === "AskUserQuestion") {
+        return new Promise<PermissionResult>((resolve) => {
+          live.questions.set(id, { input, resolve });
+          this.record(chatId, { t: "question", id, questions: (input.questions ?? []) as Question[] });
+          signal.addEventListener("abort", () => {
+            if (live.questions.has(id)) {
+              this.settleQuestion(chatId, live, id, null);
+              resolve({ behavior: "deny", message: "Cancelled." });
+            }
+          });
+        });
+      }
       return new Promise<PermissionResult>((resolve) => {
         live.permissions.set(id, { input, suggestions, resolve });
         this.record(chatId, { t: "permission", id, tool, input });
@@ -327,6 +380,10 @@ export class Chats {
       p.resolve({ behavior: "deny", message, interrupt: true });
     }
     live.permissions.clear();
+    for (const [id, q] of [...live.questions]) {
+      this.settleQuestion(chatId, live, id, null);
+      q.resolve({ behavior: "deny", message, interrupt: true });
+    }
   }
 
   private status(chatId: string, live: Live): void {

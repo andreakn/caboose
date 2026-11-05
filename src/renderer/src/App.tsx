@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import type { Chat } from "../../shared/chat.ts";
 import type { Repo, Result, State, Workspace } from "../../shared/types.ts";
-import { ChatArea } from "./Chat.tsx";
+import type { DiffComment } from "../../shared/diff.ts";
+import { ChangesView, useChanges } from "./Changes.tsx";
+import { activeChat, ChatArea } from "./Chat.tsx";
 
 const api = window.caboose;
 
 export function App() {
-  const [state, setState] = useState<State>({ repos: [], workspaces: [], chats: [] });
+  const [state, setState] = useState<State>({ repos: [], workspaces: [], chats: [], comments: [] });
   const [selected, setSelectedRaw] = useState<string | null>(() => localStorage.getItem("caboose-selected"));
   const setSelected = (id: string | null) => {
     setSelectedRaw(id);
@@ -68,6 +70,7 @@ export function App() {
             ws={ws}
             repo={repoOf(ws)}
             chats={state.chats.filter((c) => c.workspaceId === ws.id)}
+            comments={state.comments.filter((c) => c.workspaceId === ws.id)}
             onArchive={() => act(`Archiving ${ws.name}…`, () => api.archiveWorkspace(ws.id))}
             onRestore={() => act(`Restoring ${ws.name}…`, () => api.restoreWorkspace(ws.id))}
           />
@@ -134,11 +137,16 @@ function WorkspaceView(props: {
   ws: Workspace;
   repo?: Repo;
   chats: Chat[];
+  comments: DiffComment[];
   onArchive: () => void;
   onRestore: () => void;
 }) {
   const { ws } = props;
   const [log, setLog] = useState("");
+  const [tab, setTab] = useState<"chat" | "changes">(location.hash === "#changes" ? "changes" : "chat");
+  const diff = useChanges(ws);
+  const fileCount = diff.changes?.files.length ?? 0;
+  const openComments = props.comments.filter((c) => !c.resolved).length;
   useEffect(() => {
     void api.setupLog(ws.id).then(setLog);
   }, [ws.id, ws.setup]);
@@ -181,7 +189,33 @@ function WorkspaceView(props: {
         {log && <pre className="log">{log}</pre>}
       </details>
 
-      <ChatArea ws={ws} chats={props.chats} />
+      <div className="view-tabs">
+        <button className={tab === "chat" ? "active" : ""} onClick={() => setTab("chat")}>
+          Chat
+        </button>
+        <button className={tab === "changes" ? "active" : ""} onClick={() => setTab("changes")}>
+          Changes{fileCount > 0 && <span className="badge">{fileCount}</span>}
+          {openComments > 0 && <span className="badge comments">💬{openComments}</span>}
+        </button>
+      </div>
+
+      <ChatArea ws={ws} chats={props.chats} hidden={tab !== "chat"} />
+      {tab === "changes" && (
+        <ChangesView
+          ws={ws}
+          changes={diff.changes}
+          error={diff.error}
+          comments={props.comments}
+          refresh={diff.refresh}
+          onSendComments={async () => {
+            const chat = activeChat(ws, props.chats);
+            if (!chat) return;
+            const r = await api.sendComments(ws.id, chat.id);
+            if (r.ok) setTab("chat");
+            else alert(r.error);
+          }}
+        />
+      )}
     </div>
   );
 }

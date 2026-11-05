@@ -1,5 +1,6 @@
 // Shapes shared by the main process, the preload bridge and the renderer.
 import type { Chat, ChatEvent, Effort, Mode, Model } from "./chat.ts";
+import type { DiffComment, WorkspaceChanges } from "./diff.ts";
 
 export type Repo = {
   id: string;
@@ -31,6 +32,7 @@ export type State = {
   repos: Repo[];
   workspaces: Workspace[];
   chats: Chat[];
+  comments: DiffComment[];
 };
 
 /** Per-repo settings, read from `caboose.json` in the repo's main checkout. */
@@ -76,5 +78,14 @@ export type CabooseApi = {
   interrupt(chatId: string): Promise<void>;
   answerPermission(chatId: string, id: string, answer: "allow" | "always" | "deny"): Promise<void>;
   configureChat(chatId: string, patch: { model?: Model; effort?: Effort; mode?: Mode }): Promise<void>;
+  answerQuestion(chatId: string, id: string, answers: Record<string, string> | null): Promise<void>;
   onChatEvent(listener: (chatId: string, event: ChatEvent) => void): () => void;
+
+  changes(workspaceId: string): Promise<Result<WorkspaceChanges>>;
+  filePatch(workspaceId: string, path: string): Promise<Result<string>>;
+  addComment(c: { workspaceId: string; file: string; line: number; side: "new" | "old"; lineText: string; body: string }): Promise<void>;
+  removeComment(id: string): Promise<void>;
+  resolveComment(id: string, resolved: boolean): Promise<void>;
+  /** Sends the unsent user comments to a chat as one message. */
+  sendComments(workspaceId: string, chatId: string): Promise<Result<void>>;
 };

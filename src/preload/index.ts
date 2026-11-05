@@ -24,6 +24,13 @@ const api: CabooseApi = {
   interrupt: (chatId) => ipcRenderer.invoke("chat:interrupt", chatId),
   answerPermission: (chatId, id, answer) => ipcRenderer.invoke("chat:answerPermission", chatId, id, answer),
   configureChat: (chatId, patch) => ipcRenderer.invoke("chat:configure", chatId, patch),
+  answerQuestion: (chatId, id, answers) => ipcRenderer.invoke("chat:answerQuestion", chatId, id, answers),
+  changes: (workspaceId) => ipcRenderer.invoke("diff:changes", workspaceId),
+  filePatch: (workspaceId, path) => ipcRenderer.invoke("diff:patch", workspaceId, path),
+  addComment: (c) => ipcRenderer.invoke("comments:add", c),
+  removeComment: (id) => ipcRenderer.invoke("comments:remove", id),
+  resolveComment: (id, resolved) => ipcRenderer.invoke("comments:resolve", id, resolved),
+  sendComments: (workspaceId, chatId) => ipcRenderer.invoke("comments:send", workspaceId, chatId),
   onChatEvent: (listener) => {
     const handler = (_e: unknown, chatId: string, event: ChatEvent) => listener(chatId, event);
     ipcRenderer.on("chat:event", handler);

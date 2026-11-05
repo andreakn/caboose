@@ -36,6 +36,20 @@ function fakeQuery() {
           parent_tool_use_id: null,
           event: { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "Hel" } },
         } as SDKMessage;
+        if (text === "ask") {
+          const decision = await options.canUseTool!(
+            "AskUserQuestion",
+            { questions: [{ question: "Which colour?", header: "Colour", multiSelect: false, options: [{ label: "Red", description: "" }, { label: "Blue", description: "" }] }] },
+            { signal: new AbortController().signal, toolUseID: "q1" } as never,
+          );
+          const answer = decision?.behavior === "allow" ? JSON.stringify(decision.updatedInput?.answers) : decision?.message;
+          yield {
+            type: "assistant",
+            uuid: `q${n}`,
+            parent_tool_use_id: null,
+            message: { content: [{ type: "text", text: `answer: ${answer}` }] },
+          } as SDKMessage;
+        }
         if (text === "use tool") {
           const decision = await options.canUseTool!("Bash", { command: "ls" }, {
             signal: new AbortController().signal,
@@ -180,4 +194,44 @@ test("settings follow into the live session and into the next chat", async () =>
   assert.equal(next.value.model, "sonnet");
   assert.equal(next.value.mode, "plan");
   assert.equal(store.get().chats.length, 2);
+});
+
+const texts = (events: ChatEvent[]) => view(events).items.flatMap((i) => (i.kind === "text" ? [i.text] : []));
+
+test("Claude's questions wait for the user's choice and pass the answers on", async () => {
+  const { chats, events, chatId } = setup();
+  chats.send(chatId, "ask");
+  await until(() => view(events).items.some((i) => i.kind === "question"));
+  const q = view(events).items.find((i) => i.kind === "question")!;
+  chats.answerQuestion(chatId, q.id, { "Which colour?": "Blue" });
+  await until(() => events.some((e) => e.t === "result"));
+  assert.ok(texts(events).includes(`answer: {"Which colour?":"Blue"}`));
+  const answered = view(events).items.find((i) => i.kind === "question");
+  assert.ok(answered?.kind === "question" && answered.answered && answered.answers?.["Which colour?"] === "Blue");
+});
+
+test("replying in the chat while Claude asks answers the question in words", async () => {
+  const { chats, events, chatId } = setup();
+  chats.send(chatId, "ask");
+  await until(() => view(events).items.some((i) => i.kind === "question"));
+  chats.send(chatId, "green, actually");
+  await until(() => events.some((e) => e.t === "result"));
+  assert.ok(texts(events).some((t) => t.includes("replied instead") && t.includes("green, actually")));
+  assert.deepEqual(view(events).queued, []);
+  assert.equal(view(events).items.filter((i) => i.kind === "user").length, 2);
+});
+
+test("extra options reach the query", () => {
+  const store = new Store(join(tmp, `${Math.random()}`, "state.json"));
+  store.update((s) => ({
+    ...s,
+    workspaces: [{ id: "w1", repoId: "r1", name: "finse", branch: "b", path: tmp, baseRef: "main", createdAt: "", archived: false, setup: "none" }],
+  }));
+  const fake = fakeQuery();
+  const chats = new Chats(store, join(tmp, `${Math.random()}`), fake.fn, () => {}, (_c, ws) => ({ allowedTools: [`x-${ws.name}`] }));
+  const c = chats.create("w1");
+  assert.ok(c.ok);
+  chats.send(c.value.id, "hi");
+  assert.deepEqual(fake.calls.options.allowedTools, ["x-finse"]);
+  chats.stopAll();
 });
