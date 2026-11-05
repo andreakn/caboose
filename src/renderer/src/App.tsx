@@ -4,6 +4,7 @@ import type { RepoConfig, Repo, Result, State, Terminal, Workspace } from "../..
 import type { DiffComment } from "../../shared/diff.ts";
 import { ChangesView, useChanges } from "./Changes.tsx";
 import { activeChat, ChatArea } from "./Chat.tsx";
+import { BranchName, GitHubBar, useGitHub } from "./GitHub.tsx";
 import { TerminalPanel, useTerminals } from "./Terminals.tsx";
 
 const api = window.caboose;
@@ -149,6 +150,7 @@ function WorkspaceView(props: {
   const [log, setLog] = useState("");
   const [tab, setTab] = useState<"chat" | "changes">(location.hash === "#changes" ? "changes" : "chat");
   const diff = useChanges(ws);
+  const gh = useGitHub(ws, props.chats);
   const fileCount = diff.changes?.files.length ?? 0;
   const openComments = props.comments.filter((c) => !c.resolved).length;
 
@@ -185,7 +187,8 @@ function WorkspaceView(props: {
         <div>
           <h1>{ws.name}</h1>
           <div className="muted">
-            {props.repo?.name} · <code>{ws.branch}</code> from <code>{ws.baseRef}</code>
+            {props.repo?.name} · <BranchName ws={ws} status={gh.status} onRenamed={gh.refresh} /> from{" "}
+            <code>{ws.baseRef}</code>
           </div>
         </div>
         <div className="actions">
@@ -216,6 +219,16 @@ function WorkspaceView(props: {
           )}
         </div>
       </header>
+
+      <GitHubBar
+        ws={ws}
+        chats={props.chats}
+        status={gh.status}
+        error={gh.error}
+        refresh={gh.refresh}
+        onAskedClaude={() => setTab("chat")}
+        onArchive={props.onArchive}
+      />
 
       <details className="ws-info" open={ws.setup === "failed" || undefined}>
         <summary>

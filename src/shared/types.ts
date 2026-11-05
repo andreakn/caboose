@@ -1,6 +1,7 @@
 // Shapes shared by the main process, the preload bridge and the renderer.
 import type { Chat, ChatEvent, Effort, Mode, Model } from "./chat.ts";
 import type { DiffComment, WorkspaceChanges } from "./diff.ts";
+import type { GitHubStatus, MergeMethod } from "./github.ts";
 
 export type Repo = {
   id: string;
@@ -104,6 +105,12 @@ export type CabooseApi = {
   resolveComment(id: string, resolved: boolean): Promise<void>;
   /** Sends the unsent user comments to a chat as one message. */
   sendComments(workspaceId: string, chatId: string): Promise<Result<void>>;
+
+  githubStatus(workspaceId: string): Promise<Result<GitHubStatus>>;
+  push(workspaceId: string): Promise<Result<void>>;
+  merge(workspaceId: string, method: MergeMethod): Promise<Result<void>>;
+  renameBranch(workspaceId: string, name: string): Promise<Result<void>>;
+  openUrl(url: string): Promise<void>;
 
   repoConfig(workspaceId: string): Promise<RepoConfig>;
   terminalFont(): Promise<string | undefined>;

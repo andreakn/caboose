@@ -11,7 +11,9 @@ import { changes, filePatch } from "./core/diff.ts";
 import { cabooseInstructions, cabooseMcp } from "./core/mcp.ts";
 import { commentsMessage } from "../shared/diff.ts";
 import { loadLocalConfig, loadRepoConfig } from "./core/config.ts";
+import { GitHub } from "./core/github.ts";
 import { Terminals } from "./core/terminals.ts";
+import type { MergeMethod } from "../shared/github.ts";
 import { Store } from "./core/store.ts";
 import { Workspaces } from "./core/workspaces.ts";
 
@@ -186,6 +188,45 @@ ipcMain.handle("repo:config", (_e, workspaceId: string) => {
   } catch {
     return {};
   }
+});
+const github = new GitHub();
+const attempt = async <T>(fn: () => Promise<T>) => {
+  try {
+    return { ok: true, value: await fn() };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+};
+const archivedError = { ok: false, error: "This workspace is archived." };
+ipcMain.handle("github:status", (_e, workspaceId: string) => {
+  const ws = liveWorkspace(workspaceId);
+  return ws ? attempt(() => github.status(ws.path, ws.branch, ws.baseRef)) : archivedError;
+});
+ipcMain.handle("github:push", (_e, workspaceId: string) => {
+  const ws = liveWorkspace(workspaceId);
+  return ws ? attempt(() => github.push(ws.path, ws.branch)) : archivedError;
+});
+ipcMain.handle("github:merge", async (_e, workspaceId: string, method: MergeMethod) => {
+  const ws = liveWorkspace(workspaceId);
+  if (!ws) return archivedError;
+  return attempt(async () => {
+    const pr = await github.pr(ws.path, ws.branch);
+    if (!pr || pr.state !== "OPEN") throw new Error("There is no open PR for this branch.");
+    await github.merge(ws.path, pr.number, method);
+  });
+});
+ipcMain.handle("github:rename", (_e, workspaceId: string, name: string) => {
+  const ws = liveWorkspace(workspaceId);
+  if (!ws) return archivedError;
+  return attempt(async () => {
+    const status = await github.branchStatus(ws.path, ws.baseRef);
+    if (status.upstream) throw new Error("The branch is already pushed; renaming it would cut it off from GitHub.");
+    await github.renameBranch(ws.path, ws.branch, name.trim());
+    workspaces.setBranch(ws.id, name.trim());
+  });
+});
+ipcMain.handle("shell:openUrl", (_e, url: string) => {
+  if (/^https:\/\//.test(url)) return shell.openExternal(url);
 });
 ipcMain.handle("config:terminalFont", () => localConfig.terminalFont);
 ipcMain.handle("term:list", (_e, workspaceId: string) => terminals.list(workspaceId));

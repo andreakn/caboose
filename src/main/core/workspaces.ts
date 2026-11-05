@@ -168,6 +168,10 @@ export class Workspaces {
     return port;
   }
 
+  setBranch(id: string, branch: string): void {
+    this.patch(id, { branch });
+  }
+
   setupLog(id: string): string {
     const { ws } = this.find(id);
     if (!ws || !existsSync(this.logFile(ws))) return "";

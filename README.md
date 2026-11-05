@@ -8,7 +8,7 @@ macOS, Windows and Linux, run straight from a clone.
 - Node 22.12+ (developed on Node 26) and npm
 - git (on Windows: Git for Windows, which Claude Code needs too)
 - Claude Code, logged in (`claude` then `/login`)
-- `gh`, logged in (from Phase 7)
+- `gh`, logged in (`gh auth login`), for PRs
 
 ## Run
 

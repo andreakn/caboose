@@ -140,6 +140,30 @@ questions at the bottom are the ones that need an answer.
     protocol (evaluate JS, wait, screenshot), so UI changes can be checked
     end to end without clicking by hand.
 
+## Phase 7: GitHub (2026-11-05)
+
+40. **`gh` owns the GitHub login**; Caboose calls `gh` and `git` and keeps no
+    tokens. Without `gh`, or for repos whose `origin` is not on GitHub, the
+    bar only shows the local branch status and says why.
+41. **Judgement goes to Claude, mechanics to Caboose.** "Create PR" / "Draft
+    PR", "Fix checks" and "Resolve conflicts" send Claude a message in the
+    open chat tab (commit what belongs, push, `gh pr create --base <base>`,
+    follow the repo's conventions). Push, Merge, status, checks and branch
+    rename are run by Caboose directly.
+42. **Status refreshes** every 15 s while the window is visible, on focus,
+    after every chat turn in the workspace, and after each action.
+43. **Merge asks first** (with a warning for failing or running checks), uses
+    the method you last picked (squash by default), is disabled for drafts
+    and conflicts, and does **not** delete the branch: the worktree still has
+    it checked out. After merging, the bar offers "Archive workspace".
+44. **Renaming a branch is only offered before it is pushed**: renaming a
+    pushed branch would cut it off from its PR.
+45. **Links open in the browser** only for `https://` URLs.
+46. **Tested against GitHub for real**: a throwaway workspace on this repo,
+    "Draft PR" clicked in the app, Claude (Haiku) committed, pushed and
+    opened draft PR #1; it was closed and its branch deleted right after.
+    Merge is covered by a test of the `gh` call, not run against GitHub.
+
 ## Answered (2026-11-05)
 
 - Private GitHub repo `andreakn/caboose`: yes.
