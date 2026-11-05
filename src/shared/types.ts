@@ -47,7 +47,7 @@ export type RepoConfig = {
 export type LocalConfig = {
   /** Where worktrees go. Default: ~/caboose/workspaces */
   workspacesRoot?: string;
-  /** Branch prefix for new workspaces. Default: the OS user name. */
+  /** Branch prefix for new workspaces. Default: "caboose". */
   branchPrefix?: string;
   /** Path to bash for repo scripts. Default: bash on PATH, or Git for Windows' bash. */
   bashPath?: string;

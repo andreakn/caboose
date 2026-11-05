@@ -1,6 +1,25 @@
+# Dependencies
 node_modules/
-dist/
+
+# Build output
 out/
-.DS_Store
-.context/
+dist/
+release/
+*.tsbuildinfo
+
+# Logs
+*.log
+npm-debug.log*
+
+# This machine only: local settings, secrets, scratch space
 caboose.local.json
+.env
+.env.*
+.context/
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/

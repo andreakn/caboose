@@ -25,11 +25,11 @@ questions at the bottom are the ones that need an answer.
    all machines. Scripts get `CABOOSE_WORKSPACE_NAME/PATH`, `CABOOSE_ROOT_PATH`,
    `CABOOSE_BRANCH`.
 5. **Workspaces**: `~/caboose/workspaces/<repo>/<station>`, branch
-   `<prefix>/<station>` (prefix = OS user name by default), branched from
+   `caboose/<station>` (prefix configurable), branched from
    `origin/HEAD` (else the current branch) after a `git fetch` that is allowed
    to fail offline. The branch is created **without** upstream tracking so a
    plain `git push` can never push to main.
-6. **Names are railway stations**, Norwegian first (finse, myrdal, flam…).
+6. **Names are Nordic railway stations** (Norway, Sweden, Denmark, Finland), in ASCII.
 7. **`.context/` is excluded via `.git/info/exclude`**, not the repo's
    `.gitignore`, so Caboose never makes a change you did not ask for.
 8. **Archive = run archive script, remove worktree, keep branch.** Restore
@@ -47,10 +47,9 @@ questions at the bottom are the ones that need an answer.
 13. **Theme**: own light/dark palette with a caboose-red accent, following the
     OS. Not linked to the family theme.css.
 
-## Questions for Andreas
+## Answered (2026-11-05)
 
-- **GitHub repo?** Nothing is pushed anywhere yet. Create a private
-  `andreakn/caboose` and push? (Needed before you can clone on Windows.)
-- **Branch prefix**: OS user name (`andreakn/finse`) OK, or `caboose/finse`?
-- **Stations**: fun, or would you rather have Conductor-style city names?
-- **Linux**: nothing so far is Mac/Windows-only, but it is untested.
+- Private GitHub repo `andreakn/caboose`: yes.
+- Branch prefix: `caboose`.
+- Names: railway stations from all the Nordic countries.
+- Linux: tested later. Flag any choice that affects Linux compatibility.

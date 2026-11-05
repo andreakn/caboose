@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { homedir, userInfo } from "node:os";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import type { LocalConfig, RepoConfig } from "../../shared/types.ts";
 
@@ -17,10 +17,9 @@ export type ResolvedLocalConfig = Required<Omit<LocalConfig, "bashPath">> & { ba
 /** This machine's settings: `caboose.local.json` in the Caboose checkout, with defaults. */
 export function loadLocalConfig(cabooseDir: string): ResolvedLocalConfig {
   const c = readJson<LocalConfig>(join(cabooseDir, "caboose.local.json"));
-  const user = userInfo().username.toLowerCase().replace(/[^a-z0-9._-]/g, "");
   return {
     workspacesRoot: c.workspacesRoot ? expandHome(c.workspacesRoot) : join(homedir(), "caboose", "workspaces"),
-    branchPrefix: c.branchPrefix ?? user,
+    branchPrefix: c.branchPrefix ?? "caboose",
     bashPath: c.bashPath,
   };
 }
