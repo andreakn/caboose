@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { LocalConfig, RepoConfig } from "../../shared/types.ts";
@@ -28,6 +28,17 @@ export function loadLocalConfig(cabooseDir: string): ResolvedLocalConfig {
     shellPath: c.shellPath,
     terminalFont: c.terminalFont,
   };
+}
+
+/** This machine's settings as written in the file, without defaults. */
+export function readLocalConfig(cabooseDir: string): LocalConfig {
+  return readJson<LocalConfig>(join(cabooseDir, "caboose.local.json"));
+}
+
+/** Writes `caboose.local.json`, leaving out empty values (so defaults apply). */
+export function saveLocalConfig(cabooseDir: string, c: LocalConfig): void {
+  const clean = Object.fromEntries(Object.entries(c).filter(([, v]) => typeof v === "string" && v.trim() !== "").map(([k, v]) => [k, (v as string).trim()]));
+  writeFileSync(join(cabooseDir, "caboose.local.json"), `${JSON.stringify(clean, null, 2)}\n`);
 }
 
 /** A repo's `caboose.json`, read from its main checkout. */

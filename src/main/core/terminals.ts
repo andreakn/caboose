@@ -32,6 +32,11 @@ export class Terminals {
     this.shellPath = opts.shellPath;
   }
 
+  setPaths(bashPath?: string, shellPath?: string): void {
+    this.bashPath = bashPath;
+    this.shellPath = shellPath;
+  }
+
   list(workspaceId?: string): Terminal[] {
     return [...this.entries.values()]
       .filter((t) => !workspaceId || t.workspaceId === workspaceId)

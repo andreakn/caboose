@@ -14,8 +14,23 @@
   --mono: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
   color-scheme: light dark;
 }
+:root[data-theme="dark"] {
+  --bg: #1c1b1a;
+  --sidebar: #242220;
+  --card: #2b2926;
+  --text: #ece8e2;
+  --muted: #9b948a;
+  --border: #3a3733;
+  --accent: #e0674d;
+  --accent-soft: #4a2a22;
+  --danger: #f2756a;
+  --ok: #5cc98a;
+  --warn: #e2b350;
+  color-scheme: dark;
+}
+:root[data-theme="light"] { color-scheme: light; }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #1c1b1a;
     --sidebar: #242220;
     --card: #2b2926;
@@ -361,3 +376,36 @@ table.diff { border-collapse: collapse; width: 100%; font: 12px/1.55 var(--mono)
 .chip.bad { background: color-mix(in srgb, var(--danger) 20%, transparent); }
 .gh-check-list { flex-basis: 100%; list-style: none; margin: 4px 0 0; padding: 6px 0 0; border-top: 1px solid var(--border); font-size: 12.5px; }
 .gh-check-list a { color: var(--text); }
+
+/* Activity dots: working, waiting for you, finished unseen */
+.dot.act-running { background: var(--warn); animation: pulse 1.2s ease-in-out infinite; }
+.dot.act-waiting { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.dot.act-unread { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 25%, transparent); }
+@keyframes pulse { 50% { opacity: 0.35; } }
+.tab .dot { flex-shrink: 0; }
+
+/* Sidebar footer */
+.sidebar { display: flex; flex-direction: column; }
+.sidebar-foot { margin-top: auto; padding: 12px 6px 0; }
+.sidebar-foot .link { font-size: 13px; }
+.sidebar-foot .link.active { color: var(--accent); }
+
+/* Settings */
+.settings { flex: 1; padding: 16px 24px 40px; overflow-y: auto; }
+.settings > * { max-width: 820px; }
+.settings section { margin-top: 26px; }
+.settings h2 { font-size: 15px; margin: 0 0 8px; }
+.settings p { margin: 6px 0 10px; }
+.segmented { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.segmented button { border: none; border-radius: 0; background: none; padding: 6px 14px; }
+.segmented button + button { border-left: 1px solid var(--border); }
+.segmented button.active { background: var(--accent-soft); }
+.check { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+.form { display: grid; gap: 12px; margin: 12px 0; }
+.form label { display: grid; grid-template-columns: 170px 1fr; column-gap: 12px; align-items: center; }
+.form small { grid-column: 2; margin-top: 2px; }
+.form input { font: inherit; font-family: var(--mono); font-size: 12.5px; color: var(--text); background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; }
+.form input:focus { outline: none; border-color: var(--accent); }
+.row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.doctor, .commits { list-style: none; padding: 0; margin: 12px 0; display: grid; gap: 6px; font-size: 13px; }
+.doctor .hint { margin-left: 18px; color: var(--warn); }

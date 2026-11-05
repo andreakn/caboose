@@ -38,7 +38,7 @@ Status: ✅ done · 🟡 started · blank = not started. Decisions: `docs/DECISI
    while visible; inline comments sent to the agent.
 6. ✅ **Terminal and run script** — a pty per workspace; a unique port per workspace.
 7. ✅ **GitHub** — create PR, status, checks, merge, rename branch.
-8. 🟡 **Polish** — notifications, ✅ multiple tabs, shortcuts, settings, theme,
+8. ✅ **Polish** — notifications, multiple tabs, shortcuts, settings, theme,
    updates by `git pull`.
 9. **Later** — other agents via ACP, checkpoints, remote access.
 

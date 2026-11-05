@@ -168,6 +168,10 @@ export class Workspaces {
     return port;
   }
 
+  setConfig(config: ResolvedLocalConfig): void {
+    this.config = config;
+  }
+
   setBranch(id: string, branch: string): void {
     this.patch(id, { branch });
   }

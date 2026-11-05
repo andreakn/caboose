@@ -13,6 +13,8 @@ import {
   type Question,
 } from "../../shared/chat.ts";
 import type { Workspace } from "../../shared/types.ts";
+import { activityOf, setVisibleChat, useActivityVersion } from "./activity.ts";
+import { useCommand } from "./commands.ts";
 
 const api = window.caboose;
 
@@ -48,11 +50,32 @@ export function ChatArea({ ws, chats, hidden }: { ws: Workspace; chats: Chat[]; 
     if (!ws.archived && chats.length === 0) void newChat();
   }, [ws.id, ws.archived, chats.length]);
 
+  // The chat on screen counts as read.
+  useEffect(() => {
+    setVisibleChat(hidden ? null : (active?.id ?? null));
+    return () => setVisibleChat(null);
+  }, [hidden, active?.id]);
+  useActivityVersion();
+
+  useCommand((c) => {
+    if (c === "newChat" && !ws.archived) void newChat();
+    if ((c === "nextChat" || c === "prevChat") && active && chats.length > 1) {
+      const i = chats.findIndex((x) => x.id === active.id);
+      select(chats[(i + (c === "nextChat" ? 1 : -1) + chats.length) % chats.length].id);
+    }
+    if (c.startsWith("selectChat:")) {
+      const id = c.slice("selectChat:".length);
+      if (chats.some((x) => x.id === id)) select(id);
+    }
+    if (c === "stopClaude" && active) void api.interrupt(active.id);
+  });
+
   return (
     <div className="chat-area" hidden={hidden}>
       <div className="tabs">
         {chats.map((c) => (
           <div key={c.id} className={`tab${c.id === active?.id ? " active" : ""}`} onClick={() => select(c.id)}>
+            <TabState chatId={c.id} />
             <span className="tab-title">{c.title}</span>
             <button
               className="tab-close"
@@ -75,6 +98,14 @@ export function ChatArea({ ws, chats, hidden }: { ws: Workspace; chats: Chat[]; 
       {active ? <ChatPanel key={active.id} chat={active} ws={ws} /> : <div className="chat-empty muted">No chats.</div>}
     </div>
   );
+}
+
+function TabState({ chatId }: { chatId: string }) {
+  const a = activityOf([chatId]);
+  if (a.waiting) return <span className="dot act-waiting" title="Claude needs you" />;
+  if (a.running) return <span className="dot act-running" title="Claude is working" />;
+  if (a.unread) return <span className="dot act-unread" title="Claude is done" />;
+  return null;
 }
 
 function ChatPanel({ chat, ws }: { chat: Chat; ws: Workspace }) {
@@ -328,6 +359,9 @@ function Composer(props: { chat: Chat; running: boolean; asking: boolean; disabl
   const input = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => input.current?.focus(), [chat.id]);
+  useCommand((c) => {
+    if (c === "focusComposer") requestAnimationFrame(() => input.current?.focus());
+  });
 
   async function send() {
     if (!text.trim()) return;

@@ -39,4 +39,23 @@ To check UI changes end to end, start the app with
 `npx electron . --remote-debugging-port=9333` and drive it with
 `node scripts/drive.ts 9333 steps.json` (see the top of that file).
 
+## Shortcuts
+
+Cmd on macOS, Ctrl on Windows/Linux.
+
+| | |
+| --- | --- |
+| New workspace / chat tab / terminal | N / T / Shift+T |
+| Chat / Changes | 1 / 2 |
+| Toggle terminal | J |
+| Focus the message box | L |
+| Next / previous chat tab | Shift+] / Shift+[ |
+| Next / previous workspace | Alt+Down / Alt+Up |
+| Run (or restart) the run script | R |
+| Stop Claude | . (or Esc in the message box) |
+| Settings | , |
+
+Settings also checks this machine's prerequisites and updates Caboose
+(`git pull`, install, build, restart).
+
 See `docs/PLAN.md` and `docs/DECISIONS.md`.

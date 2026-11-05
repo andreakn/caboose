@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Chat } from "../../shared/chat.ts";
 import type { RepoConfig, Repo, Result, State, Terminal, Workspace } from "../../shared/types.ts";
 import type { DiffComment } from "../../shared/diff.ts";
@@ -6,6 +6,10 @@ import { ChangesView, useChanges } from "./Changes.tsx";
 import { activeChat, ChatArea } from "./Chat.tsx";
 import { BranchName, GitHubBar, useGitHub } from "./GitHub.tsx";
 import { TerminalPanel, useTerminals } from "./Terminals.tsx";
+import { type Activity, activityOf, onActivityNotice, useActivityVersion } from "./activity.ts";
+import { dispatch, useCommand } from "./commands.ts";
+import { notificationsOn } from "./prefs.ts";
+import { Settings } from "./Settings.tsx";
 
 const api = window.caboose;
 
@@ -19,11 +23,50 @@ export function App() {
   };
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const activityVersion = useActivityVersion();
 
   useEffect(() => {
     void api.getState().then(setState);
     return api.onStateChanged(setState);
   }, []);
+
+  // System notifications while Caboose is in the background; clicking one opens the chat.
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  useEffect(
+    () =>
+      onActivityNotice(({ chatId, kind }) => {
+        if (!notificationsOn() || document.hasFocus()) return;
+        const s = stateRef.current;
+        const chat = s.chats.find((c) => c.id === chatId);
+        const w = chat && s.workspaces.find((x) => x.id === chat.workspaceId);
+        if (!chat || !w) return;
+        const n = new Notification(kind === "done" ? `${w.name}: Claude is done` : `${w.name}: Claude needs you`, {
+          body: chat.title,
+          silent: kind === "done",
+        });
+        n.onclick = () => {
+          api.focusWindow();
+          setShowSettings(false);
+          setSelected(w.id);
+          setTimeout(() => {
+            dispatch("showChat");
+            dispatch(`selectChat:${chat.id}`);
+          });
+        };
+      }),
+    [],
+  );
+
+  // Dock/taskbar badge: chats that finished unseen or wait for an answer.
+  useEffect(() => {
+    const count = state.chats.filter((c) => {
+      const a = activityOf([c.id]);
+      return a.unread || a.waiting > 0;
+    }).length;
+    api.setBadge(count);
+  }, [activityVersion, state.chats]);
 
   /** Runs an action, showing `label` while it runs and any error after. */
   async function act<T>(label: string, fn: () => Promise<Result<T> | null>): Promise<T | undefined> {
@@ -42,6 +85,33 @@ export function App() {
   const ws =
     state.workspaces.find((w) => w.id === selected) ?? state.workspaces.find((w) => !w.archived);
   const repoOf = (w: Workspace) => state.repos.find((r) => r.id === w.repoId);
+  const activity = (w: Workspace) => activityOf(state.chats.filter((c) => c.workspaceId === w.id).map((c) => c.id));
+  // Sidebar order, for next/previous.
+  const live = state.repos.flatMap((r) => state.workspaces.filter((w) => w.repoId === r.id && !w.archived));
+
+  async function newWorkspace(repoId: string) {
+    const repo = state.repos.find((r) => r.id === repoId);
+    const w = await act(`Creating a workspace in ${repo?.name}…`, () => api.createWorkspace(repoId));
+    if (w) {
+      setShowSettings(false);
+      setSelected(w.id);
+    }
+  }
+
+  useCommand((c) => {
+    if (c === "settings") setShowSettings((s) => !s);
+    if (c === "addRepo") void act("Adding repository…", () => api.pickAndAddRepo());
+    if (c === "newWorkspace") {
+      const repoId = ws?.repoId ?? state.repos[0]?.id;
+      if (repoId) void newWorkspace(repoId);
+    }
+    if ((c === "nextWorkspace" || c === "prevWorkspace") && live.length) {
+      const i = live.findIndex((w) => w.id === ws?.id);
+      const next = live[(i + (c === "nextWorkspace" ? 1 : -1) + live.length) % live.length];
+      setShowSettings(false);
+      setSelected(next.id);
+    }
+  });
 
   return (
     <div className="app">
@@ -52,23 +122,31 @@ export function App() {
             key={repo.id}
             repo={repo}
             workspaces={state.workspaces.filter((w) => w.repoId === repo.id)}
-            selected={ws?.id ?? null}
-            onSelect={setSelected}
-            onNew={async () => {
-              const w = await act(`Creating a workspace in ${repo.name}…`, () => api.createWorkspace(repo.id));
-              if (w) setSelected(w.id);
+            selected={showSettings ? null : (ws?.id ?? null)}
+            activity={activity}
+            onSelect={(id) => {
+              setShowSettings(false);
+              setSelected(id);
             }}
+            onNew={() => newWorkspace(repo.id)}
             onRemove={() => act(`Removing ${repo.name}…`, () => api.removeRepo(repo.id))}
           />
         ))}
         <button className="add-repo" onClick={() => act("Adding repository…", () => api.pickAndAddRepo())}>
           + Add repository
         </button>
+        <div className="sidebar-foot">
+          <button className={`link${showSettings ? " active" : ""}`} onClick={() => setShowSettings(!showSettings)}>
+            ⚙ Settings
+          </button>
+        </div>
       </aside>
 
       <main className="main">
         {(busy || error) && <div className={busy ? "banner" : "banner error"}>{busy ?? error}</div>}
-        {ws ? (
+        {showSettings ? (
+          <Settings onClose={() => setShowSettings(false)} />
+        ) : ws ? (
           <WorkspaceView
             ws={ws}
             repo={repoOf(ws)}
@@ -90,6 +168,7 @@ function RepoGroup(props: {
   repo: Repo;
   workspaces: Workspace[];
   selected: string | null;
+  activity: (w: Workspace) => Activity;
   onSelect: (id: string) => void;
   onNew: () => void;
   onRemove: () => void;
@@ -113,7 +192,13 @@ function RepoGroup(props: {
         )}
       </div>
       {live.map((w) => (
-        <WorkspaceRow key={w.id} w={w} active={w.id === props.selected} onClick={() => props.onSelect(w.id)} />
+        <WorkspaceRow
+          key={w.id}
+          w={w}
+          activity={props.activity(w)}
+          active={w.id === props.selected}
+          onClick={() => props.onSelect(w.id)}
+        />
       ))}
       {archived.length > 0 && (
         <details className="archived">
@@ -127,10 +212,19 @@ function RepoGroup(props: {
   );
 }
 
-function WorkspaceRow({ w, active, onClick }: { w: Workspace; active: boolean; onClick: () => void }) {
+function WorkspaceRow(props: { w: Workspace; activity?: Activity; active: boolean; onClick: () => void }) {
+  const { w, active, onClick, activity: a } = props;
+  // Most urgent first: Claude waiting for you, working, finished unseen; else the setup state.
+  const [cls, title] = a?.waiting
+    ? ["act-waiting", "Claude needs you"]
+    : a?.running
+      ? ["act-running", "Claude is working"]
+      : a?.unread
+        ? ["act-unread", "Claude is done"]
+        : [`setup-${w.setup}`, `Setup: ${w.setup}`];
   return (
     <button className={`ws-row${active ? " active" : ""}${w.archived ? " is-archived" : ""}`} onClick={onClick}>
-      <span className={`dot setup-${w.setup}`} />
+      <span className={`dot ${cls}`} title={title} />
       <span className="ws-name">{w.name}</span>
       <span className="ws-branch">{w.branch}</span>
     </button>
@@ -177,6 +271,19 @@ function WorkspaceView(props: {
     setTermActive(r.value.id);
     setTermOpen(true);
   }
+
+  useCommand(async (c) => {
+    if (c === "showChat" || c === "focusComposer") setTab("chat");
+    if (c === "showChanges") setTab("changes");
+    if (c === "toggleTerminal" && !ws.archived) setTermOpen(!termOpen);
+    if (c === "run" && config.run && !ws.archived) void startRun();
+    if (c === "newTerminal" && !ws.archived) {
+      const r = await api.openShell(ws.id);
+      if (!r.ok) return alert(r.error);
+      setTermActive(r.value.id);
+      setTermOpen(true);
+    }
+  });
   useEffect(() => {
     void api.setupLog(ws.id).then(setLog);
   }, [ws.id, ws.setup]);

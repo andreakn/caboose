@@ -1,0 +1,61 @@
+import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { after, test } from "node:test";
+import { loadLocalConfig, readLocalConfig, saveLocalConfig } from "../src/main/core/config.ts";
+import { checkForUpdate, update } from "../src/main/core/updater.ts";
+
+const tmp = mkdtempSync(join(tmpdir(), "caboose-upd-"));
+after(() => rmSync(tmp, { recursive: true, force: true }));
+const sh = (cwd: string, ...a: string[]) => execFileSync("git", a, { cwd, encoding: "utf8", stdio: "pipe" }).trim();
+
+test("an update check lists the commits waiting upstream and notices local edits", async () => {
+  const origin = join(tmp, "origin");
+  sh(tmp, "init", "-q", "-b", "main", origin);
+  sh(origin, "-c", "user.email=t@e", "-c", "user.name=T", "commit", "-q", "--allow-empty", "-m", "one");
+  const clone = join(tmp, "clone");
+  sh(tmp, "clone", "-q", origin, clone);
+  sh(origin, "-c", "user.email=t@e", "-c", "user.name=T", "commit", "-q", "--allow-empty", "-m", "two: new feature");
+
+  const info = await checkForUpdate(clone);
+  assert.equal(info.branch, "main");
+  assert.equal(info.behind, 1);
+  assert.match(info.commits[0], /two: new feature/);
+  assert.equal(info.dirty, false);
+
+  writeFileSync(join(clone, "x.txt"), "x");
+  sh(clone, "add", "x.txt");
+  assert.equal((await checkForUpdate(clone, false)).dirty, true);
+});
+
+test("local config is saved without empty values, and defaults fill the gaps", () => {
+  saveLocalConfig(tmp, { branchPrefix: " mine ", bashPath: "", workspacesRoot: "~/ws" });
+  assert.deepEqual(readLocalConfig(tmp), { branchPrefix: "mine", workspacesRoot: "~/ws" });
+  const resolved = loadLocalConfig(tmp);
+  assert.equal(resolved.branchPrefix, "mine");
+  assert.ok(!resolved.workspacesRoot.startsWith("~"));
+});
+
+test("update pulls, reinstalls when package.json changed, and builds", async () => {
+  const origin = join(tmp, "app-origin");
+  sh(tmp, "init", "-q", "-b", "main", origin);
+  const pkg = (v: string) =>
+    JSON.stringify({ name: "fake", version: v, private: true, scripts: { build: "node -e \"require('fs').writeFileSync('built.txt', 'yes')\"" } });
+  writeFileSync(join(origin, "package.json"), pkg("1.0.0"));
+  sh(origin, "add", ".");
+  sh(origin, "-c", "user.email=t@e", "-c", "user.name=T", "commit", "-q", "-m", "v1");
+  const clone = join(tmp, "app-clone");
+  sh(tmp, "clone", "-q", origin, clone);
+  writeFileSync(join(origin, "package.json"), pkg("1.1.0"));
+  sh(origin, "-c", "user.email=t@e", "-c", "user.name=T", "commit", "-q", "-am", "v1.1");
+
+  assert.equal((await checkForUpdate(clone)).behind, 1);
+  const log: string[] = [];
+  await update(clone, (l) => log.push(l));
+  assert.equal((await checkForUpdate(clone, false)).behind, 0);
+  assert.ok(log.includes("$ npm install"), log.join("\n"));
+  assert.ok(log.includes("$ npm run build"));
+  assert.ok(existsSync(join(clone, "built.txt")));
+});

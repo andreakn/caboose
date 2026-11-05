@@ -74,6 +74,48 @@ export type LocalConfig = {
   terminalFont?: string;
 };
 
+export type DoctorCheck = { name: string; ok: boolean; detail: string; hint?: string };
+
+export type UpdateInfo = {
+  branch: string;
+  commit: string;
+  behind: number;
+  ahead: number;
+  dirty: boolean;
+  /** "abc1234 subject" for each commit an update would bring. */
+  commits: string[];
+  note?: string;
+};
+
+export type Theme = "system" | "light" | "dark";
+
+export type MenuCommand =
+  | "settings"
+  | "newWorkspace"
+  | "newChat"
+  | "newTerminal"
+  | "addRepo"
+  | "showChat"
+  | "showChanges"
+  | "toggleTerminal"
+  | "focusComposer"
+  | "nextChat"
+  | "prevChat"
+  | "run"
+  | "stopClaude"
+  | "nextWorkspace"
+  | "prevWorkspace";
+
+export type SettingsInfo = {
+  /** What caboose.local.json says, without defaults. */
+  local: LocalConfig;
+  /** With defaults filled in, as used. */
+  resolved: LocalConfig;
+  file: string;
+  dataDir: string;
+  cabooseDir: string;
+};
+
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string };
 
 /** What the preload script exposes as `window.caboose`. */
@@ -111,6 +153,18 @@ export type CabooseApi = {
   merge(workspaceId: string, method: MergeMethod): Promise<Result<void>>;
   renameBranch(workspaceId: string, name: string): Promise<Result<void>>;
   openUrl(url: string): Promise<void>;
+
+  settings(): Promise<SettingsInfo>;
+  saveSettings(local: LocalConfig): Promise<Result<void>>;
+  doctor(): Promise<DoctorCheck[]>;
+  checkForUpdate(): Promise<Result<UpdateInfo>>;
+  /** Pulls, installs and builds, then restarts the app. Resolves only on failure. */
+  update(): Promise<Result<void>>;
+  onUpdateLog(listener: (line: string) => void): () => void;
+  setTheme(theme: Theme): void;
+  focusWindow(): void;
+  setBadge(count: number): void;
+  onMenuCommand(listener: (command: MenuCommand) => void): () => void;
 
   repoConfig(workspaceId: string): Promise<RepoConfig>;
   terminalFont(): Promise<string | undefined>;

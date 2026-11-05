@@ -1,16 +1,19 @@
 // Electron glue: window, IPC and state wiring. The real work is in ./core.
-import { query } from "@anthropic-ai/claude-agent-sdk";
-import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { query, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, screen, shell } from "electron";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { Effort, Mode, Model } from "../shared/chat.ts";
-import type { State } from "../shared/types.ts";
-import { Chats } from "./core/chats.ts";
+import type { LocalConfig, State, Theme } from "../shared/types.ts";
+import { Chats, Inbox } from "./core/chats.ts";
+import { doctor } from "./core/doctor.ts";
+import { checkForUpdate, update } from "./core/updater.ts";
+import { installMenu } from "./menu.ts";
 import { Comments } from "./core/comments.ts";
 import { changes, filePatch } from "./core/diff.ts";
 import { cabooseInstructions, cabooseMcp } from "./core/mcp.ts";
 import { commentsMessage } from "../shared/diff.ts";
-import { loadLocalConfig, loadRepoConfig } from "./core/config.ts";
+import { loadLocalConfig, loadRepoConfig, readLocalConfig, saveLocalConfig } from "./core/config.ts";
 import { GitHub } from "./core/github.ts";
 import { Terminals } from "./core/terminals.ts";
 import type { MergeMethod } from "../shared/github.ts";
@@ -24,7 +27,7 @@ if (process.env.CABOOSE_DATA) app.setPath("userData", process.env.CABOOSE_DATA);
 const dataDir = app.getPath("userData");
 const store = new Store(join(dataDir, "state.json"));
 // The Caboose checkout itself holds this machine's gitignored caboose.local.json.
-const localConfig = loadLocalConfig(app.getAppPath());
+let localConfig = loadLocalConfig(app.getAppPath());
 const workspaces = new Workspaces(store, localConfig, join(dataDir, "logs"));
 
 let win: BrowserWindow | null = null;
@@ -58,14 +61,28 @@ const chats = new Chats(
   }),
 );
 
+// The window opens where it was last closed, if that place is still on a screen.
+const boundsFile = join(dataDir, "window.json");
+function savedBounds(): Electron.Rectangle | undefined {
+  try {
+    const b = JSON.parse(readFileSync(boundsFile, "utf8")) as Electron.Rectangle;
+    const area = screen.getDisplayMatching(b).workArea;
+    const visible = b.x < area.x + area.width - 100 && b.x + b.width > area.x + 100 && b.y >= area.y - 20 && b.y < area.y + area.height - 100;
+    return visible ? b : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function createWindow() {
   win = new BrowserWindow({
     width: 1200,
     height: 800,
+    ...savedBounds(),
     minWidth: 720,
     minHeight: 480,
     title: "Caboose",
-    backgroundColor: "#1c1b1a",
+    backgroundColor: nativeTheme.shouldUseDarkColors ? "#1c1b1a" : "#f7f5f2",
     webPreferences: {
       preload: join(import.meta.dirname, "../preload/index.mjs"),
       sandbox: false, // ESM preload needs it off; the renderer only ever loads our own files
@@ -78,9 +95,13 @@ function createWindow() {
   if (process.env.ELECTRON_RENDERER_URL) win.loadURL(`${process.env.ELECTRON_RENDERER_URL}#${hash}`);
   else win.loadFile(join(import.meta.dirname, "../renderer/index.html"), { hash });
 
+  win.on("close", () => {
+    if (win && !win.isMaximized() && !win.isFullScreen()) writeFileSync(boundsFile, JSON.stringify(win.getBounds()));
+  });
+
   // Never navigate the app window away; links open in the browser.
   win.webContents.setWindowOpenHandler(({ url }) => {
-    void shell.openExternal(url);
+    if (/^https?:/.test(url)) void shell.openExternal(url);
     return { action: "deny" };
   });
   win.webContents.on("will-navigate", (e, url) => {
@@ -228,6 +249,60 @@ ipcMain.handle("github:rename", (_e, workspaceId: string, name: string) => {
 ipcMain.handle("shell:openUrl", (_e, url: string) => {
   if (/^https:\/\//.test(url)) return shell.openExternal(url);
 });
+ipcMain.handle("settings:get", () => ({
+  local: readLocalConfig(app.getAppPath()),
+  resolved: localConfig,
+  file: join(app.getAppPath(), "caboose.local.json"),
+  dataDir,
+  cabooseDir: app.getAppPath(),
+}));
+ipcMain.handle("settings:save", (_e, local: LocalConfig) =>
+  attempt(async () => {
+    saveLocalConfig(app.getAppPath(), local);
+    localConfig = loadLocalConfig(app.getAppPath());
+    workspaces.setConfig(localConfig);
+    terminals.setPaths(localConfig.bashPath, localConfig.shellPath);
+  }),
+);
+ipcMain.handle("app:doctor", () => doctor({ bashPath: localConfig.bashPath, claudeAccount }));
+ipcMain.handle("app:checkForUpdate", () => attempt(() => checkForUpdate(app.getAppPath())));
+ipcMain.handle("app:update", (e) =>
+  attempt(async () => {
+    await update(app.getAppPath(), (line) => e.sender.send("app:updateLog", line));
+    app.relaunch();
+    app.quit();
+  }),
+);
+ipcMain.on("app:theme", (_e, theme: Theme) => {
+  nativeTheme.themeSource = theme;
+});
+ipcMain.on("window:focus", () => {
+  if (win?.isMinimized()) win.restore();
+  win?.show();
+  win?.focus();
+});
+ipcMain.on("app:badge", (_e, count: number) => app.setBadgeCount(count));
+
+/** Who Claude Code is logged in as: starts a session, asks, and ends it without sending anything. */
+async function claudeAccount(): Promise<string> {
+  const inbox = new Inbox<SDKUserMessage>();
+  const q = query({ prompt: inbox, options: { cwd: app.getPath("home") } });
+  try {
+    const a = await Promise.race([
+      q.accountInfo(),
+      new Promise<never>((_r, reject) => setTimeout(() => reject(new Error("Claude Code did not answer in 30 s")), 30_000)),
+    ]);
+    if (a.subscriptionType) return `logged in, ${a.subscriptionType}`;
+    if (a.apiKeySource && a.apiKeySource !== "none") return `using an API key (${a.apiKeySource})`;
+    if (a.apiProvider && a.apiProvider !== "firstParty") return `using ${a.apiProvider}`;
+    if (a.email) return "logged in";
+    throw new Error("Not logged in");
+  } finally {
+    inbox.end();
+    q.close();
+  }
+}
+
 ipcMain.handle("config:terminalFont", () => localConfig.terminalFont);
 ipcMain.handle("term:list", (_e, workspaceId: string) => terminals.list(workspaceId));
 ipcMain.handle("term:openShell", (_e, workspaceId: string) => {
@@ -264,6 +339,7 @@ ipcMain.handle("chat:configure", (_e, chatId: string, patch: { model?: Model; ef
 store.subscribe((s: State) => win?.webContents.send("state:changed", s));
 
 app.whenReady().then(() => {
+  installMenu(() => win);
   createWindow();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

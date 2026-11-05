@@ -164,6 +164,35 @@ questions at the bottom are the ones that need an answer.
     opened draft PR #1; it was closed and its branch deleted right after.
     Merge is covered by a test of the `gh` call, not run against GitHub.
 
+## Phase 8: polish (2026-11-05)
+
+47. **Activity is tracked per chat in the window** (working / needs you /
+    finished unseen) and shown as dots on workspaces and chat tabs. A chat on
+    screen in a focused window counts as read.
+48. **System notifications only while Caboose is in the background**, for
+    "done" (silent) and "needs you" (with sound); clicking one opens that
+    chat. Switch off in Settings. The dock/taskbar badge counts chats that
+    finished unseen or wait for you *(Linux: badges only show on desktops that
+    support them, such as Unity/KDE; harmless elsewhere)*.
+49. **A real app menu** with the standard Edit/Window menus (copy/paste need
+    them on macOS) and Caboose's commands with shortcuts (README). Reload moved
+    to Cmd/Ctrl+Shift+R so Cmd/Ctrl+R can be Run.
+50. **Settings page** edits `caboose.local.json` and applies it without a
+    restart (new workspaces and terminals use it). Theme and notifications are
+    window preferences (localStorage), not in that file.
+51. **Theme**: follow the system, or force light/dark (also sets Electron's
+    `nativeTheme`, so menus and dialogs match).
+52. **Prerequisite checks** ("doctor"): git, bash, Claude Code (version and
+    login, asked from a Claude Code session that is started and ended without
+    sending anything), gh and its login, Node/Electron. Meant for setting up a
+    new machine, Windows especially.
+53. **Updating Caboose** = `git pull --ff-only` of its own checkout, `npm
+    install` only if `package.json`/lock changed, `npm run build`, restart.
+    Refused when the checkout has local changes or commits. *(Tested with a
+    fake app repo; not yet by updating Caboose itself.)*
+54. **The window opens where it was closed**, unless that place is no longer
+    on a screen.
+
 ## Answered (2026-11-05)
 
 - Private GitHub repo `andreakn/caboose`: yes.

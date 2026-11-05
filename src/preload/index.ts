@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { ChatEvent } from "../shared/chat.ts";
-import type { CabooseApi, State, Terminal } from "../shared/types.ts";
+import type { CabooseApi, MenuCommand, State, Terminal } from "../shared/types.ts";
 
 const api: CabooseApi = {
   getState: () => ipcRenderer.invoke("state:get"),
@@ -37,6 +37,24 @@ const api: CabooseApi = {
   merge: (workspaceId, method) => ipcRenderer.invoke("github:merge", workspaceId, method),
   renameBranch: (workspaceId, name) => ipcRenderer.invoke("github:rename", workspaceId, name),
   openUrl: (url) => ipcRenderer.invoke("shell:openUrl", url),
+  settings: () => ipcRenderer.invoke("settings:get"),
+  saveSettings: (local) => ipcRenderer.invoke("settings:save", local),
+  doctor: () => ipcRenderer.invoke("app:doctor"),
+  checkForUpdate: () => ipcRenderer.invoke("app:checkForUpdate"),
+  update: () => ipcRenderer.invoke("app:update"),
+  onUpdateLog: (listener) => {
+    const handler = (_e: unknown, line: string) => listener(line);
+    ipcRenderer.on("app:updateLog", handler);
+    return () => ipcRenderer.removeListener("app:updateLog", handler);
+  },
+  setTheme: (theme) => ipcRenderer.send("app:theme", theme),
+  focusWindow: () => ipcRenderer.send("window:focus"),
+  setBadge: (count) => ipcRenderer.send("app:badge", count),
+  onMenuCommand: (listener) => {
+    const handler = (_e: unknown, command: MenuCommand) => listener(command);
+    ipcRenderer.on("menu:command", handler);
+    return () => ipcRenderer.removeListener("menu:command", handler);
+  },
   terminalFont: () => ipcRenderer.invoke("config:terminalFont"),
   terminals: (workspaceId) => ipcRenderer.invoke("term:list", workspaceId),
   openShell: (workspaceId) => ipcRenderer.invoke("term:openShell", workspaceId),
