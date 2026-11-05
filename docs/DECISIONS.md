@@ -47,6 +47,37 @@ questions at the bottom are the ones that need an answer.
 13. **Theme**: own light/dark palette with a caboose-red accent, following the
     OS. Not linked to the family theme.css.
 
+## Phase 3: chat (2026-11-05)
+
+14. **Caboose uses the SDK's own Claude Code binary**, not the `claude` on
+    PATH. npm installs the right one per OS (macOS, Windows, Linux x64/arm64,
+    musl too), and `package-lock.json` pins the version, so every machine runs
+    the same Claude Code. Update with `npm update @anthropic-ai/claude-agent-sdk`.
+    Login is shared with your installed Claude Code.
+15. **One live Claude Code process per open chat**, fed through streaming
+    input; it stays alive between messages and is ended when the tab closes,
+    the workspace is archived or the app quits. After a restart the next
+    message resumes the session by id (verified with real Claude).
+16. **Our own transcript** per chat (`chats/<id>.jsonl` in the app data
+    folder): a small event format we control (`src/shared/chat.ts`), used
+    both for live updates and replay. Claude Code's own session files are
+    still what `resume` uses.
+17. **Messages sent while Claude works are queued by Caboose** (shown dimmed)
+    and sent when the turn ends; Stop (or Esc) interrupts and drops the queue.
+18. **Approvals arrived early** (planned for Phase 4): in "Ask before acting"
+    and "Accept edits" modes, tool calls that need permission show
+    Allow / Always allow / Deny. AskUserQuestion is still answered with "ask
+    in plain text" until Phase 4.
+19. **Defaults for a new chat**: the workspace's previous chat's settings,
+    else default model, effort high, **Accept edits** (file edits in the
+    worktree go through; commands ask).
+20. **Subagents' own messages are hidden**; the Agent tool's result shows
+    their report.
+21. **Settings, CLAUDE.md, MCP servers and hooks load like in the terminal**
+    (the SDK default: user, project and local settings).
+22. **Tabs arrived early** (planned for Phase 8). Closing a tab deletes its
+    transcript, after a confirm.
+
 ## Answered (2026-11-05)
 
 - Private GitHub repo `andreakn/caboose`: yes.

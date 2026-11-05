@@ -49,9 +49,11 @@ export class Workspaces {
   removeRepo(repoId: string): Result<void> {
     const live = this.store.get().workspaces.filter((w) => w.repoId === repoId && !w.archived);
     if (live.length) return fail(`Archive its ${live.length} workspace(s) first.`);
+    const gone = new Set(this.store.get().workspaces.filter((w) => w.repoId === repoId).map((w) => w.id));
     this.store.update((s) => ({
       repos: s.repos.filter((r) => r.id !== repoId),
       workspaces: s.workspaces.filter((w) => w.repoId !== repoId),
+      chats: s.chats.filter((c) => !gone.has(c.workspaceId)),
     }));
     return ok(undefined);
   }

@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
+import type { Chat } from "../../shared/chat.ts";
 import type { Repo, Result, State, Workspace } from "../../shared/types.ts";
+import { ChatArea } from "./Chat.tsx";
 
 const api = window.caboose;
 
 export function App() {
-  const [state, setState] = useState<State>({ repos: [], workspaces: [] });
+  const [state, setState] = useState<State>({ repos: [], workspaces: [], chats: [] });
   const [selected, setSelectedRaw] = useState<string | null>(() => localStorage.getItem("caboose-selected"));
   const setSelected = (id: string | null) => {
     setSelectedRaw(id);
@@ -65,6 +67,7 @@ export function App() {
           <WorkspaceView
             ws={ws}
             repo={repoOf(ws)}
+            chats={state.chats.filter((c) => c.workspaceId === ws.id)}
             onArchive={() => act(`Archiving ${ws.name}…`, () => api.archiveWorkspace(ws.id))}
             onRestore={() => act(`Restoring ${ws.name}…`, () => api.restoreWorkspace(ws.id))}
           />
@@ -127,7 +130,13 @@ function WorkspaceRow({ w, active, onClick }: { w: Workspace; active: boolean; o
   );
 }
 
-function WorkspaceView(props: { ws: Workspace; repo?: Repo; onArchive: () => void; onRestore: () => void }) {
+function WorkspaceView(props: {
+  ws: Workspace;
+  repo?: Repo;
+  chats: Chat[];
+  onArchive: () => void;
+  onRestore: () => void;
+}) {
   const { ws } = props;
   const [log, setLog] = useState("");
   useEffect(() => {
@@ -157,25 +166,22 @@ function WorkspaceView(props: { ws: Workspace; repo?: Repo; onArchive: () => voi
         </div>
       </header>
 
-      <dl className="facts">
-        <dt>Path</dt>
-        <dd>
-          <code>{ws.path}</code>
-        </dd>
-        <dt>Setup</dt>
-        <dd>{{ none: "No setup script", running: "Running…", ok: "Done", failed: "Failed" }[ws.setup]}</dd>
-        <dt>Created</dt>
-        <dd>{new Date(ws.createdAt).toLocaleString()}</dd>
-      </dl>
+      <details className="ws-info" open={ws.setup === "failed" || undefined}>
+        <summary>
+          Workspace · setup {{ none: "not configured", running: "running…", ok: "done", failed: "failed" }[ws.setup]}
+        </summary>
+        <dl className="facts">
+          <dt>Path</dt>
+          <dd>
+            <code>{ws.path}</code>
+          </dd>
+          <dt>Created</dt>
+          <dd>{new Date(ws.createdAt).toLocaleString()}</dd>
+        </dl>
+        {log && <pre className="log">{log}</pre>}
+      </details>
 
-      {log && (
-        <>
-          <h2>Setup log</h2>
-          <pre className="log">{log}</pre>
-        </>
-      )}
-
-      <div className="placeholder">Chat with Claude arrives in Phase 3.</div>
+      <ChatArea ws={ws} chats={props.chats} />
     </div>
   );
 }

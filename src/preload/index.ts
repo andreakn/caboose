@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
+import type { ChatEvent } from "../shared/chat.ts";
 import type { CabooseApi, State } from "../shared/types.ts";
 
 const api: CabooseApi = {
@@ -14,6 +15,19 @@ const api: CabooseApi = {
     const handler = (_e: unknown, s: State) => listener(s);
     ipcRenderer.on("state:changed", handler);
     return () => ipcRenderer.removeListener("state:changed", handler);
+  },
+
+  createChat: (workspaceId) => ipcRenderer.invoke("chat:create", workspaceId),
+  removeChat: (chatId) => ipcRenderer.invoke("chat:remove", chatId),
+  chatEvents: (chatId) => ipcRenderer.invoke("chat:events", chatId),
+  send: (chatId, text) => ipcRenderer.invoke("chat:send", chatId, text),
+  interrupt: (chatId) => ipcRenderer.invoke("chat:interrupt", chatId),
+  answerPermission: (chatId, id, answer) => ipcRenderer.invoke("chat:answerPermission", chatId, id, answer),
+  configureChat: (chatId, patch) => ipcRenderer.invoke("chat:configure", chatId, patch),
+  onChatEvent: (listener) => {
+    const handler = (_e: unknown, chatId: string, event: ChatEvent) => listener(chatId, event);
+    ipcRenderer.on("chat:event", handler);
+    return () => ipcRenderer.removeListener("chat:event", handler);
   },
 };
 

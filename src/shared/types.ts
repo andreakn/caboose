@@ -1,4 +1,5 @@
 // Shapes shared by the main process, the preload bridge and the renderer.
+import type { Chat, ChatEvent, Effort, Mode, Model } from "./chat.ts";
 
 export type Repo = {
   id: string;
@@ -29,6 +30,7 @@ export type Workspace = {
 export type State = {
   repos: Repo[];
   workspaces: Workspace[];
+  chats: Chat[];
 };
 
 /** Per-repo settings, read from `caboose.json` in the repo's main checkout. */
@@ -66,4 +68,13 @@ export type CabooseApi = {
   openPath(path: string): Promise<void>;
   setupLog(workspaceId: string): Promise<string>;
   onStateChanged(listener: (state: State) => void): () => void;
+
+  createChat(workspaceId: string): Promise<Result<Chat>>;
+  removeChat(chatId: string): Promise<void>;
+  chatEvents(chatId: string): Promise<ChatEvent[]>;
+  send(chatId: string, text: string): Promise<Result<void>>;
+  interrupt(chatId: string): Promise<void>;
+  answerPermission(chatId: string, id: string, answer: "allow" | "always" | "deny"): Promise<void>;
+  configureChat(chatId: string, patch: { model?: Model; effort?: Effort; mode?: Mode }): Promise<void>;
+  onChatEvent(listener: (chatId: string, event: ChatEvent) => void): () => void;
 };
