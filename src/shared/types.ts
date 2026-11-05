@@ -1,0 +1,69 @@
+// Shapes shared by the main process, the preload bridge and the renderer.
+
+export type Repo = {
+  id: string;
+  name: string;
+  /** Absolute path to the main checkout. */
+  path: string;
+  /** What new workspaces branch from, e.g. "origin/main" or "main". */
+  baseRef: string;
+  addedAt: string;
+};
+
+export type SetupState = "none" | "running" | "ok" | "failed";
+
+export type Workspace = {
+  id: string;
+  repoId: string;
+  /** The station name, also the folder name. */
+  name: string;
+  branch: string;
+  /** Absolute path to the worktree. */
+  path: string;
+  baseRef: string;
+  createdAt: string;
+  archived: boolean;
+  setup: SetupState;
+};
+
+export type State = {
+  repos: Repo[];
+  workspaces: Workspace[];
+};
+
+/** Per-repo settings, read from `caboose.json` in the repo's main checkout. */
+export type RepoConfig = {
+  /** Shell command run in a new workspace (e.g. "npm install"). */
+  setup?: string;
+  /** Shell command for the run button (later phase). */
+  run?: string;
+  /** Shell command run before a workspace is archived. */
+  archive?: string;
+  /** Gitignored files copied from the main checkout into new workspaces (e.g. ".env"). */
+  copy?: string[];
+};
+
+/** This machine's settings, read from `caboose.local.json` in the Caboose checkout (gitignored). */
+export type LocalConfig = {
+  /** Where worktrees go. Default: ~/caboose/workspaces */
+  workspacesRoot?: string;
+  /** Branch prefix for new workspaces. Default: the OS user name. */
+  branchPrefix?: string;
+  /** Path to bash for repo scripts. Default: bash on PATH, or Git for Windows' bash. */
+  bashPath?: string;
+};
+
+export type Result<T> = { ok: true; value: T } | { ok: false; error: string };
+
+/** What the preload script exposes as `window.caboose`. */
+export type CabooseApi = {
+  getState(): Promise<State>;
+  pickAndAddRepo(): Promise<Result<Repo> | null>;
+  removeRepo(repoId: string): Promise<Result<void>>;
+  createWorkspace(repoId: string): Promise<Result<Workspace>>;
+  archiveWorkspace(workspaceId: string): Promise<Result<void>>;
+  restoreWorkspace(workspaceId: string): Promise<Result<void>>;
+  openPath(path: string): Promise<void>;
+  setupLog(workspaceId: string): Promise<string>;
+  onStateChanged(listener: (state: State) => void): () => void;
+};

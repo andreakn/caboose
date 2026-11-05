@@ -1,0 +1,135 @@
+:root {
+  --bg: #f7f5f2;
+  --sidebar: #efebe6;
+  --card: #ffffff;
+  --text: #22201d;
+  --muted: #7a746c;
+  --border: #ddd6cd;
+  --accent: #b5452f; /* caboose red */
+  --accent-soft: #f3dcd5;
+  --danger: #b3261e;
+  --ok: #2e7d4f;
+  --warn: #c08a1a;
+  --radius: 8px;
+  --mono: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1c1b1a;
+    --sidebar: #242220;
+    --card: #2b2926;
+    --text: #ece8e2;
+    --muted: #9b948a;
+    --border: #3a3733;
+    --accent: #e0674d;
+    --accent-soft: #4a2a22;
+    --danger: #f2756a;
+    --ok: #5cc98a;
+    --warn: #e2b350;
+  }
+}
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body {
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+code { font-family: var(--mono); font-size: 12.5px; }
+button {
+  font: inherit;
+  color: inherit;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+button:hover { border-color: var(--accent); }
+button.danger { color: var(--danger); }
+.muted { color: var(--muted); }
+
+.app { display: flex; height: 100%; }
+
+.sidebar {
+  width: 270px;
+  flex-shrink: 0;
+  background: var(--sidebar);
+  border-right: 1px solid var(--border);
+  padding: 14px 10px;
+  overflow-y: auto;
+}
+.brand { font-weight: 700; font-size: 16px; padding: 0 6px 14px; }
+.repo { margin-bottom: 14px; }
+.repo-head { display: flex; align-items: center; gap: 4px; padding: 0 6px 4px; }
+.repo-name {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+button.icon { border: none; background: none; padding: 0 6px; font-size: 16px; color: var(--muted); }
+button.icon:hover { color: var(--accent); }
+.ws-row {
+  display: grid;
+  grid-template-columns: 10px 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: none;
+  padding: 6px 8px;
+}
+.ws-row:hover { background: var(--card); }
+.ws-row.active { background: var(--accent-soft); }
+.ws-row.is-archived { opacity: 0.6; }
+.ws-name { font-weight: 500; }
+.ws-branch { grid-column: 2; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.dot { width: 8px; height: 8px; border-radius: 50%; align-self: center; background: var(--muted); }
+.dot.setup-ok, .dot.setup-none { background: var(--ok); }
+.dot.setup-running { background: var(--warn); }
+.dot.setup-failed { background: var(--danger); }
+.archived summary { font-size: 12px; color: var(--muted); padding: 4px 8px; cursor: pointer; }
+.add-repo { width: 100%; margin-top: 6px; border-style: dashed; background: none; }
+
+.main { flex: 1; overflow-y: auto; position: relative; }
+.banner { padding: 8px 20px; background: var(--accent-soft); border-bottom: 1px solid var(--border); }
+.banner.error { color: var(--danger); }
+
+.ws-view { padding: 24px 32px; max-width: 980px; }
+.ws-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.ws-header h1 { margin: 0 0 2px; font-size: 22px; }
+.actions { display: flex; gap: 8px; }
+.facts { display: grid; grid-template-columns: 90px 1fr; gap: 6px 12px; margin: 22px 0; }
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; word-break: break-all; }
+h2 { font-size: 14px; margin: 18px 0 8px; }
+.log {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  font: 12px/1.5 var(--mono);
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+.placeholder {
+  margin-top: 28px;
+  padding: 40px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  text-align: center;
+  color: var(--muted);
+}
+
+.empty { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.empty-icon { font-size: 56px; }
+.empty h1 { margin: 8px 0 4px; }

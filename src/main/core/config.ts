@@ -1,0 +1,35 @@
+import { existsSync, readFileSync } from "node:fs";
+import { homedir, userInfo } from "node:os";
+import { join } from "node:path";
+import type { LocalConfig, RepoConfig } from "../../shared/types.ts";
+
+function readJson<T>(file: string): T {
+  if (!existsSync(file)) return {} as T;
+  try {
+    return JSON.parse(readFileSync(file, "utf8")) as T;
+  } catch (e) {
+    throw new Error(`${file} is not valid JSON: ${(e as Error).message}`);
+  }
+}
+
+export type ResolvedLocalConfig = Required<Omit<LocalConfig, "bashPath">> & { bashPath?: string };
+
+/** This machine's settings: `caboose.local.json` in the Caboose checkout, with defaults. */
+export function loadLocalConfig(cabooseDir: string): ResolvedLocalConfig {
+  const c = readJson<LocalConfig>(join(cabooseDir, "caboose.local.json"));
+  const user = userInfo().username.toLowerCase().replace(/[^a-z0-9._-]/g, "");
+  return {
+    workspacesRoot: c.workspacesRoot ? expandHome(c.workspacesRoot) : join(homedir(), "caboose", "workspaces"),
+    branchPrefix: c.branchPrefix ?? user,
+    bashPath: c.bashPath,
+  };
+}
+
+/** A repo's `caboose.json`, read from its main checkout. */
+export function loadRepoConfig(repoPath: string): RepoConfig {
+  return readJson<RepoConfig>(join(repoPath, "caboose.json"));
+}
+
+function expandHome(p: string): string {
+  return p === "~" || p.startsWith("~/") || p.startsWith("~\\") ? join(homedir(), p.slice(1)) : p;
+}
