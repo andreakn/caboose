@@ -96,6 +96,7 @@ export class Workspaces {
         createdAt: new Date().toISOString(),
         archived: false,
         setup: repoConfig.setup ? "running" : "none",
+        port: this.freePort(),
       };
       this.store.update((s) => ({ ...s, workspaces: [...s.workspaces, ws] }));
       if (repoConfig.setup) void this.runSetup(ws, repo, repoConfig.setup);
@@ -141,6 +142,32 @@ export class Workspaces {
     }
   }
 
+  /** The workspace's port block, assigned on first use for workspaces made before ports existed. */
+  ensurePort(id: string): number | undefined {
+    const { ws } = this.find(id);
+    if (!ws) return undefined;
+    if (ws.port) return ws.port;
+    const port = this.freePort();
+    this.patch(id, { port });
+    return port;
+  }
+
+  /** Environment for scripts and terminals in a workspace. */
+  scriptEnv(id: string): Record<string, string> {
+    const { ws, repo } = this.find(id);
+    if (!ws || !repo) return {};
+    const port = this.ensurePort(id);
+    return this.env({ ...ws, port }, repo);
+  }
+
+  /** The lowest free block of 10 ports from 41000, skipping live workspaces' blocks. */
+  private freePort(): number {
+    const used = new Set(this.store.get().workspaces.filter((w) => !w.archived && w.port).map((w) => w.port));
+    let port = 41000;
+    while (used.has(port)) port += 10;
+    return port;
+  }
+
   setupLog(id: string): string {
     const { ws } = this.find(id);
     if (!ws || !existsSync(this.logFile(ws))) return "";
@@ -166,6 +193,7 @@ export class Workspaces {
       CABOOSE_WORKSPACE_PATH: ws.path,
       CABOOSE_ROOT_PATH: repo.path,
       CABOOSE_BRANCH: ws.branch,
+      ...(ws.port ? { CABOOSE_PORT: String(ws.port) } : {}),
     };
   }
 

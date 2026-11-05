@@ -99,6 +99,13 @@ test("two workspaces get different names", async () => {
   assert.equal(new Set(names).size, names.length);
 });
 
+test("each workspace gets its own block of ports, also in its scripts", () => {
+  const { ws, store } = service();
+  const ports = store.get().workspaces.map((w) => w.port);
+  assert.deepEqual(ports, [41000, 41010]);
+  assert.equal(ws.scriptEnv(store.get().workspaces[1].id).CABOOSE_PORT, "41010");
+});
+
 test("archive removes the worktree but keeps the branch; restore brings it back", async () => {
   const { ws, store } = service();
   const w = store.get().workspaces[0];

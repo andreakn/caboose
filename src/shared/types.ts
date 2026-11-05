@@ -26,6 +26,18 @@ export type Workspace = {
   createdAt: string;
   archived: boolean;
   setup: SetupState;
+  /** First of 10 ports reserved for this workspace (CABOOSE_PORT). */
+  port?: number;
+};
+
+export type Terminal = {
+  id: string;
+  workspaceId: string;
+  kind: "shell" | "run";
+  title: string;
+  startedAt: string;
+  /** Set once the process has exited. */
+  exitCode?: number;
 };
 
 export type State = {
@@ -55,6 +67,10 @@ export type LocalConfig = {
   branchPrefix?: string;
   /** Path to bash for repo scripts. Default: bash on PATH, or Git for Windows' bash. */
   bashPath?: string;
+  /** Shell for terminals. Default: $SHELL on macOS/Linux, PowerShell on Windows. */
+  shellPath?: string;
+  /** Font for terminals, e.g. a Nerd Font your prompt needs. Default: common Nerd/Powerline fonts, then monospace. */
+  terminalFont?: string;
 };
 
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string };
@@ -88,4 +104,17 @@ export type CabooseApi = {
   resolveComment(id: string, resolved: boolean): Promise<void>;
   /** Sends the unsent user comments to a chat as one message. */
   sendComments(workspaceId: string, chatId: string): Promise<Result<void>>;
+
+  repoConfig(workspaceId: string): Promise<RepoConfig>;
+  terminalFont(): Promise<string | undefined>;
+  terminals(workspaceId: string): Promise<Terminal[]>;
+  openShell(workspaceId: string): Promise<Result<Terminal>>;
+  runScript(workspaceId: string): Promise<Result<Terminal>>;
+  stopTerminal(id: string): Promise<void>;
+  closeTerminal(id: string): Promise<void>;
+  termWrite(id: string, data: string): void;
+  termResize(id: string, cols: number, rows: number): void;
+  termBuffer(id: string): Promise<string>;
+  onTermData(listener: (id: string, data: string) => void): () => void;
+  onTerminalsChanged(listener: (terminals: Terminal[]) => void): () => void;
 };

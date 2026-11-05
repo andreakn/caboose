@@ -33,10 +33,10 @@ Status: ✅ done · 🟡 started · blank = not started. Decisions: `docs/DECISI
    stop, queue, resume by session ID; model/effort/permission pickers; transcripts.
 4. ✅ **Permissions and Caboose tools** — `canUseTool` → approval prompt; in-process
    MCP server with AskUserQuestion, GetWorkspaceDiff, DiffComment, GetDiffComments
-   (GetTerminalOutput comes with Phase 6).
+   and GetTerminalOutput.
 5. ✅ **Diff and review** — `git diff origin/main...` + untracked, polled
    while visible; inline comments sent to the agent.
-6. **Terminal and run script** — a pty per workspace; a unique port per workspace.
+6. ✅ **Terminal and run script** — a pty per workspace; a unique port per workspace.
 7. **GitHub** — create PR, status, checks, merge, rename branch.
 8. 🟡 **Polish** — notifications, ✅ multiple tabs, shortcuts, settings, theme,
    updates by `git pull`.

@@ -109,6 +109,37 @@ questions at the bottom are the ones that need an answer.
 30. **Chat and Changes are two views** of a workspace (switch at the top),
     not side by side: a side-by-side split was too tight at laptop widths.
 
+## Phase 6: terminals and the run script (2026-11-05)
+
+31. **Terminals use `@lydell/node-pty`**, a repackaging of Microsoft's
+    node-pty with ready-built binaries per OS as optional npm packages (like
+    the Claude SDK). No compiler, no install script, and it loads in Electron
+    without a rebuild. *(Linux: x64 and arm64 with glibc are covered; musl
+    distros such as Alpine are not. Upstream `node-pty` would compile on Linux
+    and needs build tools there.)* It is a beta version; if it ever lags,
+    switching to upstream `node-pty` is a one-line change.
+32. **Shell**: `$SHELL -l` on macOS/Linux, PowerShell (7 if installed) on
+    Windows; `shellPath` in `caboose.local.json` overrides. The run script
+    always goes through bash, like setup, so `caboose.json` works everywhere.
+33. **Each workspace gets 10 ports** starting at 41000 (`CABOOSE_PORT` = the
+    first), set in setup/run scripts and terminals and told to Claude. Kept
+    per workspace in the state; freed when archived. Caboose does not set
+    `PORT` itself: do `PORT=$CABOOSE_PORT npm run dev` in `run` if wanted.
+34. **Terminals live in memory**: they end when the app quits (or the
+    workspace is archived) and are not restored. Run again with ▶ Run.
+35. **Stopping** hangs up the whole process group on macOS/Linux; on Windows
+    closing the ConPTY ends its processes.
+36. **Terminal output is batched per frame** (16 ms) on its way to the window,
+    and each terminal keeps its last 256 KB for redraws and for Claude.
+37. **`GetTerminalOutput`** gives Claude the last lines (escape codes
+    stripped) of the Run terminal, or a terminal by title.
+38. **Terminal font**: a list of common Nerd/Powerline fonts first (your
+    zsh prompt uses those symbols), then monospace; `terminalFont` in
+    `caboose.local.json` overrides.
+39. **`scripts/drive.ts`** drives the real app over the Chrome DevTools
+    protocol (evaluate JS, wait, screenshot), so UI changes can be checked
+    end to end without clicking by hand.
+
 ## Answered (2026-11-05)
 
 - Private GitHub repo `andreakn/caboose`: yes.

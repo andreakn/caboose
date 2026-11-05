@@ -12,7 +12,11 @@ function readJson<T>(file: string): T {
   }
 }
 
-export type ResolvedLocalConfig = Required<Omit<LocalConfig, "bashPath">> & { bashPath?: string };
+export type ResolvedLocalConfig = Required<Omit<LocalConfig, "bashPath" | "shellPath" | "terminalFont">> & {
+  bashPath?: string;
+  shellPath?: string;
+  terminalFont?: string;
+};
 
 /** This machine's settings: `caboose.local.json` in the Caboose checkout, with defaults. */
 export function loadLocalConfig(cabooseDir: string): ResolvedLocalConfig {
@@ -21,6 +25,8 @@ export function loadLocalConfig(cabooseDir: string): ResolvedLocalConfig {
     workspacesRoot: c.workspacesRoot ? expandHome(c.workspacesRoot) : join(homedir(), "caboose", "workspaces"),
     branchPrefix: c.branchPrefix ?? "caboose",
     bashPath: c.bashPath,
+    shellPath: c.shellPath,
+    terminalFont: c.terminalFont,
   };
 }
 

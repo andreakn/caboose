@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { ChatEvent } from "../shared/chat.ts";
-import type { CabooseApi, State } from "../shared/types.ts";
+import type { CabooseApi, State, Terminal } from "../shared/types.ts";
 
 const api: CabooseApi = {
   getState: () => ipcRenderer.invoke("state:get"),
@@ -31,6 +31,26 @@ const api: CabooseApi = {
   removeComment: (id) => ipcRenderer.invoke("comments:remove", id),
   resolveComment: (id, resolved) => ipcRenderer.invoke("comments:resolve", id, resolved),
   sendComments: (workspaceId, chatId) => ipcRenderer.invoke("comments:send", workspaceId, chatId),
+  repoConfig: (workspaceId) => ipcRenderer.invoke("repo:config", workspaceId),
+  terminalFont: () => ipcRenderer.invoke("config:terminalFont"),
+  terminals: (workspaceId) => ipcRenderer.invoke("term:list", workspaceId),
+  openShell: (workspaceId) => ipcRenderer.invoke("term:openShell", workspaceId),
+  runScript: (workspaceId) => ipcRenderer.invoke("term:run", workspaceId),
+  stopTerminal: (id) => ipcRenderer.invoke("term:stop", id),
+  closeTerminal: (id) => ipcRenderer.invoke("term:close", id),
+  termWrite: (id, data) => ipcRenderer.send("term:write", id, data),
+  termResize: (id, cols, rows) => ipcRenderer.send("term:resize", id, cols, rows),
+  termBuffer: (id) => ipcRenderer.invoke("term:buffer", id),
+  onTermData: (listener) => {
+    const handler = (_e: unknown, id: string, data: string) => listener(id, data);
+    ipcRenderer.on("term:data", handler);
+    return () => ipcRenderer.removeListener("term:data", handler);
+  },
+  onTerminalsChanged: (listener) => {
+    const handler = (_e: unknown, list: Terminal[]) => listener(list);
+    ipcRenderer.on("term:list", handler);
+    return () => ipcRenderer.removeListener("term:list", handler);
+  },
   onChatEvent: (listener) => {
     const handler = (_e: unknown, chatId: string, event: ChatEvent) => listener(chatId, event);
     ipcRenderer.on("chat:event", handler);

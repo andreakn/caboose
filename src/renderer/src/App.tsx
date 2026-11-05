@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
 import type { Chat } from "../../shared/chat.ts";
-import type { Repo, Result, State, Workspace } from "../../shared/types.ts";
+import type { RepoConfig, Repo, Result, State, Terminal, Workspace } from "../../shared/types.ts";
 import type { DiffComment } from "../../shared/diff.ts";
 import { ChangesView, useChanges } from "./Changes.tsx";
 import { activeChat, ChatArea } from "./Chat.tsx";
+import { TerminalPanel, useTerminals } from "./Terminals.tsx";
 
 const api = window.caboose;
 
 export function App() {
+  const terminals = useTerminals();
   const [state, setState] = useState<State>({ repos: [], workspaces: [], chats: [], comments: [] });
   const [selected, setSelectedRaw] = useState<string | null>(() => localStorage.getItem("caboose-selected"));
   const setSelected = (id: string | null) => {
@@ -71,6 +73,7 @@ export function App() {
             repo={repoOf(ws)}
             chats={state.chats.filter((c) => c.workspaceId === ws.id)}
             comments={state.comments.filter((c) => c.workspaceId === ws.id)}
+            terminals={terminals.filter((t) => t.workspaceId === ws.id)}
             onArchive={() => act(`Archiving ${ws.name}…`, () => api.archiveWorkspace(ws.id))}
             onRestore={() => act(`Restoring ${ws.name}…`, () => api.restoreWorkspace(ws.id))}
           />
@@ -138,6 +141,7 @@ function WorkspaceView(props: {
   repo?: Repo;
   chats: Chat[];
   comments: DiffComment[];
+  terminals: Terminal[];
   onArchive: () => void;
   onRestore: () => void;
 }) {
@@ -147,6 +151,30 @@ function WorkspaceView(props: {
   const diff = useChanges(ws);
   const fileCount = diff.changes?.files.length ?? 0;
   const openComments = props.comments.filter((c) => !c.resolved).length;
+
+  const [config, setConfig] = useState<RepoConfig>({});
+  useEffect(() => {
+    void api.repoConfig(ws.id).then(setConfig);
+  }, [ws.id]);
+  const [termOpen, setTermOpenRaw] = useState(() => localStorage.getItem(`caboose-term-open-${ws.id}`) === "1");
+  const [termActive, setTermActive] = useState<string | null>(null);
+  useEffect(() => {
+    setTermOpenRaw(localStorage.getItem(`caboose-term-open-${ws.id}`) === "1");
+    setTermActive(null);
+  }, [ws.id]);
+  const setTermOpen = (open: boolean) => {
+    setTermOpenRaw(open);
+    localStorage.setItem(`caboose-term-open-${ws.id}`, open ? "1" : "0");
+  };
+  const run = props.terminals.find((t) => t.kind === "run");
+  const running = run && run.exitCode === undefined;
+
+  async function startRun() {
+    const r = await api.runScript(ws.id);
+    if (!r.ok) return alert(r.error);
+    setTermActive(r.value.id);
+    setTermOpen(true);
+  }
   useEffect(() => {
     void api.setupLog(ws.id).then(setLog);
   }, [ws.id, ws.setup]);
@@ -165,6 +193,21 @@ function WorkspaceView(props: {
             <button onClick={props.onRestore}>Restore</button>
           ) : (
             <>
+              {config.run &&
+                (running ? (
+                  <>
+                    <button onClick={startRun} title={config.run}>
+                      ↻ Restart
+                    </button>
+                    <button className="danger" onClick={() => api.stopTerminal(run.id)}>
+                      ■ Stop
+                    </button>
+                  </>
+                ) : (
+                  <button className="primary" onClick={startRun} title={config.run}>
+                    ▶ Run
+                  </button>
+                ))}
               <button onClick={() => api.openPath(ws.path)}>Open folder</button>
               <button className="danger" onClick={props.onArchive}>
                 Archive
@@ -183,6 +226,14 @@ function WorkspaceView(props: {
           <dd>
             <code>{ws.path}</code>
           </dd>
+          {ws.port && (
+            <>
+              <dt>Ports</dt>
+              <dd>
+                <code>{ws.port}</code>–<code>{ws.port + 9}</code> (<code>CABOOSE_PORT</code>)
+              </dd>
+            </>
+          )}
           <dt>Created</dt>
           <dd>{new Date(ws.createdAt).toLocaleString()}</dd>
         </dl>
@@ -216,6 +267,14 @@ function WorkspaceView(props: {
           }}
         />
       )}
+      <TerminalPanel
+        ws={ws}
+        terminals={props.terminals}
+        open={termOpen}
+        setOpen={setTermOpen}
+        activeId={termActive}
+        setActiveId={setTermActive}
+      />
     </div>
   );
 }

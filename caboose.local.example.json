@@ -1,5 +1,7 @@
 {
   "workspacesRoot": "~/caboose/workspaces",
   "branchPrefix": "caboose",
-  "bashPath": "C:\\Program Files\\Git\\bin\\bash.exe"
+  "bashPath": "C:\\Program Files\\Git\\bin\\bash.exe",
+  "shellPath": "/bin/zsh",
+  "terminalFont": "MesloLGS NF"
 }

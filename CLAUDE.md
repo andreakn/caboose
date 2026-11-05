@@ -11,5 +11,8 @@ worktrees. Personal/team-internal, never commercial. Plan and status: `docs/PLAN
   commands, paths or signals in app code; spawn `git`/`gh` with `execFile` and
   argument arrays. Linux is not tested yet: **tell Andreas whenever a choice
   affects Linux compatibility** (native modules, OS integrations, packaging).
+- **Check UI changes in the real app**: `npm run build`, start Electron with
+  `--remote-debugging-port` and a throwaway `CABOOSE_DATA`, then drive it with
+  `scripts/drive.ts` and look at the screenshots.
 - **Runs from a clone** (`npm install && npm start`) on every machine. Keep
   native modules to a minimum and log new decisions in `docs/DECISIONS.md`.

@@ -27,7 +27,16 @@ for this machine's settings.
 In a repo you add to Caboose, an optional `caboose.json` sets its scripts:
 
 ```json
-{ "setup": "npm install", "run": "npm run dev", "archive": "", "copy": [".env"] }
+{ "setup": "npm install", "run": "PORT=$CABOOSE_PORT npm run dev", "archive": "", "copy": [".env"] }
 ```
+
+Scripts run through bash on every OS (Git Bash on Windows). They get
+`CABOOSE_PORT` (the first of 10 ports reserved for the workspace),
+`CABOOSE_WORKSPACE_NAME`, `CABOOSE_WORKSPACE_PATH`, `CABOOSE_ROOT_PATH` and
+`CABOOSE_BRANCH`.
+
+To check UI changes end to end, start the app with
+`npx electron . --remote-debugging-port=9333` and drive it with
+`node scripts/drive.ts 9333 steps.json` (see the top of that file).
 
 See `docs/PLAN.md` and `docs/DECISIONS.md`.
