@@ -12,6 +12,7 @@ import {
   type Theme,
   type UpdateInfo,
 } from "../../shared/types.ts";
+import { MODES } from "../../shared/chat.ts";
 import { useApps } from "./Menu.tsx";
 import { applyTheme, getTheme, notificationsOn, setNotifications } from "./prefs.ts";
 
@@ -121,6 +122,25 @@ export function Configure({ onDone, onSaved }: { onDone: () => void; onSaved?: (
               </label>
             );
           })}
+        </div>
+      </section>
+
+      <section>
+        <h2>Permissions for new chats</h2>
+        <p className="muted">What the agent may do without asking. Each chat can change it in the picker under its message box.</p>
+        <div className="levels">
+          {MODES.map((m) => (
+            <label key={m.value} className={`level${(form.defaultMode ?? "bypassPermissions") === m.value ? " active" : ""}`}>
+              <input
+                type="radio"
+                name="default-mode"
+                checked={(form.defaultMode ?? "bypassPermissions") === m.value}
+                onChange={() => setForm({ ...form, defaultMode: m.value })}
+              />
+              <b>{m.label}</b>
+              <span className="muted">{m.hint}</span>
+            </label>
+          ))}
         </div>
       </section>
 

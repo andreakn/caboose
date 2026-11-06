@@ -132,7 +132,7 @@ test("a message streams a draft, then the full reply, and saves the session id",
   assert.equal(chat.sessionId, "sess-1");
   assert.equal(chat.title, "hi");
   assert.equal(fake.calls.options.cwd, tmp);
-  assert.equal(fake.calls.options.permissionMode, "acceptEdits");
+  assert.equal(fake.calls.options.permissionMode, "bypassPermissions", "new chats start in the configured mode");
 });
 
 test("the transcript is saved and replays to the same items", async () => {
@@ -188,7 +188,7 @@ test("settings follow into the live session and into the next chat", async () =>
   const next = chats.create("w1");
   assert.ok(next.ok);
   assert.equal(next.value.model, "sonnet");
-  assert.equal(next.value.mode, "plan");
+  assert.equal(next.value.mode, "bypassPermissions", "the mode comes from the setting, not the last chat");
   assert.equal(store.get().chats.length, 2);
 });
 

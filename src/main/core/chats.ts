@@ -19,7 +19,10 @@ type Live = {
   questions: Map<string, (a: QuestionAnswer) => void>;
 };
 
-const DEFAULTS = { model: "default", effort: "high" as Effort, mode: "acceptEdits" as Mode };
+const DEFAULTS = { model: "default", effort: "high" as Effort };
+
+/** What new chats start with, from the config: the main agent and the permission mode. */
+export type ChatDefaults = { agent: Agent; mode: Mode };
 
 export const agentOf = (chat: Chat): Agent => chat.agent ?? "claude";
 
@@ -30,29 +33,29 @@ export class Chats {
   private emit: (chatId: string, e: ChatEvent) => void;
   private live = new Map<string, Live>();
 
-  private defaultAgent: () => Agent;
+  private defaults: () => ChatDefaults;
 
   constructor(
     store: Store,
     dataDir: string,
     providers: Partial<Record<Agent, AgentProvider>>,
     emit: (chatId: string, e: ChatEvent) => void,
-    defaultAgent: () => Agent = () => "claude",
+    defaults: () => ChatDefaults = () => ({ agent: "claude", mode: "bypassPermissions" }),
   ) {
-    this.defaultAgent = defaultAgent;
+    this.defaults = defaults;
     this.store = store;
     this.dir = join(dataDir, "chats");
     this.providers = providers as Record<Agent, AgentProvider>;
     this.emit = emit;
   }
 
-  /** A new chat (in a repo's worktree, or the feature's central chat); settings come from the feature's latest chat with the same agent. */
+  /** A new chat (in a repo's worktree, or the feature's central chat). Model and effort come from the latest chat with the same agent; the permission mode from the setting. */
   create(featureId: string, agent?: Agent, repo?: string): Result<Chat> {
     const feature = this.store.get().features.find((f) => f.id === featureId);
     if (!feature) return { ok: false, error: "Unknown feature." };
     if (repo && !feature.repos.some((r) => r.name === repo)) return { ok: false, error: `No repo "${repo}" in this feature.` };
     const inWs = this.store.get().chats.filter((c) => c.featureId === featureId);
-    const kind = agent ?? (inWs.length ? agentOf(inWs.at(-1)!) : this.defaultAgent());
+    const kind = agent ?? (inWs.length ? agentOf(inWs.at(-1)!) : this.defaults().agent);
     if (!this.providers[kind]) return { ok: false, error: `${kind} is not available.` };
     const last = inWs.filter((c) => agentOf(c) === kind).at(-1) ?? this.store.get().chats.filter((c) => agentOf(c) === kind).at(-1);
     const chat: Chat = {
@@ -63,7 +66,8 @@ export class Chats {
       title: repo ? repo : "New chat",
       model: last?.model ?? DEFAULTS.model,
       effort: last?.effort ?? DEFAULTS.effort,
-      mode: last?.mode ?? DEFAULTS.mode,
+      // The permission mode always starts from the setting (model and effort follow the last chat).
+      mode: this.defaults().mode,
       createdAt: new Date().toISOString(),
     };
     this.store.update((s) => ({ ...s, chats: [...s.chats, chat] }));
@@ -89,7 +93,7 @@ export class Chats {
   }
 
   mainAgent(): Agent {
-    return this.defaultAgent();
+    return this.defaults().agent;
   }
 
   /** The feature's most recent chat for a repo (or its central chat, without one). */

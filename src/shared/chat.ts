@@ -23,11 +23,11 @@ export const CLAUDE_MODELS: ModelOption[] = [
   { value: "haiku", label: "Haiku" },
 ];
 export const EFFORTS: Effort[] = ["low", "medium", "high", "xhigh", "max"];
-export const MODES: { value: Mode; label: string }[] = [
-  { value: "default", label: "Ask before acting" },
-  { value: "acceptEdits", label: "Accept edits" },
-  { value: "plan", label: "Plan only" },
-  { value: "bypassPermissions", label: "Bypass permissions" },
+export const MODES: { value: Mode; label: string; hint: string }[] = [
+  { value: "default", label: "Ask before acting", hint: "Asks before edits and commands (reading files in the feature is free)." },
+  { value: "acceptEdits", label: "Accept edits", hint: "File edits inside the feature go through; commands, web and MCP tools ask." },
+  { value: "plan", label: "Plan only", hint: "The agent plans and reads, and changes nothing." },
+  { value: "bypassPermissions", label: "Bypass permissions", hint: "Never asks (as in Conductor). The worktree isolates git work, not your machine." },
 ];
 
 export type Chat = {

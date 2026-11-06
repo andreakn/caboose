@@ -46,6 +46,7 @@ function config(over: Partial<ResolvedLocalConfig> = {}): ResolvedLocalConfig {
     repos: [{ name: "web", path: web }, { name: "api", path: api }],
     jira: { level: "off" },
     defaultAgent: "claude",
+    defaultMode: "bypassPermissions",
     ...over,
   };
 }

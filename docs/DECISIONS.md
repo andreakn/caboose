@@ -462,6 +462,17 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      agent, so even an empty feature starts with the right one. Saving in
      Configure now updates the open window straight away.
 
+## Permissions like Conductor (2026-11-06)
+
+115. **New chats start in "Bypass permissions"**, as Conductor runs Claude Code
+     (`--permission-mode=bypassPermissions`), so agents run commands without
+     asking. It is a setting (`defaultMode`; Configure → Permissions for new
+     chats: ask before acting / accept edits / plan only / bypass). Each chat
+     can still change its own mode in the picker under the message box.
+116. **The mode no longer follows the previous chat**: a new chat always
+     starts in the configured mode (model and effort still follow the last
+     chat with the same agent), so the setting is what you get.
+
 ## Answered (2026-11-05)
 
 - Private GitHub repo `andreakn/caboose`: yes.

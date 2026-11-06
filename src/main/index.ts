@@ -120,7 +120,7 @@ const chats = new Chats(
   dataDir,
   { claude, copilot },
   (chatId, e) => win?.webContents.send("chat:event", chatId, e),
-  () => localConfig.defaultAgent,
+  () => ({ agent: localConfig.defaultAgent, mode: localConfig.defaultMode }),
 );
 const github = new GitHub();
 const coordinator = new Coordinator({

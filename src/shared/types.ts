@@ -129,6 +129,8 @@ export type LocalConfig = {
   terminalFont?: string;
   /** Which agent new chats use unless you pick another: Claude Code or GitHub Copilot. */
   defaultAgent?: Agent;
+  /** The permission mode new chats start in. Default: bypass (like Conductor). */
+  defaultMode?: Mode;
   /** How PRs should be written (title, description style); added to Create PR requests to the agent. */
   prInstructions?: string;
   /** Commands to open a folder in an app, overriding detection; "{path}" is replaced. */
