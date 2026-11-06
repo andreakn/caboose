@@ -27,6 +27,10 @@ The first launch opens the **Configure** screen: pick where features go, add
 your repositories, and optionally connect Jira. It writes `caboose.local.json`
 (gitignored; see `caboose.local.example.json`). "⚙ Configure" opens it again.
 
+Each repo in Configure has **local files** rules: the gitignored files a new
+feature copies from the repo's main checkout so it can run (defaults `.env*`
+and `*.local.*`; .gitignore-style patterns, with a live preview).
+
 A **feature** gets a railway-station name and a folder with a git worktree for
 each repo you pick (`<features folder>/<station>/<repo>/`). The agents work in
 the feature folder and see all of its repos. With Jira on, a feature can be

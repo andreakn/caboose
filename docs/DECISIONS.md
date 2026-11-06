@@ -279,6 +279,31 @@ own folder; it can span several repos; it can be tied to Jira.
     jira.txt), a terminal per repo with its own port, and a Claude chat in the
     feature folder reading both repos and jira.txt. Real Jira is untested.
 
+## Local files per repo (2026-11-06)
+
+Andreas: bringing the right gitignored files (.env, *.local.*) from the main
+checkout is essential for a repo to run in a feature, and each repo has its
+own rules.
+
+79. **Rules per repo in the machine config** (`repos[].localFiles`), so work
+    repos need no Caboose file of their own. A repo's `caboose.json` `copy`
+    list still adds to them. Repos without rules use the defaults
+    `.env*` and `*.local.*`.
+80. **Patterns work like .gitignore**: no slash = file name at any depth,
+    a slash = from the repo root, trailing slash = a whole folder, `**`,
+    `* ? {a,b}`, `!` to leave out (later lines win), `#` comments.
+81. **Only files git ignores are copied.** Tracked files are in every worktree
+    already, and untracked-but-not-ignored files are work in progress that
+    would show up as changes in the feature (and could be committed by an
+    agent). Configure's live preview lists those as "left out".
+82. **The search skips big generated folders** (node_modules, .venv, dist,
+    build, target, .next, vendor, …) and symlinks, and stops after 200 000
+    entries.
+83. **Copied before the setup script runs**, so `npm install`/dev servers see
+    them. The feature remembers what it copied (Feature details), and
+    "↻ copy again" brings them over again from the main checkout,
+    overwriting the feature's copies.
+
 ## Answered (2026-11-05)
 
 - Private GitHub repo `andreakn/caboose`: yes.

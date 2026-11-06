@@ -30,6 +30,7 @@ import { doctor } from "./core/doctor.ts";
 import { checkRepo, Features, scanRepos } from "./core/features.ts";
 import { GitHub } from "./core/github.ts";
 import { Jira } from "./core/jira.ts";
+import { DEFAULT_LOCAL_FILES, scanLocalFiles } from "./core/localfiles.ts";
 import { cabooseCopilotTools, cabooseInstructions, cabooseMcp } from "./core/mcp.ts";
 import { Store } from "./core/store.ts";
 import { Terminals } from "./core/terminals.ts";
@@ -189,7 +190,7 @@ ipcMain.handle("state:get", () => store.get());
 // --- config
 ipcMain.handle("config:get", () => ({
   config: configView(readLocalConfig(configDir)),
-  defaults: { featuresRoot: defaultFeaturesRoot(), branchPrefix: "caboose" },
+  defaults: { featuresRoot: defaultFeaturesRoot(), branchPrefix: "caboose", localFiles: DEFAULT_LOCAL_FILES },
   firstRun: !configExists(configDir),
   file: configFile(configDir),
   dataDir,
@@ -209,6 +210,9 @@ ipcMain.handle("config:pickFolder", async (_e, title: string) => {
 });
 ipcMain.handle("config:checkRepo", (_e, path: string) => checkRepo(path));
 ipcMain.handle("config:scanRepos", (_e, folder: string) => scanRepos(folder));
+ipcMain.handle("config:previewLocalFiles", (_e, repoPath: string, patterns: string[]) =>
+  attempt(() => scanLocalFiles(repoPath, patterns)),
+);
 ipcMain.handle("config:terminalFont", () => localConfig.terminalFont);
 
 // --- jira
@@ -230,6 +234,7 @@ ipcMain.handle("feature:archive", (_e, id: string) => {
   terminals.closeFeature(id);
   return features.archive(id);
 });
+ipcMain.handle("feature:copyLocalFiles", (_e, featureId: string, repo: string) => features.copyLocalFilesAgain(featureId, repo));
 ipcMain.handle("feature:restore", (_e, id: string) => features.restore(id));
 ipcMain.handle("feature:setupLog", (_e, id: string, repo: string) => features.setupLog(id, repo));
 ipcMain.handle("feature:repoConfig", (_e, featureId: string, repo: string) => {

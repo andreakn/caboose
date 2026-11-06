@@ -29,9 +29,14 @@ function makeRepo(name: string, files: Record<string, string>) {
 let web: string;
 let api: string;
 before(() => {
-  web = makeRepo("web", { "README.md": "web\n", "caboose.json": JSON.stringify({ setup: "echo port=$CABOOSE_PORT > setup.txt", copy: [".env"] }) });
+  const gitignore = ".env*\n*.local.*\nsetup.txt\n";
+  web = makeRepo("web", {
+    "README.md": "web\n",
+    ".gitignore": gitignore,
+    "caboose.json": JSON.stringify({ setup: "echo port=$CABOOSE_PORT > setup.txt", copy: [".env"] }),
+  });
   writeFileSync(join(web, ".env"), "SECRET=1\n");
-  api = makeRepo("api", { "README.md": "api\n" });
+  api = makeRepo("api", { "README.md": "api\n", ".gitignore": gitignore });
 });
 
 function config(over: Partial<ResolvedLocalConfig> = {}): ResolvedLocalConfig {
@@ -146,6 +151,35 @@ test("optional Jira: links are set by hand, subtasks created on request", async 
   assert.ok(features.setSubtask(r.value.id, "api", null).ok);
   assert.ok(features.setTask(r.value.id, null).ok);
   assert.equal(existsSync(join(r.value.folder, "jira.txt")), false);
+});
+
+test("local files: each repo's patterns pick the gitignored files to bring; copy again overwrites", async () => {
+  // In the main checkouts: gitignored files of different kinds.
+  writeFileSync(join(web, ".env.local"), "WEB_LOCAL=1\n");
+  writeFileSync(join(web, "app.local.yaml"), "x: 1\n");
+  writeFileSync(join(api, ".env"), "API=1\n");
+  writeFileSync(join(api, "secrets.local.json"), "{}\n");
+  const store = new Store(join(tmp, "s5", "state.json"));
+  const cfg = config({
+    repos: [
+      { name: "web", path: web }, // no patterns: the defaults (.env*, *.local.*), plus caboose.json's ".env"
+      { name: "api", path: api, localFiles: [".env", "!*.local.*"] },
+    ],
+  });
+  const features = new Features(store, cfg, join(tmp, "s5", "logs"));
+  const r = await features.create({ repos: ["web", "api"] });
+  assert.ok(r.ok, !r.ok ? r.error : "");
+  const [w, a] = r.value.repos;
+  assert.deepEqual(w.copied, [".env", ".env.local", "app.local.yaml"]);
+  assert.deepEqual(a.copied, [".env"]);
+  assert.ok(existsSync(join(w.path, "app.local.yaml")));
+  assert.equal(existsSync(join(a.path, "secrets.local.json")), false);
+
+  writeFileSync(join(api, ".env"), "API=2\n");
+  const again = await features.copyLocalFilesAgain(r.value.id, "api");
+  assert.ok(again.ok && again.value.join() === ".env");
+  assert.equal(readFileSync(join(a.path, ".env"), "utf8"), "API=2\n");
+  await until(settled(store));
 });
 
 test("repos are found by folder and by scanning a parent folder", async () => {

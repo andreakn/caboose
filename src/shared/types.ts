@@ -6,7 +6,15 @@ import type { GitHubStatus, MergeMethod } from "./github.ts";
 export type SetupState = "none" | "running" | "ok" | "failed";
 
 /** A repo the user works in, from the config: its name is also its folder name inside a feature. */
-export type RepoEntry = { name: string; path: string };
+export type RepoEntry = {
+  name: string;
+  path: string;
+  /**
+   * Gitignored files to copy from the main checkout into each new worktree
+   * (.env, *.local.*, …), as gitignore-style patterns. Absent: the defaults.
+   */
+  localFiles?: string[];
+};
 
 /** One repo's worktree inside a feature. */
 export type FeatureRepo = {
@@ -20,6 +28,8 @@ export type FeatureRepo = {
   /** What the branch started from, e.g. "origin/main". */
   baseRef: string;
   setup: SetupState;
+  /** The local files copied in from the main checkout (repo-relative paths). */
+  copied?: string[];
 };
 
 /** A piece of work: a station name, a folder, and one worktree per repo. */
@@ -62,7 +72,7 @@ export type RepoConfig = {
   run?: string;
   /** Shell command run before a worktree is removed. */
   archive?: string;
-  /** Gitignored files copied from the main checkout into new worktrees (e.g. ".env"). */
+  /** More local-file patterns (like RepoEntry.localFiles), kept in the repo itself. */
   copy?: string[];
 };
 
@@ -112,7 +122,7 @@ export type ConfigInput = Omit<LocalConfig, "jira"> & { jira?: Omit<JiraConfig, 
 export type ConfigInfo = {
   config: ConfigView;
   /** With defaults filled in. */
-  defaults: { featuresRoot: string; branchPrefix: string };
+  defaults: { featuresRoot: string; branchPrefix: string; localFiles: string[] };
   /** No config file yet: show the setup screen. */
   firstRun: boolean;
   file: string;
@@ -185,6 +195,10 @@ export type CabooseApi = {
   featureJira(featureId: string): Promise<FeatureJira>;
   setFeatureTask(featureId: string, key: string | null): Promise<Result<void>>;
   setRepoSubtask(featureId: string, repo: string, key: string | null): Promise<Result<void>>;
+  /** The files these patterns would copy from a repo's main checkout. */
+  previewLocalFiles(repoPath: string, patterns: string[]): Promise<Result<{ copy: string[]; notIgnored: string[] }>>;
+  /** Copies the repo's local files into the feature again, overwriting. */
+  copyLocalFilesAgain(featureId: string, repo: string): Promise<Result<string[]>>;
   createSubtask(featureId: string, repo: string): Promise<Result<string>>;
 
   createFeature(f: NewFeature): Promise<Result<Feature>>;

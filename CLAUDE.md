@@ -13,6 +13,8 @@ GitHub Copilot) in parallel git worktrees. Personal/team-internal, never commerc
   folder; changes, PRs and run scripts are per repo. `jira.txt` in the feature
   folder is the record of its Jira links; the Jira token never reaches the
   window (`configView`).
+- **Local files** (`core/localfiles.ts`): only files git *ignores* are copied
+  into a feature, never merely untracked ones (they would become changes).
 - **One chat engine, one adapter per agent** (`src/main/core/chats.ts`,
   `src/main/core/agents/`). Agent-specific code stays in its adapter; the
   transcript format (`src/shared/chat.ts`) is Caboose's own.

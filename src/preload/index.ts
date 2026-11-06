@@ -27,6 +27,8 @@ const api: CabooseApi = {
   featureJira: invoke("jira:feature"),
   setFeatureTask: invoke("jira:setTask"),
   setRepoSubtask: invoke("jira:setSubtask"),
+  previewLocalFiles: invoke("config:previewLocalFiles"),
+  copyLocalFilesAgain: invoke("feature:copyLocalFiles"),
   createSubtask: invoke("jira:createSubtask"),
 
   createFeature: invoke("feature:create"),

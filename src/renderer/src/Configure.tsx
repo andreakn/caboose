@@ -122,16 +122,20 @@ export function Configure({ onDone }: { onDone: () => void }) {
 
       <section>
         <h2>Repositories</h2>
-        <p className="muted">The repos you work on. Their name is the folder name inside a feature.</p>
+        <p className="muted">
+          The repos you work on. Their name is the folder name inside a feature. For each, choose the gitignored files a new
+          feature brings from the repo's main checkout (.env, *.local.* …), so the repo can run there.
+        </p>
         {repos.length === 0 && <p className="del">No repositories yet.</p>}
         <ul className="repo-list">
           {repos.map((r) => (
-            <li key={r.path}>
-              <b>{r.name}</b> <code>{r.path}</code>
-              <button className="link" onClick={() => setForm({ ...form, repos: repos.filter((x) => x.path !== r.path) })}>
-                Remove
-              </button>
-            </li>
+            <RepoItem
+              key={r.path}
+              repo={r}
+              defaults={info.defaults.localFiles}
+              onChange={(next) => setForm({ ...form, repos: repos.map((x) => (x.path === r.path ? next : x)) })}
+              onRemove={() => setForm({ ...form, repos: repos.filter((x) => x.path !== r.path) })}
+            />
           ))}
         </ul>
         <div className="row">
@@ -313,6 +317,79 @@ export function Configure({ onDone }: { onDone: () => void }) {
         <span className="muted">App data (features, chats): {info.dataDir}</span>
       </div>
     </div>
+  );
+}
+
+/** A configured repo, with its local-file rules and a live preview of what they copy. */
+function RepoItem(props: { repo: RepoEntry; defaults: string[]; onChange: (r: RepoEntry) => void; onRemove: () => void }) {
+  const { repo, defaults } = props;
+  const [open, setOpen] = useState(false);
+  const patterns = repo.localFiles ?? defaults;
+  const [text, setText] = useState(patterns.join("\n"));
+  const [preview, setPreview] = useState<{ files?: string[]; notIgnored?: string[]; error?: string } | null>(null);
+
+  // Preview the rules as they are typed (and once, for the count).
+  useEffect(() => {
+    const t = setTimeout(async () => {
+      const r = await api.previewLocalFiles(repo.path, text.split("\n"));
+      setPreview(r.ok ? { files: r.value.copy, notIgnored: r.value.notIgnored } : { error: r.error });
+    }, 300);
+    return () => clearTimeout(t);
+  }, [text, repo.path]);
+
+  const update = (value: string) => {
+    setText(value);
+    const lines = value.split("\n").map((l) => l.trim()).filter(Boolean);
+    const same = lines.join("\n") === defaults.join("\n");
+    props.onChange({ ...repo, localFiles: same ? undefined : lines });
+  };
+
+  return (
+    <li className="repo-item">
+      <div className="row">
+        <b>{repo.name}</b> <code>{repo.path}</code>
+        <button className="link" onClick={() => setOpen(!open)}>
+          {open ? "▾" : "▸"} local files: {patterns.join(", ") || "none"}
+          {preview?.files && ` (${preview.files.length} file${preview.files.length === 1 ? "" : "s"} now)`}
+        </button>
+        <span className="spacer" />
+        <button className="link" onClick={props.onRemove}>
+          Remove
+        </button>
+      </div>
+      {open && (
+        <div className="local-files">
+          <div>
+            <textarea rows={Math.max(3, text.split("\n").length + 1)} value={text} onChange={(e) => update(e.target.value)} spellCheck={false} />
+            <small className="muted">
+              One pattern per line, like .gitignore: <code>.env*</code> matches at any depth, <code>config/app.json</code> from the
+              repo root, <code>certs/</code> a whole folder, <code>!pattern</code> leaves out. Only files git ignores are
+              copied. <button className="link" onClick={() => update(defaults.join("\n"))}>Reset to defaults</button>
+            </small>
+          </div>
+          <div className="local-preview">
+            <div className="muted">A new feature would copy:</div>
+            {preview?.error && <div className="del">{preview.error}</div>}
+            {preview?.files?.length === 0 && <div className="muted">nothing</div>}
+            {preview?.files?.map((f) => (
+              <code key={f}>{f}</code>
+            ))}
+            {!!preview?.notIgnored?.length && (
+              <>
+                <div className="muted" title="Untracked files that git does not ignore are work in progress, not local config">
+                  Matched but not gitignored, so left out:
+                </div>
+                {preview.notIgnored.map((f) => (
+                  <code key={f} className="not-ignored">
+                    {f}
+                  </code>
+                ))}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </li>
   );
 }
 

@@ -375,7 +375,7 @@ function FeatureView(props: {
         </summary>
         <dl className="facts">
           {f.repos.map((r, i) => (
-            <SetupFacts key={r.name} f={f} repo={r.name} setup={r.setup} port={f.port + 10 * i} path={r.path} />
+            <SetupFacts key={r.name} f={f} repo={r.name} setup={r.setup} port={f.port + 10 * i} path={r.path} copied={r.copied} />
           ))}
           <dt>Created</dt>
           <dd>{new Date(f.createdAt).toLocaleString()}</dd>
@@ -434,7 +434,7 @@ function FeatureView(props: {
   );
 }
 
-function SetupFacts(props: { f: Feature; repo: string; setup: string; port: number; path: string }) {
+function SetupFacts(props: { f: Feature; repo: string; setup: string; port: number; path: string; copied?: string[] }) {
   const [log, setLog] = useState("");
   useEffect(() => {
     void api.setupLog(props.f.id, props.repo).then(setLog);
@@ -445,6 +445,23 @@ function SetupFacts(props: { f: Feature; repo: string; setup: string; port: numb
       <dd>
         <code>{props.path}</code> · CABOOSE_PORT <code>{props.port}</code> · setup{" "}
         {{ none: "not configured", running: "running…", ok: "done", failed: "failed" }[props.setup]}
+        <div className="copied">
+          <span className="muted">Local files from the main checkout:</span>{" "}
+          {props.copied?.length ? props.copied.map((c) => <code key={c}>{c}</code>) : <span className="muted">none</span>}{" "}
+          {!props.f.archived && (
+            <button
+              className="link"
+              title="Copy them again from the main checkout, overwriting the feature's copies"
+              onClick={async () => {
+                if (!confirm(`Copy ${props.repo}'s local files from its main checkout again? Changed copies in the feature are overwritten.`)) return;
+                const r = await api.copyLocalFilesAgain(props.f.id, props.repo);
+                alert(r.ok ? `Copied ${r.value.length} file(s)${r.value.length ? `:\n${r.value.join("\n")}` : "."}` : r.error);
+              }}
+            >
+              ↻ copy again
+            </button>
+          )}
+        </div>
         {log && <pre className="log">{log}</pre>}
       </dd>
     </>

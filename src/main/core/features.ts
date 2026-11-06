@@ -2,12 +2,13 @@
 // (<features root>/<station>/<repo>). Optionally tied to a Jira task, with a
 // subtask per repo. Electron-free, tested with plain `node --test`.
 import { randomUUID } from "node:crypto";
-import { appendFileSync, copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { basename, join } from "node:path";
 import type { Feature, FeatureJira, FeatureRepo, NewFeature, RepoEntry, Result } from "../../shared/types.ts";
 import { loadRepoConfig, type ResolvedLocalConfig } from "./config.ts";
 import * as g from "./git.ts";
 import { type Jira, parseKey, readFeatureJira, writeFeatureJira } from "./jira.ts";
+import { copyLocalFiles, DEFAULT_LOCAL_FILES, findLocalFiles } from "./localfiles.ts";
 import { runScript } from "./scripts.ts";
 import { pickStation } from "./stations.ts";
 import type { Store } from "./store.ts";
@@ -116,15 +117,19 @@ export class Features {
       if (existsSync(path)) return fail(`${path} already exists.`);
       await g.addWorktree(root, path, branch, baseRef);
 
+      // The gitignored files it needs to run (.env, *.local.*), before setup runs.
       const repoConfig = loadRepoConfig(root);
-      for (const rel of repoConfig.copy ?? []) {
-        const from = join(root, rel);
-        if (existsSync(from)) {
-          mkdirSync(dirname(join(path, rel)), { recursive: true });
-          copyFileSync(from, join(path, rel));
-        }
-      }
-      const fr: FeatureRepo = { name: repo.name, source: root, path, branch, baseRef, setup: repoConfig.setup ? "running" : "none" };
+      const copied = await findLocalFiles(root, this.localFilePatterns(repo.name, root));
+      copyLocalFiles(root, path, copied);
+      const fr: FeatureRepo = {
+        name: repo.name,
+        source: root,
+        path,
+        branch,
+        baseRef,
+        setup: repoConfig.setup ? "running" : "none",
+        copied,
+      };
       this.patch(featureId, (x) => ({ ...x, repos: [...x.repos, fr] }));
       if (repoConfig.setup) void this.runSetup(featureId, fr, repoConfig.setup);
       return ok(undefined);
@@ -177,6 +182,33 @@ export class Features {
     } catch (e) {
       return fail(e);
     }
+  }
+
+  /** Copies the repo's local files from its main checkout again (they changed there), overwriting. */
+  async copyLocalFilesAgain(featureId: string, repoName: string): Promise<Result<string[]>> {
+    const f = this.get(featureId);
+    const r = f?.repos.find((x) => x.name === repoName);
+    if (!f || !r || f.archived) return fail("Unknown or archived feature.");
+    try {
+      const files = await findLocalFiles(r.source, this.localFilePatterns(r.name, r.source));
+      copyLocalFiles(r.source, r.path, files);
+      this.patch(featureId, (x) => ({ ...x, repos: x.repos.map((y) => (y.name === r.name ? { ...y, copied: files } : y)) }));
+      return ok(files);
+    } catch (e) {
+      return fail(e);
+    }
+  }
+
+  /** The repo's patterns from the config (or the defaults), plus any in its own caboose.json. */
+  private localFilePatterns(repoName: string, root: string): string[] {
+    const configured = this.config.repos.find((r) => r.name === repoName)?.localFiles ?? DEFAULT_LOCAL_FILES;
+    let inRepo: string[] = [];
+    try {
+      inRepo = loadRepoConfig(root).copy ?? [];
+    } catch {
+      // a broken caboose.json should not stop the feature
+    }
+    return [...configured, ...inRepo];
   }
 
   jiraOf(featureId: string): FeatureJira {

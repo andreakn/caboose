@@ -449,3 +449,13 @@ h1 .jira-chip { font-size: 13px; vertical-align: middle; }
 .my-issues { display: grid; gap: 2px; max-height: 260px; overflow-y: auto; }
 .issue { text-align: left; border: none; background: none; padding: 4px 8px; font-size: 13px; border-radius: 6px; }
 .issue:hover, .issue.active { background: var(--accent-soft); }
+
+/* Local files per repo */
+.repo-item { display: block !important; border-bottom: 1px solid var(--border); padding: 6px 0; }
+.repo-item .row { gap: 8px; }
+.local-files { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 8px 0 4px; }
+.local-files textarea { width: 100%; font: 12.5px/1.5 var(--mono); color: var(--text); background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; resize: vertical; }
+.local-files textarea:focus { outline: none; border-color: var(--accent); }
+.local-preview { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; font-size: 12.5px; max-height: 220px; overflow-y: auto; }
+.copied { margin-top: 4px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.not-ignored { opacity: 0.55; text-decoration: line-through; }

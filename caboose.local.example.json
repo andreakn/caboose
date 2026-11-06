@@ -4,7 +4,13 @@
   "repos": [
     {
       "name": "my-app",
-      "path": "~/code/my-app"
+      "path": "~/code/my-app",
+      "localFiles": [
+        ".env*",
+        "*.local.*",
+        "certs/",
+        "!.env.example"
+      ]
     },
     {
       "name": "my-api",

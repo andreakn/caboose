@@ -48,7 +48,7 @@ export function loadLocalConfig(cabooseDir: string): ResolvedLocalConfig {
   return {
     featuresRoot: c.featuresRoot ? expandHome(c.featuresRoot) : defaultFeaturesRoot(),
     branchPrefix: c.branchPrefix ?? "caboose",
-    repos: (c.repos ?? []).map((r) => ({ name: r.name, path: expandHome(r.path) })),
+    repos: (c.repos ?? []).map((r) => ({ ...r, path: expandHome(r.path) })),
     jira: { level: "off", ...c.jira },
     bashPath: c.bashPath,
     shellPath: c.shellPath,
@@ -73,7 +73,11 @@ export function applyConfigInput(stored: LocalConfig, input: ConfigInput, codec:
     const kept = token === undefined ? stored.jira?.token : token === null || token.trim() === "" ? undefined : seal(token.trim(), codec);
     out.jira = { ...cleanStrings(j), level: j.level, ...(kept ? { token: kept } : {}) };
   }
-  if (out.repos) out.repos = out.repos.filter((r) => r.name && r.path);
+  if (out.repos) {
+    out.repos = out.repos
+      .filter((r) => r.name && r.path)
+      .map((r) => (r.localFiles ? { ...r, localFiles: r.localFiles.map((p) => p.trim()).filter(Boolean) } : r));
+  }
   return out;
 }
 
