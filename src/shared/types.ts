@@ -75,6 +75,13 @@ export type Terminal = {
   exitCode?: number;
 };
 
+/** A file for the Files tab. */
+export type FileContent =
+  | { kind: "text"; size: number; text: string }
+  | { kind: "image"; size: number; dataUrl: string }
+  | { kind: "binary"; size: number }
+  | { kind: "tooLarge"; size: number };
+
 /** What archiving or deleting a feature will do to one repo. */
 export type RetireRepo = {
   repo: string;
@@ -419,6 +426,10 @@ export type CabooseApi = {
   onChatEvent(listener: (chatId: string, event: ChatEvent) => void): () => void;
 
   changes(featureId: string, repo: string): Promise<Result<WorkspaceChanges>>;
+  /** Every file git sees in a repo's worktree (tracked + untracked, not ignored). */
+  repoFiles(featureId: string, repo: string): Promise<Result<{ files: string[]; truncated: boolean }>>;
+  /** One file of a repo's worktree. */
+  readRepoFile(featureId: string, repo: string, path: string): Promise<Result<FileContent>>;
   filePatch(featureId: string, repo: string, path: string): Promise<Result<string>>;
   addComment(c: {
     featureId: string;

@@ -42,6 +42,10 @@ for what needs you); a feature's repo rows are one line each with the action
 that matters now, and its **Pull requests** and **Activity** tabs gather every
 PR and every chat in one place.
 
+A feature page has two levels: **Feature** (the repos at a glance, the
+central chat, plan, programs, PRs, activity) and a tab per **repo** (its
+files as a navigable tree, its changes, its own chats and programs).
+
 **New feature** is one optional text box: press Enter for an empty feature,
 or describe the work and the feature's agent proposes which repos to add
 (you confirm, correct or decline).

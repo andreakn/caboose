@@ -77,6 +77,8 @@ export function RepoRow(props: {
   onChat?: () => void;
   onJiraChanged: () => void;
   onAskedAgent: () => void;
+  /** Opens the repo's own view (its files, changes, chat, programs). */
+  onOpen?: () => void;
   onChanged: () => void;
 }) {
   const { feature, repo, jiraKey, ov } = props;
@@ -209,7 +211,20 @@ export function RepoRow(props: {
       <div className="repo-line" onClick={() => setOpen(!open)}>
         <span className="twisty">{open ? "▾" : "▸"}</span>
         {ov ? <HealthDot r={ov} /> : <span className={`dot setup-${repo.setup}`} title={`Setup: ${repo.setup}`} />}
-        <b className="repo-name-cell">{repo.name}</b>
+        {props.onOpen ? (
+          <button
+            className="repo-name-cell repo-open"
+            title={`Open ${repo.name}: files, changes, its chat and programs`}
+            onClick={(e) => {
+              e.stopPropagation();
+              props.onOpen!();
+            }}
+          >
+            {repo.name}
+          </button>
+        ) : (
+          <b className="repo-name-cell">{repo.name}</b>
+        )}
         {ov?.reported?.status && (
           <span title={`${ov.reported.at}: ${ov.reported.text}`}>
             <StatusChip status={ov.reported.status} />

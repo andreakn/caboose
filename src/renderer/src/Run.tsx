@@ -27,9 +27,17 @@ export function useRunOverview(f: Feature, terminals: Terminal[], active: boolea
   return { ov, reload: load };
 }
 
-export function RunView(props: { f: Feature; ov: RunOverview | null; reload: () => Promise<void>; onShow: (terminalId: string) => void }) {
-  const { f, ov, reload } = props;
+export function RunView(props: {
+  f: Feature;
+  ov: RunOverview | null;
+  reload: () => Promise<void>;
+  onShow: (terminalId: string) => void;
+  /** Only this repo's programs (the repo's own Run tab). */
+  only?: string;
+}) {
+  const { f, reload, only } = props;
   const [busy, setBusy] = useState<string | null>(null);
+  const ov = props.ov && only ? { ...props.ov, repos: props.ov.repos.filter((r) => r.repo === only) } : props.ov;
   if (!ov) return <div className="changes-empty muted">Loading…</div>;
   const all = ov.repos.flatMap((r) => r.scripts);
   const running = all.filter((s) => s.state === "running").length;
@@ -69,12 +77,26 @@ export function RunView(props: { f: Feature; ov: RunOverview | null; reload: () 
         <span className="spacer" />
         {busy && <span className="muted small">{busy}…</span>}
         {idle > 0 && !f.archived && (
-          <button className="primary" disabled={!!busy} onClick={() => act("Starting", () => api.runStartAll(f.id))} title="Start every program that is not running (Cmd/Ctrl+R)">
-            ▶ Run feature
+          <button
+            className="primary"
+            disabled={!!busy}
+            onClick={() => act("Starting", () => api.runStartAll(f.id, only))}
+            title={only ? `Start every program of ${only} that is not running` : "Start every program that is not running (Cmd/Ctrl+R)"}
+          >
+            {only ? "▶ Run all" : "▶ Run feature"}
           </button>
         )}
         {running > 0 && (
-          <button disabled={!!busy} onClick={() => act("Stopping", () => api.runStopAll(f.id))} title="Ctrl-C every running program, then close their terminals">
+          <button
+            disabled={!!busy}
+            onClick={() =>
+              act("Stopping", async () => {
+                if (!only) return api.runStopAll(f.id);
+                await Promise.all(all.filter((s) => s.state === "running" && s.terminalId).map((s) => api.runStop(s.terminalId!)));
+              })
+            }
+            title="Ctrl-C every running program, then close their terminals"
+          >
             ■ Stop all
           </button>
         )}

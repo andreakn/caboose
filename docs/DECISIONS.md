@@ -546,6 +546,26 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      (worktrees removed, branches kept) still offer Restore, and the same
      dialog.
 
+## Feature and repo levels, and Files (2026-11-06)
+
+128. **Two levels under the header**: a bar with **Feature** and one tab per
+     repo (health dot, changed-file count). Feature holds what the repos
+     share: the one-line repo rows, details, and Chat (every chat), Plan,
+     Run (all programs), Pull requests, Activity. A repo holds its own row
+     (Pull/Push/PR actions) and Files, Changes, Chat (its break-out chats,
+     or a button to start one) and Run (its programs). Changes are per repo
+     only; there is no feature-wide list any more. The level and the repo
+     tab are remembered.
+129. **Files is what git sees** (`git ls-files --cached --others
+     --exclude-standard`: tracked plus untracked, never ignored, so no
+     node_modules or bin/), as a tree with single-child folders on one line
+     (`apps/web/src`), change letters on files and a dot on folders with
+     changes, quick-find by typing (characters in order, file names first),
+     and "Show changes" for a changed file. The viewer shows text with line
+     numbers, markdown rendered (or source), images; binaries and files over
+     2 MB are only named. No syntax colouring yet. Reading refuses any path
+     that leaves the worktree, symlinks included.
+
 ## Answered (2026-11-05)
 
 - Private GitHub repo `andreakn/caboose`: yes.

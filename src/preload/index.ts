@@ -40,6 +40,8 @@ const api: CabooseApi = {
   createFeature: invoke("feature:create"),
   addRepoToFeature: invoke("feature:addRepo"),
   archiveFeature: invoke("feature:archive"),
+  repoFiles: invoke("files:list"),
+  readRepoFile: invoke("files:read"),
   retirePlan: invoke("feature:retirePlan"),
   retireFeature: invoke("feature:retire"),
   restoreFeature: invoke("feature:restore"),

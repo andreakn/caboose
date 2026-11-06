@@ -71,9 +71,14 @@ export function ChangesView(props: {
   comments: DiffComment[];
   refresh: () => void;
   onSendComments: () => void;
+  /** A file to show first (from the Files tab's "Show changes"). */
+  selectedPath?: string | null;
 }) {
   const { ws, repo, changes, comments } = props;
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(props.selectedPath ?? null);
+  useEffect(() => {
+    if (props.selectedPath) setSelected(props.selectedPath);
+  }, [props.selectedPath]);
   const files = changes?.files ?? [];
   const file = files.find((f) => f.path === selected) ?? files[0];
   const totals = files.reduce((t, f) => ({ add: t.add + f.additions, del: t.del + f.deletions }), { add: 0, del: 0 });

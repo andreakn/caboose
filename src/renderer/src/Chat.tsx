@@ -49,8 +49,8 @@ export function activeChat(ws: Feature, chats: Chat[]): Chat | undefined {
 }
 
 /** Tabs for a feature's chats, and the active chat below them. */
-export function ChatArea({ ws, chats, hidden }: { ws: Feature; chats: Chat[]; hidden?: boolean }) {
-  const key = activeKey(ws);
+export function ChatArea({ ws, chats, hidden, repo }: { ws: Feature; chats: Chat[]; hidden?: boolean; repo?: string }) {
+  const key = repo ? `${activeKey(ws)}-${repo}` : activeKey(ws);
   const [activeId, setActiveId] = useState<string | null>(() => localStorage.getItem(key));
   const active = chats.find((c) => c.id === activeId) ?? chats.at(-1);
   const creating = useRef(false);
@@ -86,9 +86,9 @@ export function ChatArea({ ws, chats, hidden }: { ws: Feature; chats: Chat[]; hi
     else alert(r.error);
   }
 
-  // Every live feature has at least one chat.
+  // Every live feature has at least one chat (a repo's own chat is only made when asked for).
   useEffect(() => {
-    if (!ws.archived && chats.length === 0) void newChat();
+    if (!repo && !ws.archived && chats.length === 0) void newChat();
   }, [ws.id, ws.archived, chats.length]);
 
   // The chat on screen counts as read.
@@ -138,7 +138,12 @@ export function ChatArea({ ws, chats, hidden }: { ws: Feature; chats: Chat[]; hi
             </button>
           </div>
         ))}
-        {!ws.archived && (
+        {!ws.archived && repo && (
+          <button className="tab-new" title={`A chat working in ${repo}/`} onClick={() => void breakOut(repo)}>
+            +
+          </button>
+        )}
+        {!ws.archived && !repo && (
           <MenuButton
             className="tab-new"
             title="New chat"
@@ -155,7 +160,18 @@ export function ChatArea({ ws, chats, hidden }: { ws: Feature; chats: Chat[]; hi
           />
         )}
       </div>
-      {active ? <ChatPanel key={active.id} chat={active} ws={ws} /> : <div className="chat-empty muted">No chats.</div>}
+      {active ? (
+        <ChatPanel key={active.id} chat={active} ws={ws} />
+      ) : repo && !ws.archived ? (
+        <div className="chat-empty muted">
+          <p>No chat works in {repo} yet. The feature's central chat (Feature → Chat) sees every repo.</p>
+          <button className="primary" onClick={() => void breakOut(repo)}>
+            Break out a chat for {repo}…
+          </button>
+        </div>
+      ) : (
+        <div className="chat-empty muted">No chats.</div>
+      )}
     </div>
   );
 }

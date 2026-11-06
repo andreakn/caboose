@@ -432,9 +432,6 @@ table.diff { border-collapse: collapse; width: 100%; font: 12px/1.55 var(--mono)
 .jira-chip.empty { font-weight: 400; }
 h1 .jira-chip { font-size: 13px; vertical-align: middle; }
 .add-repo-row select { font: inherit; font-size: 12.5px; color: var(--muted); background: none; border: 1px dashed var(--border); border-radius: var(--radius); padding: 5px 8px; width: 100%; }
-.repo-tabs { display: flex; gap: 2px; margin-left: 12px; padding-left: 12px; border-left: 1px solid var(--border); }
-.repo-tabs button { border: none; background: none; padding: 4px 10px; color: var(--muted); border-radius: 6px; }
-.repo-tabs button.active { background: var(--card); color: var(--text); }
 
 /* Configure and New feature */
 .settings.configure, .settings.new-feature { padding-bottom: 0; }
@@ -648,3 +645,39 @@ textarea.wide:focus { outline: none; border-color: var(--accent); }
 .retire-repos { display: grid; gap: 6px; max-height: 40vh; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; background: var(--bg); }
 .retire-repo { display: grid; gap: 2px; font-size: 13px; }
 .retire-dialog code { font-size: 12px; word-break: break-all; }
+
+/* Files: the worktree as a tree, and one file */
+.files { flex: 1; display: flex; min-height: 0; margin-top: 6px; border-top: 1px solid var(--border); }
+.files-side { width: 300px; flex-shrink: 0; display: flex; flex-direction: column; border-right: 1px solid var(--border); min-height: 0; }
+.files-search { display: flex; gap: 4px; padding: 8px 8px 6px 0; }
+.files-search input { flex: 1; font: inherit; font-size: 12.5px; color: var(--text); background: var(--input-bg, var(--card)); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; }
+.tree { flex: 1; overflow: auto; padding: 0 8px 16px 0; }
+.tree-dir, .tree-file { display: flex; align-items: center; gap: 5px; width: 100%; border: none; background: none; padding: 2px 6px; text-align: left; font-size: 12.5px; color: var(--text); white-space: nowrap; }
+.tree-dir:hover, .tree-file:hover { background: var(--card); }
+.tree-file.active { background: var(--accent-soft); }
+.tree-dir .twisty { width: 10px; color: var(--muted); font-size: 10px; }
+.tree-file { padding-left: 21px; }
+.tree-file.found { padding-left: 8px; }
+.tree-name { overflow: hidden; text-overflow: ellipsis; }
+.tree-file .status { margin-left: auto; }
+.tree-changed { width: 6px; height: 6px; border-radius: 50%; background: var(--warn); margin-left: 4px; flex-shrink: 0; }
+.tree-note { padding: 6px 8px; }
+.file-view { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+.file-view-bar { display: flex; align-items: center; gap: 10px; padding: 8px 0 8px 12px; border-bottom: 1px solid var(--border); }
+.file-view-bar code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-code { flex: 1; overflow: auto; display: flex; align-items: flex-start; font: 12px/1.55 var(--mono); }
+.file-code pre { margin: 0; padding: 8px 10px 24px; font: inherit; }
+.file-code .gutter { color: var(--muted); text-align: right; user-select: none; border-right: 1px solid var(--border); position: sticky; left: 0; background: var(--bg); min-width: 44px; }
+.file-code .code { flex: 1; white-space: pre; tab-size: 4; }
+.file-md { flex: 1; overflow: auto; padding: 8px 16px 24px; }
+.file-image { flex: 1; overflow: auto; padding: 16px; }
+.file-image img { max-width: 100%; background: repeating-conic-gradient(var(--card) 0% 25%, var(--bg) 0% 50%) 50% / 16px 16px; }
+
+/* Feature / repo levels: the bar under the header */
+.scope-tabs { display: flex; gap: 2px; margin-top: 12px; border-bottom: 1px solid var(--border); overflow-x: auto; }
+.scope-tabs button { display: inline-flex; align-items: center; gap: 6px; border: none; border-bottom: 2px solid transparent; background: none; padding: 6px 12px; color: var(--muted); font-weight: 600; border-radius: 0; white-space: nowrap; }
+.scope-tabs button:hover { color: var(--text); }
+.scope-tabs button.active { color: var(--text); border-bottom-color: var(--accent); }
+.scope-tabs .dot { align-self: center; }
+button.repo-open { border: none; background: none; padding: 0; font-weight: 700; color: var(--text); text-align: left; }
+button.repo-open:hover { color: var(--accent); text-decoration: underline; }

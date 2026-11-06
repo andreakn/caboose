@@ -4,6 +4,7 @@ import type { DiffComment } from "../../shared/diff.ts";
 import {
   type ConfigInfo,
   type Feature,
+  type FeatureRepo,
   FEATURE_STATUSES,
   type FeatureJira,
   type JiraAlignment,
@@ -20,11 +21,12 @@ import { Configure } from "./Configure.tsx";
 import { JiraChip, RepoRow } from "./GitHub.tsx";
 import { ActivityView } from "./Activity.tsx";
 import { OpenInMenu } from "./Menu.tsx";
-import { Board, JiraStatusChip, PrsView, useOverview } from "./Overview.tsx";
+import { Board, HealthDot, JiraStatusChip, PrsView, useOverview } from "./Overview.tsx";
 import { DialogHost } from "./Dialog.tsx";
 import { NewFeature } from "./NewFeature.tsx";
 import { PlanView, StatusChip, useDocs } from "./Plan.tsx";
 import { notificationsOn } from "./prefs.ts";
+import { FilesView } from "./Files.tsx";
 import { RetireDialog } from "./Retire.tsx";
 import { RunView, useRunOverview } from "./Run.tsx";
 import { TerminalPanel, useTerminals } from "./Terminals.tsx";
@@ -260,6 +262,9 @@ function FeatureRow(props: { f: Feature; activity?: Activity; active: boolean; o
   );
 }
 
+type FeatureTab = "chat" | "plan" | "run" | "prs" | "activity";
+type RepoTab = "files" | "changes" | "chat" | "run";
+
 function FeatureView(props: {
   feature: Feature;
   config: ConfigInfo;
@@ -270,9 +275,39 @@ function FeatureView(props: {
   onRestore: () => void;
 }) {
   const { feature: f, config } = props;
-  const [tab, setTab] = useState<"chat" | "changes" | "plan" | "run" | "prs" | "activity">(
-    location.hash === "#changes" ? "changes" : location.hash === "#run" ? "run" : "chat",
+  // Two levels: the feature (what every repo shares) or one repo (its files, changes, chat, programs).
+  const [scopeRaw, setScopeRaw] = useState<string>(() =>
+    location.hash === "#changes" ? (f.repos[0]?.name ?? "feature") : (localStorage.getItem(`caboose-scope-${f.id}`) ?? "feature"),
   );
+  const scopeRepo = f.repos.find((r) => r.name === scopeRaw);
+  const setScope = (s: string) => {
+    setScopeRaw(s);
+    localStorage.setItem(`caboose-scope-${f.id}`, s);
+  };
+  const [featureTab, setFeatureTab] = useState<FeatureTab>(location.hash === "#run" ? "run" : "chat");
+  /** A feature tab (and the feature level). */
+  const setTab = (t: FeatureTab) => {
+    setScope("feature");
+    setFeatureTab(t);
+  };
+  const tab = scopeRepo ? null : featureTab;
+  const [repoTab, setRepoTabRaw] = useState<RepoTab>(() =>
+    location.hash === "#changes" ? "changes" : ((localStorage.getItem("caboose-repo-tab") as RepoTab | null) ?? "files"),
+  );
+  const setRepoTab = (t: RepoTab) => {
+    setRepoTabRaw(t);
+    localStorage.setItem("caboose-repo-tab", t);
+  };
+  const openRepo = (repo: string, t?: RepoTab) => {
+    setScope(repo);
+    if (t) setRepoTab(t);
+  };
+  /** The repo's own chat when it has one, else the feature's. */
+  const showChat = (repo?: string) => {
+    if (repo && props.chats.some((c) => c.repo === repo)) openRepo(repo, "chat");
+    else setTab("chat");
+  };
+  const [changeFile, setChangeFile] = useState<string | null>(null);
   const overview = useOverview(f);
   const openChat = (id: string) => {
     setTab("chat");
@@ -281,10 +316,7 @@ function FeatureView(props: {
   const { docs, reload: reloadDocs } = useDocs(f);
   const reported: Record<string, LogEntry | undefined> = {};
   for (const e of docs?.log ?? []) if (e.status) reported[e.from] = e;
-  const [repoTab, setRepoTab] = useState<string | null>(null);
   const diff = useFeatureChanges(f);
-  const fileCount = Object.values(diff.byRepo).reduce((n, c) => n + (c?.files.length ?? 0), 0);
-  const openComments = props.comments.filter((c) => !c.resolved).length;
   const unsent = props.comments.filter((c) => c.author === "user" && !c.sentAt && !c.resolved).length;
   const level = config.config.jira?.level ?? "off";
   const site = config.config.jira?.site;
@@ -293,7 +325,7 @@ function FeatureView(props: {
   const loadJira = () => api.featureJira(f.id).then(setJira);
   useEffect(() => void loadJira(), [f.id]);
 
-  const runs = useRunOverview(f, props.terminals, tab === "run");
+  const runs = useRunOverview(f, props.terminals, tab === "run" || (Boolean(scopeRepo) && repoTab === "run"));
   const running = runs.ov?.repos.reduce((n, r) => n + r.scripts.filter((x) => x.state === "running").length, 0) ?? 0;
 
   const [termOpen, setTermOpenRaw] = useState(() => localStorage.getItem(`caboose-term-open-${f.id}`) === "1");
@@ -326,8 +358,14 @@ function FeatureView(props: {
   };
 
   useCommand(async (c) => {
-    if (c === "showChat" || c === "focusComposer") setTab("chat");
-    if (c === "showChanges") setTab("changes");
+    if (c === "showChat" || c === "focusComposer") {
+      if (scopeRepo) setRepoTab("chat");
+      else setTab("chat");
+    }
+    if (c === "showChanges") {
+      const repo = scopeRepo ?? f.repos.find((r) => (diff.byRepo[r.name]?.files.length ?? 0) > 0) ?? f.repos[0];
+      if (repo) openRepo(repo.name, "changes");
+    }
     if (c === "toggleTerminal" && !f.archived) setTermOpen(!termOpen);
     if (c === "run" && !f.archived) {
       setTab("run");
@@ -342,7 +380,30 @@ function FeatureView(props: {
   });
 
   const missing = (config.config.repos ?? []).filter((r) => !f.repos.some((x) => x.name === r.name));
-  const shownRepo = f.repos.find((r) => r.name === repoTab) ?? f.repos[0];
+  const repoRow = (r: FeatureRepo) => (
+    <RepoRow
+      key={r.name}
+      feature={f}
+      repo={r}
+      chats={props.chats}
+      jiraLevel={level}
+      jiraKey={jira.subtasks[r.name] ?? jira.task}
+      subtask={jira.subtasks[r.name]}
+      hasTask={Boolean(jira.task)}
+      jiraSite={site}
+      prInstructions={config.config.prInstructions}
+      ov={overview.ov?.repos.find((x) => x.name === r.name)}
+      onChanged={() => void overview.reload()}
+      hasChat={props.chats.some((c) => c.repo === r.name)}
+      onChat={() => {
+        openRepo(r.name, "chat");
+        if (!props.chats.some((c) => c.repo === r.name)) setTimeout(() => dispatch(`breakOut:${r.name}`));
+      }}
+      onJiraChanged={() => void loadJira()}
+      onAskedAgent={() => showChat(r.name)}
+      onOpen={scopeRepo ? undefined : () => openRepo(r.name)}
+    />
+  );
 
   return (
     <div className="ws-view">
@@ -420,134 +481,170 @@ function FeatureView(props: {
         setTimeout(() => dispatch(`selectChat:${id}`));
       }} />
 
-      <div className="repos">
-        {f.repos.map((r) => (
-          <RepoRow
-            key={r.name}
-            feature={f}
-            repo={r}
-            chats={props.chats}
-            jiraLevel={level}
-            jiraKey={jira.subtasks[r.name] ?? jira.task}
-            subtask={jira.subtasks[r.name]}
-            hasTask={Boolean(jira.task)}
-            jiraSite={site}
-            prInstructions={config.config.prInstructions}
-            ov={overview.ov?.repos.find((x) => x.name === r.name)}
-            onChanged={() => void overview.reload()}
-            hasChat={props.chats.some((c) => c.repo === r.name)}
-            onChat={() => {
-              setTab("chat");
-              setTimeout(() => dispatch(`breakOut:${r.name}`));
-            }}
-            onJiraChanged={() => void loadJira()}
-            onAskedAgent={() => setTab("chat")}
-          />
-        ))}
-        {!f.archived && missing.length > 0 && (
-          <div className="add-repo-row">
-            <select
-              value=""
-              onChange={async (e) => {
-                const name = e.target.value;
-                if (!name) return;
-                const r = await api.addRepoToFeature(f.id, name);
-                if (!r.ok) alert(r.error);
-                void loadJira();
+      <div className="scope-tabs">
+        <button
+          className={scopeRepo ? "" : "active"}
+          onClick={() => setScope("feature")}
+          title="What the repos share: the central chat, the plan, every program, the PRs, all activity"
+        >
+          Feature
+        </button>
+        {f.repos.map((r) => {
+          const n = diff.byRepo[r.name]?.files.length ?? 0;
+          const rov = overview.ov?.repos.find((x) => x.name === r.name);
+          return (
+            <button key={r.name} className={scopeRepo?.name === r.name ? "active" : ""} onClick={() => setScope(r.name)} title={r.path}>
+              {rov && <HealthDot r={rov} />}
+              {r.name}
+              {n > 0 && <span className="badge">{n}</span>}
+            </button>
+          );
+        })}
+      </div>
+
+      {scopeRepo ? (
+        <>
+          <div className="repos">{repoRow(scopeRepo)}</div>
+          <div className="view-tabs">
+            <button className={repoTab === "files" ? "active" : ""} onClick={() => setRepoTab("files")}>
+              Files
+            </button>
+            <button className={repoTab === "changes" ? "active" : ""} onClick={() => setRepoTab("changes")}>
+              Changes
+              {(diff.byRepo[scopeRepo.name]?.files.length ?? 0) > 0 && <span className="badge">{diff.byRepo[scopeRepo.name]!.files.length}</span>}
+              {(() => {
+                const n = props.comments.filter((c) => c.repo === scopeRepo.name && !c.resolved).length;
+                return n > 0 ? <span className="badge comments">💬{n}</span> : null;
+              })()}
+            </button>
+            <button className={repoTab === "chat" ? "active" : ""} onClick={() => setRepoTab("chat")}>
+              Chat
+              {(() => {
+                const n = props.chats.filter((c) => c.repo === scopeRepo.name).length;
+                return n > 0 ? <span className="badge">{n}</span> : null;
+              })()}
+            </button>
+            <button className={repoTab === "run" ? "active" : ""} onClick={() => setRepoTab("run")}>
+              Run
+              {(() => {
+                const n = runs.ov?.repos.find((r) => r.repo === scopeRepo.name)?.scripts.filter((x) => x.state === "running").length ?? 0;
+                return n > 0 ? <span className="badge ok">{n}</span> : null;
+              })()}
+            </button>
+          </div>
+          {repoTab === "files" && (
+            <FilesView
+              key={scopeRepo.name}
+              f={f}
+              repo={scopeRepo}
+              changes={diff.byRepo[scopeRepo.name]}
+              onShowChange={(path) => {
+                setChangeFile(path);
+                setRepoTab("changes");
               }}
-            >
-              <option value="">+ Add a repo to this feature…</option>
-              {missing.map((r) => (
-                <option key={r.name} value={r.name}>
-                  {r.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-      </div>
-
-      <details className="ws-info">
-        <summary>
-          Feature details · ports {f.port}–{f.port + 99}
-        </summary>
-        <dl className="facts">
-          <dt>Folder</dt>
-          <dd>
-            <code>{f.folder}</code>
-          </dd>
-          {f.repos.map((r, i) => (
-            <SetupFacts key={r.name} f={f} repo={r.name} setup={r.setup} port={f.port + 10 * i} path={r.path} copied={r.copied} />
-          ))}
-          <dt>Created</dt>
-          <dd>{new Date(f.createdAt).toLocaleString()}</dd>
-        </dl>
-      </details>
-
-      <div className="view-tabs">
-        <button className={tab === "chat" ? "active" : ""} onClick={() => setTab("chat")}>
-          Chat
-        </button>
-        <button className={tab === "plan" ? "active" : ""} onClick={() => setTab("plan")}>
-          Plan
-          {docs && docs.progress.total > 0 && (
-            <span className="badge">
-              {docs.progress.done}/{docs.progress.total}
-            </span>
+            />
           )}
-        </button>
-        <button className={tab === "changes" ? "active" : ""} onClick={() => setTab("changes")}>
-          Changes{fileCount > 0 && <span className="badge">{fileCount}</span>}
-          {openComments > 0 && <span className="badge comments">💬{openComments}</span>}
-        </button>
-        <button className={tab === "run" ? "active" : ""} onClick={() => setTab("run")}>
-          Run{running > 0 && <span className="badge ok">{running}</span>}
-        </button>
-        <button className={tab === "prs" ? "active" : ""} onClick={() => setTab("prs")}>
-          Pull requests
-          {(() => {
-            const n = overview.ov?.repos.filter((r) => r.pr && (r.pr.state === "OPEN" || r.pr.state === "DRAFT")).length ?? 0;
-            return n > 0 ? <span className="badge">{n}</span> : null;
-          })()}
-        </button>
-        <button className={tab === "activity" ? "active" : ""} onClick={() => setTab("activity")}>
-          Activity
-        </button>
-        {tab === "changes" && f.repos.length > 1 && (
-          <div className="repo-tabs">
-            {f.repos.map((r) => (
-              <button key={r.name} className={r.name === shownRepo?.name ? "active" : ""} onClick={() => setRepoTab(r.name)}>
-                {r.name}
-                {(diff.byRepo[r.name]?.files.length ?? 0) > 0 && <span className="badge">{diff.byRepo[r.name]!.files.length}</span>}
-              </button>
-            ))}
+          {repoTab === "changes" && (
+            <ChangesView
+              key={scopeRepo.name}
+              ws={f}
+              repo={scopeRepo}
+              unsent={unsent}
+              changes={diff.byRepo[scopeRepo.name]}
+              error={diff.errors[scopeRepo.name]}
+              comments={props.comments.filter((c) => c.repo === scopeRepo.name)}
+              refresh={diff.refresh}
+              selectedPath={changeFile}
+              onSendComments={async () => {
+                const chat = props.chats.filter((c) => c.repo === scopeRepo.name).at(-1) ?? activeChat(f, props.chats);
+                if (!chat) return;
+                const r = await api.sendComments(f.id, chat.id);
+                if (r.ok) showChat(chat.repo);
+                else alert(r.error);
+              }}
+            />
+          )}
+          {repoTab === "chat" && (
+            <ChatArea key={scopeRepo.name} ws={f} chats={props.chats.filter((c) => c.repo === scopeRepo.name)} repo={scopeRepo.name} />
+          )}
+          {repoTab === "run" && <RunView f={f} ov={runs.ov} reload={runs.reload} onShow={showTerminal} only={scopeRepo.name} />}
+        </>
+      ) : (
+        <>
+          <div className="repos">
+            {f.repos.map(repoRow)}
+            {!f.archived && missing.length > 0 && (
+              <div className="add-repo-row">
+                <select
+                  value=""
+                  onChange={async (e) => {
+                    const name = e.target.value;
+                    if (!name) return;
+                    const r = await api.addRepoToFeature(f.id, name);
+                    if (!r.ok) alert(r.error);
+                    void loadJira();
+                  }}
+                >
+                  <option value="">+ Add a repo to this feature…</option>
+                  {missing.map((r) => (
+                    <option key={r.name} value={r.name}>
+                      {r.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        <details className="ws-info">
+          <summary>
+            Feature details · ports {f.port}–{f.port + 99}
+          </summary>
+          <dl className="facts">
+            <dt>Folder</dt>
+            <dd>
+              <code>{f.folder}</code>
+            </dd>
+            {f.repos.map((r, i) => (
+              <SetupFacts key={r.name} f={f} repo={r.name} setup={r.setup} port={f.port + 10 * i} path={r.path} copied={r.copied} />
+            ))}
+            <dt>Created</dt>
+            <dd>{new Date(f.createdAt).toLocaleString()}</dd>
+          </dl>
+        </details>
 
-      <ChatArea ws={f} chats={props.chats} hidden={tab !== "chat"} />
-      {tab === "plan" && <PlanView f={f} docs={docs} reload={() => void reloadDocs()} />}
-      {tab === "run" && <RunView f={f} ov={runs.ov} reload={runs.reload} onShow={showTerminal} />}
-      {tab === "prs" && <PrsView f={f} ov={overview.ov} loading={overview.loading} refresh={() => void overview.refresh()} />}
-      {tab === "activity" && <ActivityView f={f} chats={props.chats} onOpenChat={openChat} />}
-      {tab === "changes" && shownRepo && (
-        <ChangesView
-          key={shownRepo.name}
-          ws={f}
-          repo={shownRepo}
-          unsent={unsent}
-          changes={diff.byRepo[shownRepo.name]}
-          error={diff.errors[shownRepo.name]}
-          comments={props.comments.filter((c) => c.repo === shownRepo.name)}
-          refresh={diff.refresh}
-          onSendComments={async () => {
-            const chat = activeChat(f, props.chats);
-            if (!chat) return;
-            const r = await api.sendComments(f.id, chat.id);
-            if (r.ok) setTab("chat");
-            else alert(r.error);
-          }}
-        />
+          <div className="view-tabs">
+            <button className={tab === "chat" ? "active" : ""} onClick={() => setTab("chat")}>
+              Chat
+            </button>
+            <button className={tab === "plan" ? "active" : ""} onClick={() => setTab("plan")}>
+              Plan
+              {docs && docs.progress.total > 0 && (
+                <span className="badge">
+                  {docs.progress.done}/{docs.progress.total}
+                </span>
+              )}
+            </button>
+            <button className={tab === "run" ? "active" : ""} onClick={() => setTab("run")}>
+              Run{running > 0 && <span className="badge ok">{running}</span>}
+            </button>
+            <button className={tab === "prs" ? "active" : ""} onClick={() => setTab("prs")}>
+              Pull requests
+              {(() => {
+                const n = overview.ov?.repos.filter((r) => r.pr && (r.pr.state === "OPEN" || r.pr.state === "DRAFT")).length ?? 0;
+                return n > 0 ? <span className="badge">{n}</span> : null;
+              })()}
+            </button>
+            <button className={tab === "activity" ? "active" : ""} onClick={() => setTab("activity")}>
+              Activity
+            </button>
+          </div>
+
+          <ChatArea ws={f} chats={props.chats} hidden={tab !== "chat"} />
+          {tab === "plan" && <PlanView f={f} docs={docs} reload={() => void reloadDocs()} />}
+          {tab === "run" && <RunView f={f} ov={runs.ov} reload={runs.reload} onShow={showTerminal} />}
+          {tab === "prs" && <PrsView f={f} ov={overview.ov} loading={overview.loading} refresh={() => void overview.refresh()} />}
+          {tab === "activity" && <ActivityView f={f} chats={props.chats} onOpenChat={openChat} />}
+        </>
       )}
       <TerminalPanel
         ws={f}
