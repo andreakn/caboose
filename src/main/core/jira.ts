@@ -2,7 +2,7 @@
 // jira.txt file in each feature folder that records the feature's links.
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { FeatureJira, JiraIssue } from "../../shared/types.ts";
+import type { FeatureJira, JiraIssue, JiraStatus } from "../../shared/types.ts";
 
 export type JiraAuth = { site: string; email: string; token: string };
 type Fetch = typeof fetch;
@@ -47,6 +47,30 @@ export class Jira {
       `/rest/api/3/search/jql?jql=${encodeURIComponent(jql)}&maxResults=30&fields=summary,status,issuetype`,
     );
     return r.issues.map((i) => this.toIssue(i));
+  }
+
+  /** Status, assignee and summary for many issues in one search. */
+  async statuses(keys: string[]): Promise<Record<string, JiraStatus>> {
+    const valid = [...new Set(keys.filter((k) => /^[A-Z][A-Z0-9_]+-\d+$/.test(k)))].sort();
+    if (!valid.length) return {};
+    const jql = `key in (${valid.join(",")})`;
+    const r = await this.call<{ issues: (RawIssue & { fields?: { assignee?: { displayName?: string }; status?: { name?: string; statusCategory?: { key?: string } } } })[] }>(
+      "GET",
+      `/rest/api/3/search/jql?jql=${encodeURIComponent(jql)}&maxResults=100&fields=summary,status,assignee,issuetype`,
+    );
+    return Object.fromEntries(
+      r.issues.map((i) => [
+        i.key,
+        {
+          key: i.key,
+          summary: i.fields?.summary ?? "",
+          status: i.fields?.status?.name ?? "",
+          category: (i.fields?.status?.statusCategory?.key ?? "new") as JiraStatus["category"],
+          assignee: i.fields?.assignee?.displayName,
+          url: this.url(i.key),
+        },
+      ]),
+    );
   }
 
   async createTask(project: string, summary: string): Promise<string> {

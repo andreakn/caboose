@@ -37,6 +37,8 @@ import { GitHub } from "./core/github.ts";
 import { Jira } from "./core/jira.ts";
 import { DEFAULT_LOCAL_FILES, scanLocalFiles } from "./core/localfiles.ts";
 import { cabooseCopilotTools, cabooseInstructions, cabooseMcp } from "./core/mcp.ts";
+import { featureOverview } from "./core/overview.ts";
+import { PrDetailsCache } from "./core/prdetails.ts";
 import { Store } from "./core/store.ts";
 import { Terminals } from "./core/terminals.ts";
 import { checkForUpdate, update } from "./core/updater.ts";
@@ -330,6 +332,10 @@ ipcMain.handle("docs:note", (_e, featureId: string, to: string | undefined, text
   coordinator.noteFromUser(featureId, to, text),
 );
 ipcMain.handle("docs:status", (_e, featureId: string) => coordinator.status(featureId));
+const prDetails = new PrDetailsCache();
+ipcMain.handle("feature:overview", (_e, featureId: string, fresh?: boolean) =>
+  featureOverview(featureOrThrow(featureId), { github, prs: prDetails, jira, jiraOf: (id) => features.jiraOf(id) }, Boolean(fresh)),
+);
 ipcMain.handle("chat:models", (_e, agent: Agent) => attempt(() => chats.models(agent)));
 ipcMain.handle("chat:remove", (_e, chatId: string) => chats.remove(chatId));
 // Synchronous on purpose: chat events sent after this reply are newer than the file it read.

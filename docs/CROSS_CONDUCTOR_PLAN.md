@@ -99,7 +99,7 @@ coordinator. Works with Claude and Copilot.
 - Status per repo = what the agent last reported, overridden by facts (PR merged → done).
 - Shipping stays gated: pushing, PRs and Jira only when you say so (unchanged).
 
-### 5. Overview and dashboards, with less text (large)
+### 5. ✅ Overview and dashboards, with less text (done 2026-11-06)
 The xc dashboard shows everything at once: every repo row carries the agent's
 whole last report, Jira summaries, commit subjects and nine buttons. Caboose
 should show **signals first, words on demand**:

@@ -33,6 +33,11 @@ scripts, archive), and **local files** rules: the gitignored files a new
 feature copies from the repo's main checkout so it can run (defaults `.env*`
 and `*.local.*`; .gitignore-style patterns, with a live preview).
 
+The **Board** shows every feature at a glance (a dot per repo, badges only
+for what needs you); a feature's repo rows are one line each with the action
+that matters now, and its **Pull requests** and **Activity** tabs gather every
+PR and every chat in one place.
+
 Each feature has a **central chat** (in the feature folder, seeing every repo)
 and can **break out a chat per repo** (in that repo's worktree) when some repos
 need focused follow-up; the central chat can do that itself and follow up. The

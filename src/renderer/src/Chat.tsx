@@ -399,12 +399,12 @@ function ToolRow({ item, rel }: { item: Extract<ChatItem, { kind: "tool" }>; rel
 }
 
 /** "mcp__caboose__GetWorkspaceDiff" → "caboose · GetWorkspaceDiff" */
-function toolName(name: string): string {
+export function toolName(name: string): string {
   const m = /^mcp__(.+?)__(.+)$/.exec(name);
   return m ? `${m[1]} · ${m[2]}` : name;
 }
 
-function toolSummary(input: unknown, rel: (p: string) => string): string {
+export function toolSummary(input: unknown, rel: (p: string) => string): string {
   if (!input || typeof input !== "object") return "";
   const i = input as Record<string, unknown>;
   if (typeof i.file_path === "string") return rel(i.file_path);

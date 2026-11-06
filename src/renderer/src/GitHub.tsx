@@ -8,10 +8,11 @@ import {
   type MergeMethod,
   resolveConflictsMessage,
 } from "../../shared/github.ts";
-import type { Feature, FeatureRepo, JiraLevel, LogEntry } from "../../shared/types.ts";
+import type { Feature, FeatureRepo, JiraLevel, RepoOverview } from "../../shared/types.ts";
 import { activeChat } from "./Chat.tsx";
 import { askText } from "./Dialog.tsx";
-import { OpenInMenu } from "./Menu.tsx";
+import { MenuButton, type MenuItem, useApps } from "./Menu.tsx";
+import { HealthDot, JiraStatusChip, PrChip, PrDetailsPanel } from "./Overview.tsx";
 import { StatusChip } from "./Plan.tsx";
 
 const api = window.caboose;
@@ -53,7 +54,11 @@ export function useGitHub(feature: Feature, repo: string, chats: Chat[]) {
   return { status, error, refresh };
 }
 
-/** One repo of a feature: branch, Jira subtask, local status and its PR. */
+/**
+ * One repo of a feature, on one line: health dot, name, reported status, PR
+ * (checks, open comments), Jira, a short local state, the one action that
+ * matters now, and a menu with the rest. Click the line for the details.
+ */
 export function RepoRow(props: {
   feature: Feature;
   repo: FeatureRepo;
@@ -65,18 +70,19 @@ export function RepoRow(props: {
   hasTask: boolean;
   jiraSite?: string;
   prInstructions?: string;
-  /** What the repo's agent last reported. */
-  reported?: LogEntry;
+  /** From the feature overview: PR details, Jira status, what the agent reported. */
+  ov?: RepoOverview;
   hasChat?: boolean;
   onChat?: () => void;
   onJiraChanged: () => void;
   onAskedAgent: () => void;
+  onChanged: () => void;
 }) {
-  const { feature, repo, jiraKey } = props;
+  const { feature, repo, jiraKey, ov } = props;
   const { status, error, refresh } = useGitHub(feature, repo.name, props.chats);
   const [busy, setBusy] = useState<string | null>(null);
-  const [showChecks, setShowChecks] = useState(false);
-  const [method, setMethod] = useState<MergeMethod>(() => (localStorage.getItem("caboose-merge-method") as MergeMethod) || "squash");
+  const [open, setOpen] = useState(false);
+  const apps = useApps();
 
   async function act(label: string, fn: () => Promise<{ ok: boolean; error?: string } | void>) {
     setBusy(label);
@@ -85,10 +91,12 @@ export function RepoRow(props: {
     if (r && !r.ok) alert(r.error);
     refresh();
     props.onJiraChanged();
+    props.onChanged();
   }
 
   async function askAgent(message: string) {
-    const chat = activeChat(feature, props.chats);
+    // The repo's own chat if it has one, else the feature's open chat.
+    const chat = props.chats.filter((c) => c.repo === repo.name).at(-1) ?? activeChat(feature, props.chats);
     if (!chat) return;
     const r = await api.send(chat.id, message);
     if (!r.ok) return alert(r.error);
@@ -100,148 +108,136 @@ export function RepoRow(props: {
     void askAgent(createPrMessage(repo.name, repo.branch, repo.baseRef, draft, jiraKey, props.prInstructions));
   }
 
+  function merge(method: MergeMethod) {
+    if (!pr) return;
+    const c = ghPr ? checksSummary(ghPr.checks) : { failed: 0, pending: 0 };
+    const warn = c.failed ? `\n\n${c.failed} check(s) are failing.` : c.pending ? "\n\nSome checks are still running." : "";
+    if (confirm(`Merge ${repo.name} PR #${pr.number} into ${pr.base ?? "its base"} (${method})?${warn}`)) {
+      localStorage.setItem("caboose-merge-method", method);
+      void act("Merging…", () => api.merge(feature.id, repo.name, method));
+    }
+  }
+
   const b = status?.branch;
+  const ghPr = status?.available ? status.pr : null;
+  // PR details from the overview when there, else the per-repo status.
+  const pr = ov?.pr ?? (ghPr ? { ...ghPr, base: ghPr.baseRefName } : null);
+  const live = Boolean(pr && (pr.state === "OPEN" || pr.state === "DRAFT"));
+  const isDraft = pr ? pr.state === "DRAFT" || ("isDraft" in pr && pr.isDraft) : false;
+  const failing = ov?.pr ? ov.pr.checks.state === "failing" : ghPr ? checksSummary(ghPr.checks).failed > 0 : false;
+  const conflicts = pr?.mergeable === "CONFLICTING";
+  const canPush = Boolean(b?.upstream && b.ahead > 0);
+  const method = (localStorage.getItem("caboose-merge-method") as MergeMethod) || "squash";
+
   const local = b
     ? [
         b.uncommitted > 0 && `${b.uncommitted} uncommitted`,
-        b.upstream ? b.ahead > 0 && `${b.ahead} to push` : b.ahead > 0 ? `${b.ahead} commit${b.ahead === 1 ? "" : "s"}, not pushed` : "not pushed",
-        b.behind > 0 && `${b.behind} to pull`,
-        b.behindBase > 0 && `${b.behindBase} behind ${repo.baseRef}`,
+        b.upstream ? b.ahead > 0 && `${b.ahead} to push` : b.ahead > 0 ? `${b.ahead} unpushed` : "",
+        b.behindBase > 0 && `${b.behindBase} behind`,
       ].filter(Boolean)
     : [];
-  if (b && !local.length) local.push("up to date");
 
-  const pr = status?.available ? status.pr : null;
-  const checks = pr ? checksSummary(pr.checks) : null;
-  const open = pr?.state === "OPEN";
-  const jiraOn = props.jiraLevel !== "off";
+  // The one action that matters now.
+  const primary: { label: string; run: () => void } | null = feature.archived
+    ? null
+    : status?.available && !live && pr?.state !== "MERGED"
+      ? { label: "Create PR", run: () => createPr(false) }
+      : live && failing
+        ? { label: "Fix checks", run: () => ghPr && void askAgent(fixChecksMessage(repo.name, ghPr)) }
+        : live && conflicts
+          ? { label: "Resolve conflicts", run: () => ghPr && void askAgent(resolveConflictsMessage(repo.name, ghPr)) }
+          : canPush
+            ? { label: "Push", run: () => void act("Pushing…", () => api.push(feature.id, repo.name)) }
+            : live && !isDraft && !conflicts
+              ? { label: "Merge", run: () => merge(method) }
+              : null;
+
+  const items: MenuItem[] = feature.archived
+    ? []
+    : [
+        ...(props.onChat ? [{ label: props.hasChat ? `${repo.name}'s chat` : "Break out a chat for this repo…", onClick: props.onChat }] : []),
+        ...(status?.available && !live ? [{ label: "Create draft PR", onClick: () => createPr(true) }, { label: "Create PR", onClick: () => createPr(false) }] : []),
+        ...(canPush ? [{ label: "Push", onClick: () => void act("Pushing…", () => api.push(feature.id, repo.name)) }] : []),
+        ...(live && ghPr && failing ? [{ label: "Ask the agent to fix the checks", onClick: () => void askAgent(fixChecksMessage(repo.name, ghPr)) }] : []),
+        ...(live && ghPr && conflicts ? [{ label: "Ask the agent to resolve conflicts", onClick: () => void askAgent(resolveConflictsMessage(repo.name, ghPr)) }] : []),
+        ...(live && !isDraft && !conflicts
+          ? (["squash", "merge", "rebase"] as MergeMethod[]).map((m) => ({ label: `Merge (${m === "merge" ? "merge commit" : m})`, onClick: () => merge(m) }))
+          : []),
+        ...(pr ? [{ label: `Open PR #${pr.number} on GitHub`, onClick: () => void api.openUrl(pr.url) }] : []),
+        "separator" as const,
+        ...apps.map((a) => ({ label: `Open in ${a.label}`, onClick: () => void api.openIn(a.id, repo.path).then((r) => !r.ok && alert(r.error)) })),
+        "separator" as const,
+        ...(b && !b.upstream ? [{ label: "Rename branch…", onClick: () => void renameBranch(feature, repo, refresh) }] : []),
+        ...(props.jiraLevel !== "off"
+          ? props.subtask
+            ? [{ label: `Unlink Jira ${props.subtask}`, onClick: () => confirm(`Unlink ${props.subtask}?`) && void act("Saving…", () => api.setRepoSubtask(feature.id, repo.name, null)) }]
+            : [
+                { label: "Link a Jira subtask…", onClick: () => void linkSubtask(feature, repo, act) },
+                ...(props.hasTask
+                  ? [{ label: "Create the Jira subtask", onClick: () => void act("Creating subtask…", () => api.createSubtask(feature.id, repo.name)) }]
+                  : []),
+              ]
+          : []),
+      ];
 
   return (
-    <div className="repo-row">
-      <div className="repo-line">
-        <span className={`dot setup-${repo.setup}`} title={`Setup: ${repo.setup}`} />
+    <div className={`repo-row${open ? " open" : ""}`}>
+      <div className="repo-line" onClick={() => setOpen(!open)}>
+        <span className="twisty">{open ? "▾" : "▸"}</span>
+        {ov ? <HealthDot r={ov} /> : <span className={`dot setup-${repo.setup}`} title={`Setup: ${repo.setup}`} />}
         <b className="repo-name-cell">{repo.name}</b>
-        {props.reported?.status && (
-          <span title={`${props.reported.at}: ${props.reported.text}`}>
-            <StatusChip status={props.reported.status} />
+        {ov?.reported?.status && (
+          <span title={`${ov.reported.at}: ${ov.reported.text}`}>
+            <StatusChip status={ov.reported.status} />
           </span>
         )}
-        <BranchName feature={feature} repo={repo} canRename={!!b && !b.upstream} onRenamed={refresh} />
-        {jiraOn && (
-          <JiraChip
-            label="subtask"
-            jiraKey={props.subtask}
-            site={props.jiraSite}
-            onSet={(key) => act("Saving…", () => api.setRepoSubtask(feature.id, repo.name, key))}
-            onCreate={
-              props.hasTask
-                ? () =>
-                    act("Creating subtask…", async () => {
-                      const r = await api.createSubtask(feature.id, repo.name);
-                      if (r.ok && r.value.renamed.length) alert(`Branch renamed to ${r.value.renamed[0].to}`);
-                      return r;
-                    })
-                : undefined
-            }
-          />
-        )}
-        <span className="muted repo-local">{local.join(" · ")}</span>
-        {busy && <span className="muted">{busy}</span>}
-        <span className="spacer" />
-        {!feature.archived && props.onChat && (
-          <button onClick={props.onChat} title={props.hasChat ? `Open ${repo.name}'s chat` : `Break out a chat working in ${repo.name}/`}>
-            {props.hasChat ? "⑂ chat" : "⑂ break out"}
-          </button>
-        )}
-        {!feature.archived && <OpenInMenu path={repo.path} label="Open ▾" />}
-
-        {status && !status.available && (
-          <span className="muted" title={status.reason}>
-            {status.reason}
-          </span>
-        )}
-        {status?.available && (!pr || pr.state === "CLOSED") && (
-          <>
-            {pr && <PrLink pr={pr} />}
-            <button className="primary" onClick={() => createPr(false)}>
-              Create PR
+        {ov?.pr ? <PrChip pr={ov.pr} /> : ghPr && <PrLink pr={ghPr} />}
+        {ov?.jira ? <JiraStatusChip j={ov.jira} site={props.jiraSite} /> : props.subtask && <JiraStatusChip j={{ key: props.subtask }} site={props.jiraSite} />}
+        <span className="muted repo-local one-line">{busy ?? (error ? "status failed" : local.join(" · "))}</span>
+        <span className="row" onClick={(e) => e.stopPropagation()}>
+          {primary && (
+            <button className="primary" onClick={primary.run} disabled={!!busy}>
+              {primary.label}
             </button>
-            <button onClick={() => createPr(true)}>Draft</button>
-          </>
-        )}
-        {pr && open && checks && (
-          <>
-            <PrLink pr={pr} />
-            {pr.isDraft && <span className="chip">Draft</span>}
-            {pr.reviewDecision === "APPROVED" && <span className="chip ok">Approved</span>}
-            {pr.reviewDecision === "CHANGES_REQUESTED" && <span className="chip bad">Changes requested</span>}
-            {pr.checks.length > 0 && (
-              <button className="link gh-checks" onClick={() => setShowChecks(!showChecks)}>
-                {checks.failed > 0 && <span className="del">✗ {checks.failed}</span>}
-                {checks.pending > 0 && <span className="pending">● {checks.pending}</span>}
-                {checks.failed === 0 && checks.pending === 0 && <span className="add">✓ checks</span>}
-              </button>
-            )}
-            {pr.mergeable === "CONFLICTING" && <span className="del">Conflicts</span>}
-            {b?.upstream && b.ahead > 0 && <button onClick={() => act("Pushing…", () => api.push(feature.id, repo.name))}>Push</button>}
-            {checks.failed > 0 && <button onClick={() => askAgent(fixChecksMessage(repo.name, pr))}>Fix checks</button>}
-            {pr.mergeable === "CONFLICTING" && (
-              <button onClick={() => askAgent(resolveConflictsMessage(repo.name, pr))}>Resolve conflicts</button>
-            )}
-            <select
-              value={method}
-              title="Merge method"
-              onChange={(e) => {
-                setMethod(e.target.value as MergeMethod);
-                localStorage.setItem("caboose-merge-method", e.target.value);
-              }}
-            >
-              <option value="squash">Squash</option>
-              <option value="merge">Merge commit</option>
-              <option value="rebase">Rebase</option>
-            </select>
-            <button
-              className="primary"
-              disabled={pr.isDraft || pr.mergeable === "CONFLICTING" || !!busy}
-              title={pr.isDraft ? "Mark the PR ready for review first" : undefined}
-              onClick={() => {
-                const warn = checks.failed ? `\n\n${checks.failed} check(s) are failing.` : checks.pending ? "\n\nSome checks are still running." : "";
-                if (confirm(`Merge ${repo.name} PR #${pr.number} into ${pr.baseRefName} (${method})?${warn}`)) {
-                  void act("Merging…", () => api.merge(feature.id, repo.name, method));
-                }
-              }}
-            >
-              Merge
-            </button>
-          </>
-        )}
-        {pr?.state === "MERGED" && (
-          <>
-            <PrLink pr={pr} />
-            <span className="chip ok">Merged</span>
-          </>
-        )}
-        {error && (
-          <span className="del" title={error}>
-            status failed
-          </span>
-        )}
+          )}
+          {items.length > 0 && <MenuButton label="⋯" title="More" align="right" items={items} />}
+        </span>
       </div>
-      {showChecks && pr && (
-        <ul className="gh-check-list">
-          {pr.checks.map((c, i) => (
-            <li key={i}>
-              <span className={`check-${c.state}`}>{{ success: "✓", failure: "✗", pending: "●", skipped: "–" }[c.state]}</span>{" "}
-              {c.url ? (
-                <a href="#" onClick={(e) => (e.preventDefault(), api.openUrl(c.url!))}>
-                  {c.name}
-                </a>
-              ) : (
-                c.name
-              )}
-            </li>
-          ))}
-        </ul>
+      {open && (
+        <div className="repo-details">
+          <div>
+            <span className="muted">branch</span> <code>{repo.branch}</code> <span className="muted">from</span> <code>{repo.baseRef}</code>
+            {b && (
+              <span className="muted">
+                {" "}
+                · {b.upstream ? `pushed to ${b.upstream}` : "not pushed"}
+                {b.ahead ? ` · ${b.ahead} commit(s) ahead` : ""}
+                {b.uncommitted ? ` · ${b.uncommitted} uncommitted` : ""}
+                {b.behindBase ? ` · ${b.behindBase} behind ${repo.baseRef}` : ""}
+              </span>
+            )}
+          </div>
+          {ov?.reported && (
+            <div>
+              <span className="muted">last report ({ov.reported.at})</span> <StatusChip status={ov.reported.status!} /> {ov.reported.text}
+            </div>
+          )}
+          {ov?.jira && "status" in ov.jira && (
+            <div>
+              <span className="muted">Jira</span> {ov.jira.key}: {ov.jira.summary} · {ov.jira.status}
+              {ov.jira.assignee ? ` · ${ov.jira.assignee}` : ""}
+            </div>
+          )}
+          {status && !status.available && <div className="muted">{status.reason}</div>}
+          {ov?.pr && (
+            <div>
+              <a href="#" onClick={(e) => (e.preventDefault(), api.openUrl(ov.pr!.url))}>
+                PR #{ov.pr.number}: {ov.pr.title}
+              </a>
+              <PrDetailsPanel pr={ov.pr} />
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
@@ -249,10 +245,32 @@ export function RepoRow(props: {
 
 function PrLink({ pr }: { pr: { number: number; url: string; title: string } }) {
   return (
-    <a className="gh-pr" href="#" title={pr.title} onClick={(e) => (e.preventDefault(), api.openUrl(pr.url))}>
-      PR #{pr.number} ↗
+    <a
+      className="pr-chip"
+      href="#"
+      title={pr.title}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        void api.openUrl(pr.url);
+      }}
+    >
+      #{pr.number}
     </a>
   );
+}
+
+async function renameBranch(feature: Feature, repo: FeatureRepo, done: () => void) {
+  const name = await askText({ title: `Rename ${repo.name}'s branch`, value: repo.branch, ok: "Rename" });
+  if (!name || name === repo.branch) return;
+  const r = await api.renameBranch(feature.id, repo.name, name);
+  if (!r.ok) alert(r.error);
+  done();
+}
+
+async function linkSubtask(feature: Feature, repo: FeatureRepo, act: (label: string, fn: () => Promise<{ ok: boolean; error?: string }>) => Promise<void>) {
+  const key = await askText({ title: `Link a Jira subtask to ${repo.name}`, label: "Its key or URL", placeholder: "e.g. NWP-1234", ok: "Link" });
+  if (key) await act("Saving…", () => api.setRepoSubtask(feature.id, repo.name, key));
 }
 
 /** Branch name with an edit button while it is unpushed. */

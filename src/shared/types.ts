@@ -1,7 +1,7 @@
 // Shapes shared by the main process, the preload bridge and the renderer.
 import type { Agent, Chat, ChatEvent, Effort, Mode, Model, ModelOption } from "./chat.ts";
 import type { DiffComment, WorkspaceChanges } from "./diff.ts";
-import type { GitHubStatus, MergeMethod } from "./github.ts";
+import type { GitHubStatus, MergeMethod, PrDetails } from "./github.ts";
 
 export type SetupState = "none" | "running" | "ok" | "failed";
 
@@ -169,6 +169,28 @@ export type ConfigInfo = {
   canEncrypt: boolean;
 };
 
+/** An issue's status for the overview. Category: new (to do), indeterminate (in progress), done. */
+export type JiraStatus = { key: string; summary: string; status: string; category: "new" | "indeterminate" | "done"; assignee?: string; url: string };
+
+/** One repo in the overview. `pr`: undefined = unknown (no GitHub), null = none on the branch. */
+export type RepoOverview = {
+  name: string;
+  branch: string;
+  reported?: LogEntry;
+  local?: { uncommitted: number; ahead: number; behindBase: number; pushed: boolean };
+  pr?: PrDetails | null;
+  jira?: JiraStatus | { key: string };
+};
+
+/** A feature at a glance: what the board and the feature page show. */
+export type FeatureOverview = {
+  id: string;
+  progress: { done: number; total: number };
+  task?: JiraStatus | { key: string };
+  repos: RepoOverview[];
+  errors: string[];
+};
+
 export type JiraIssue = { key: string; summary: string; status: string; type: string; url: string; subtasks?: { key: string; summary: string }[] };
 
 /** What a repo's agent last reported about its work. */
@@ -288,6 +310,8 @@ export type CabooseApi = {
   /** Logs a note from the user and sends it to the chats it is for ("all"/absent: every chat). */
   note(featureId: string, to: string | undefined, text: string): Promise<Result<string[]>>;
   featureStatus(featureId: string): Promise<string>;
+  /** Overview of a feature (cached 60 s for GitHub and Jira; fresh bypasses it). */
+  overview(featureId: string, fresh?: boolean): Promise<FeatureOverview>;
   models(agent: Agent): Promise<Result<ModelOption[]>>;
   removeChat(chatId: string): Promise<void>;
   chatEvents(chatId: string): Promise<ChatEvent[]>;

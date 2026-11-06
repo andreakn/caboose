@@ -69,6 +69,9 @@ export type LiveEvent =
 
 export type ChatEvent = LastingEvent | LiveEvent;
 
+/** Saved events carry the time they happened (older transcripts may not). */
+export const eventTime = (e: ChatEvent): string | undefined => (e as { at?: string }).at;
+
 /** One question from Claude Code's AskUserQuestion tool. */
 export type Question = {
   question: string;

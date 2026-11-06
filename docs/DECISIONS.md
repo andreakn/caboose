@@ -382,6 +382,41 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
     a repo brief, broke out a `sheets` chat, which edited and committed in its
     worktree, reported working → ready, logged the commit and ticked the plan.
 
+## cross_conductor parity, phase 5: overview (2026-11-06)
+
+98. **Signals first, words on demand** (Andreas found xc's dashboard too wordy):
+    one coloured dot per repo (red = needs you: needs-input/blocked, failing
+    checks, conflicts, changes requested, unresolved review comments; yellow =
+    working or checks running; blue = on track; green = merged/done; grey =
+    nothing yet), with the reason on hover; badges only for what needs you.
+99. **Board** (sidebar "▦ Board"): a row per live feature — name, title,
+    status, plan progress, repo dots, "n asking" / "n need you" badges, the
+    Jira task's status; expands to a line per repo.
+100. **Repo rows are one line**: dot, name, reported status, PR chip (#n with
+     ✓/✗/● for checks and 💬 for unresolved comments), Jira chip with its
+     status, a short local state, **the one action that matters now** (Create
+     PR / Fix checks / Resolve conflicts / Push / Merge) and a ⋯ menu with the
+     rest (draft PR, merge methods, open PR, open in apps, rename branch, Jira
+     link/create/unlink, the repo's chat). Click the line for the details.
+101. **PR details in one GitHub GraphQL call per feature** (`gh api graphql`):
+     the newest PR per repo branch with unresolved threads, reviews and
+     requested reviewers, checks (failed ones with links), merge state and
+     size; cached 60 s, refreshed every 30 s while shown, "Refresh" bypasses
+     the cache. Repos whose origin is not on GitHub show "not on GitHub".
+102. **Jira status** for the task and every subtask in one search, cached 60 s.
+103. **Pull requests tab**: totals as tiles (open, draft, merged, failing
+     builds, unresolved comments, approved, changes requested, repos without a
+     PR) and a row per repo that expands to its failing checks and comments.
+104. **Activity tab**: every chat of the feature in one feed, newest first, one
+     line per event (your messages, replies, tool calls, questions, errors),
+     filterable by chat; a click opens that chat. Chat events are now
+     time-stamped when saved (older transcripts have no times and are left
+     out of the feed).
+105. **Tested against live GitHub**: the caboose repo in a test feature, its
+     branch pointed at the old test PR #1, which showed up (closed, size,
+     merge state) on the board, the repo row and the PR tab. Jira statuses
+     from a fake Jira server.
+
 ## Answered (2026-11-05)
 
 - Private GitHub repo `andreakn/caboose`: yes.

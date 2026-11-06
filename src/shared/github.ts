@@ -34,6 +34,34 @@ export type GitHubStatus =
 
 export type MergeMethod = "squash" | "merge" | "rebase";
 
+/** An unresolved review thread on a PR. */
+export type PrThread = { path: string; line: number | null; outdated: boolean; author: string; body: string; url: string; replies: number };
+
+/** Everything the overview shows about one PR. */
+export type PrDetails = {
+  repo: string;
+  number: number;
+  title: string;
+  url: string;
+  state: "OPEN" | "DRAFT" | "MERGED" | "CLOSED";
+  reviewDecision: "APPROVED" | "CHANGES_REQUESTED" | "REVIEW_REQUIRED" | null;
+  mergeable: "MERGEABLE" | "CONFLICTING" | "UNKNOWN";
+  /** GitHub's merge state: CLEAN, BLOCKED, BEHIND, DIRTY (conflicts), UNSTABLE, DRAFT… */
+  mergeState: string;
+  additions: number;
+  deletions: number;
+  changedFiles: number;
+  head: string;
+  base: string;
+  author: string;
+  updatedAt: string;
+  threads: PrThread[];
+  approvals: string[];
+  changesRequested: string[];
+  requested: string[];
+  checks: { state: "none" | "passing" | "pending" | "failing"; total: number; passed: number; failed: { name: string; url?: string }[]; pending: number };
+};
+
 /** "origin/main" → "main" */
 export function baseBranch(baseRef: string): string {
   return baseRef.replace(/^origin\//, "");

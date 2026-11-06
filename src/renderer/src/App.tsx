@@ -19,7 +19,9 @@ import { activeChat, ChatArea } from "./Chat.tsx";
 import { dispatch, useCommand } from "./commands.ts";
 import { Configure } from "./Configure.tsx";
 import { JiraChip, RepoRow } from "./GitHub.tsx";
+import { ActivityView } from "./Activity.tsx";
 import { MenuButton, OpenInMenu } from "./Menu.tsx";
+import { Board, JiraStatusChip, PrsView, useOverview } from "./Overview.tsx";
 import { DialogHost } from "./Dialog.tsx";
 import { NewFeature } from "./NewFeature.tsx";
 import { PlanView, StatusChip, useDocs } from "./Plan.tsx";
@@ -28,7 +30,7 @@ import { TerminalPanel, useTerminals } from "./Terminals.tsx";
 
 const api = window.caboose;
 
-type Screen = "feature" | "configure" | "new";
+type Screen = "feature" | "configure" | "new" | "board";
 
 export function App() {
   const terminals = useTerminals();
@@ -133,6 +135,9 @@ export function App() {
     <div className="app">
       <aside className="sidebar">
         <div className="brand">🚃 Caboose</div>
+        <button className={`board-link${screen === "board" ? " active" : ""}`} onClick={() => setScreen("board")}>
+          ▦ Board
+        </button>
         <button className="new-feature" onClick={() => setScreen("new")}>
           + New feature
         </button>
@@ -167,7 +172,9 @@ export function App() {
 
       <main className="main">
         {(busy || error) && <div className={busy ? "banner" : "banner error"}>{busy ?? error}</div>}
-        {screen === "configure" ? (
+        {screen === "board" ? (
+          <Board features={state.features} chats={state.chats} onOpen={select} onNew={() => setScreen("new")} />
+        ) : screen === "configure" ? (
           <Configure
             onDone={() => {
               void loadConfig();
@@ -235,7 +242,12 @@ function FeatureView(props: {
   onRestore: () => void;
 }) {
   const { feature: f, config } = props;
-  const [tab, setTab] = useState<"chat" | "changes" | "plan">(location.hash === "#changes" ? "changes" : "chat");
+  const [tab, setTab] = useState<"chat" | "changes" | "plan" | "prs" | "activity">(location.hash === "#changes" ? "changes" : "chat");
+  const overview = useOverview(f);
+  const openChat = (id: string) => {
+    setTab("chat");
+    setTimeout(() => dispatch(`selectChat:${id}`));
+  };
   const { docs, reload: reloadDocs } = useDocs(f);
   const reported: Record<string, LogEntry | undefined> = {};
   for (const e of docs?.log ?? []) if (e.status) reported[e.from] = e;
@@ -323,17 +335,33 @@ function FeatureView(props: {
                 </option>
               ))}
             </select>
-            {level !== "off" && (
-              <JiraChip
-                label="Jira task"
-                jiraKey={jira.task}
-                site={site}
-                onSet={async (key) => {
-                  reportAlignment(await api.setFeatureTask(f.id, key));
-                  void loadJira();
-                }}
-              />
-            )}
+            {level !== "off" &&
+              (jira.task ? (
+                <span className="jira-chip">
+                  <JiraStatusChip j={overview.ov?.task ?? { key: jira.task }} site={site} />
+                  <button
+                    className="link"
+                    title="Unlink the Jira task"
+                    onClick={async () => {
+                      if (!confirm(`Unlink ${jira.task}?`)) return;
+                      reportAlignment(await api.setFeatureTask(f.id, null));
+                      void loadJira();
+                    }}
+                  >
+                    ×
+                  </button>
+                </span>
+              ) : (
+                <JiraChip
+                  label="Jira task"
+                  site={site}
+                  onSet={async (key) => {
+                    reportAlignment(await api.setFeatureTask(f.id, key));
+                    void loadJira();
+                    void overview.reload();
+                  }}
+                />
+              ))}
           </h1>
           <FeatureTitle f={f} />
         </div>
@@ -381,7 +409,8 @@ function FeatureView(props: {
             hasTask={Boolean(jira.task)}
             jiraSite={site}
             prInstructions={config.config.prInstructions}
-            reported={reported[r.name]}
+            ov={overview.ov?.repos.find((x) => x.name === r.name)}
+            onChanged={() => void overview.reload()}
             hasChat={props.chats.some((c) => c.repo === r.name)}
             onChat={() => {
               setTab("chat");
@@ -447,6 +476,16 @@ function FeatureView(props: {
           Changes{fileCount > 0 && <span className="badge">{fileCount}</span>}
           {openComments > 0 && <span className="badge comments">💬{openComments}</span>}
         </button>
+        <button className={tab === "prs" ? "active" : ""} onClick={() => setTab("prs")}>
+          Pull requests
+          {(() => {
+            const n = overview.ov?.repos.filter((r) => r.pr && (r.pr.state === "OPEN" || r.pr.state === "DRAFT")).length ?? 0;
+            return n > 0 ? <span className="badge">{n}</span> : null;
+          })()}
+        </button>
+        <button className={tab === "activity" ? "active" : ""} onClick={() => setTab("activity")}>
+          Activity
+        </button>
         {tab === "changes" && f.repos.length > 1 && (
           <div className="repo-tabs">
             {f.repos.map((r) => (
@@ -461,6 +500,8 @@ function FeatureView(props: {
 
       <ChatArea ws={f} chats={props.chats} hidden={tab !== "chat"} />
       {tab === "plan" && <PlanView f={f} docs={docs} reload={() => void reloadDocs()} />}
+      {tab === "prs" && <PrsView f={f} ov={overview.ov} loading={overview.loading} refresh={() => void overview.refresh()} />}
+      {tab === "activity" && <ActivityView f={f} chats={props.chats} onOpenChat={openChat} />}
       {tab === "changes" && shownRepo && (
         <ChangesView
           key={shownRepo.name}

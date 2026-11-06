@@ -52,6 +52,7 @@ const api: CabooseApi = {
   tickPlan: invoke("docs:tick"),
   note: invoke("docs:note"),
   featureStatus: invoke("docs:status"),
+  overview: invoke("feature:overview"),
   models: invoke("chat:models"),
   removeChat: invoke("chat:remove"),
   chatEvents: invoke("chat:events"),

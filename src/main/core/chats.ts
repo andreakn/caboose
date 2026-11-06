@@ -326,11 +326,12 @@ export class Chats {
     this.emit(chatId, { t: "status", running: live.running, queued: [...live.queue] });
   }
 
-  /** Saves a lasting event and sends it to the window. */
+  /** Saves a lasting event (stamped with the time, for the activity feed) and sends it to the window. */
   private record(chatId: string, e: LastingEvent): void {
+    const stamped = { ...e, at: (e as { at?: string }).at ?? new Date().toISOString() } as LastingEvent;
     mkdirSync(this.dir, { recursive: true });
-    appendFileSync(this.file(chatId), `${JSON.stringify(e)}\n`);
-    this.emit(chatId, e);
+    appendFileSync(this.file(chatId), `${JSON.stringify(stamped)}\n`);
+    this.emit(chatId, stamped);
   }
 
   private file(chatId: string): string {
