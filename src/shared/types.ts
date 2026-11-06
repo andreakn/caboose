@@ -1,7 +1,7 @@
 // Shapes shared by the main process, the preload bridge and the renderer.
 import type { Agent, Chat, ChatEvent, Effort, Mode, Model, ModelOption } from "./chat.ts";
 import type { DiffComment, WorkspaceChanges } from "./diff.ts";
-import type { GitHubStatus, MergeMethod, PrDetails } from "./github.ts";
+import type { GitHubStatus, MergeMethod, MergeOutcome, PrDetails } from "./github.ts";
 
 export type SetupState = "none" | "running" | "ok" | "failed";
 
@@ -408,6 +408,10 @@ export type CabooseApi = {
 
   githubStatus(featureId: string, repo: string): Promise<Result<GitHubStatus>>;
   push(featureId: string, repo: string): Promise<Result<void>>;
+  /** Pulls the branch's upstream (fast-forward, else merge); on conflicts it is undone and the files named. */
+  pull(featureId: string, repo: string): Promise<Result<MergeOutcome>>;
+  /** Merges the base (origin/main) into the branch; on conflicts it is undone and the files named. */
+  mergeBase(featureId: string, repo: string): Promise<Result<MergeOutcome>>;
   merge(featureId: string, repo: string, method: MergeMethod): Promise<Result<void>>;
   renameBranch(featureId: string, repo: string, name: string): Promise<Result<void>>;
   openUrl(url: string): Promise<void>;

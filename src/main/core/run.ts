@@ -10,9 +10,10 @@ export class CommandError extends Error {
   }
 }
 
-export function run(file: string, args: string[], cwd?: string): Promise<string> {
+export function run(file: string, args: string[], cwd?: string, env?: Record<string, string>): Promise<string> {
   return new Promise((resolve, reject) => {
-    execFile(file, args, { cwd, maxBuffer: 64 * 1024 * 1024, windowsHide: true }, (err, stdout, stderr) => {
+    const options = { cwd, maxBuffer: 64 * 1024 * 1024, windowsHide: true, ...(env ? { env: { ...process.env, ...env } } : {}) };
+    execFile(file, args, options, (err, stdout, stderr) => {
       if (err) {
         const detail = String(stderr).trim() || err.message;
         reject(new CommandError(`${file} ${args.join(" ")}: ${detail}`, String(stderr)));

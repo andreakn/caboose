@@ -430,6 +430,13 @@ ipcMain.handle("github:push", (_e, featureId: string, repo: string) =>
     return github.push(r.path, r.branch);
   }),
 );
+ipcMain.handle("github:pull", (_e, featureId: string, repo: string) => attempt(() => github.pull(liveRepo(featureId, repo).r.path)));
+ipcMain.handle("github:mergeBase", (_e, featureId: string, repo: string) =>
+  attempt(() => {
+    const { r } = liveRepo(featureId, repo);
+    return github.mergeBase(r.path, r.baseRef);
+  }),
+);
 ipcMain.handle("github:merge", (_e, featureId: string, repo: string, method: MergeMethod) =>
   attempt(async () => {
     const { r } = liveRepo(featureId, repo);

@@ -510,6 +510,19 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      checked-out branch, and the recorded branch is updated, so push, merge
      and renames use it too. A detached HEAD keeps the recorded one.
 
+123. **Pull and "Merge <base>" on the repo row.** Pull when the upstream has
+     commits you don't (fast-forward, else a merge); "Merge master" when the
+     base has moved (e.g. after a squash-merged PR), as the row's main
+     button when nothing more urgent is waiting. Both run locally; if a
+     merge conflicts it is aborted (nothing changes), the files are named,
+     and you can ask the agent to do the merge. A merge commit is chosen
+     over a reset: it works the same whether the PR was squashed or not and
+     never throws work away.
+124. **Caboose fetches origin while it shows a feature**, at most every
+     2 minutes per worktree (and right after merging a PR or before a pull
+     or merge), so "to pull" / "behind master" are current. The fetch never
+     prompts and gives up after 20 s.
+
 ## Answered (2026-11-05)
 
 - Private GitHub repo `andreakn/caboose`: yes.

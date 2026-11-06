@@ -5,6 +5,7 @@ import {
   createPrMessage,
   fixChecksMessage,
   type GitHubStatus,
+  mergeConflictsMessage,
   type MergeMethod,
   resolveConflictsMessage,
 } from "../../shared/github.ts";
@@ -118,7 +119,23 @@ export function RepoRow(props: {
     }
   }
 
+  /** Pull or merge the base; on conflicts nothing changed, and the agent can be asked to do it. */
+  async function mergeLocally(what: "pull" | "base") {
+    const from = what === "pull" ? (b?.upstream ?? "the upstream") : repo.baseRef;
+    setBusy(what === "pull" ? "Pulling…" : `Merging ${base}…`);
+    const r = await (what === "pull" ? api.pull(feature.id, repo.name) : api.mergeBase(feature.id, repo.name));
+    setBusy(null);
+    refresh();
+    props.onChanged();
+    if (!r.ok) return alert(r.error);
+    const files = r.value.conflicts;
+    if (files.length && confirm(`Merging ${from} conflicts in ${files.length} file(s), so nothing was changed:\n${files.join("\n")}\n\nAsk the agent to merge it and resolve the conflicts?`)) {
+      void askAgent(mergeConflictsMessage(repo.name, from, files));
+    }
+  }
+
   const b = status?.branch;
+  const base = repo.baseRef.replace(/^origin\//, "");
   const ghPr = status?.available ? status.pr : null;
   // PR details from the overview when there, else the per-repo status.
   const pr = ov?.pr ?? (ghPr ? { ...ghPr, base: ghPr.baseRefName } : null);
@@ -133,14 +150,17 @@ export function RepoRow(props: {
     ? [
         b.uncommitted > 0 && `${b.uncommitted} uncommitted`,
         b.upstream ? b.ahead > 0 && `${b.ahead} to push` : b.ahead > 0 ? `${b.ahead} unpushed` : "",
-        b.behindBase > 0 && `${b.behindBase} behind`,
+        b.behind > 0 && `${b.behind} to pull`,
+        b.behindBase > 0 && `${b.behindBase} behind ${base}`,
       ].filter(Boolean)
     : [];
 
   // The one action that matters now.
   const primary: { label: string; run: () => void } | null = feature.archived
     ? null
-    : status?.available && !live && pr?.state !== "MERGED"
+    : b && b.behind > 0
+      ? { label: "Pull", run: () => void mergeLocally("pull") }
+      : status?.available && !live && pr?.state !== "MERGED"
       ? { label: "Create PR", run: () => createPr(false) }
       : live && failing
         ? { label: "Fix checks", run: () => ghPr && void askAgent(fixChecksMessage(repo.name, ghPr)) }
@@ -150,7 +170,9 @@ export function RepoRow(props: {
             ? { label: "Push", run: () => void act("Pushing…", () => api.push(feature.id, repo.name)) }
             : live && !isDraft && !conflicts
               ? { label: "Merge", run: () => merge(method) }
-              : null;
+              : b && b.behindBase > 0
+                ? { label: `Merge ${base}`, run: () => void mergeLocally("base") }
+                : null;
 
   const items: MenuItem[] = feature.archived
     ? []
@@ -158,6 +180,8 @@ export function RepoRow(props: {
         ...(props.onChat ? [{ label: props.hasChat ? `${repo.name}'s chat` : "Break out a chat for this repo…", onClick: props.onChat }] : []),
         ...(status?.available && !live ? [{ label: "Create draft PR", onClick: () => createPr(true) }, { label: "Create PR", onClick: () => createPr(false) }] : []),
         ...(canPush ? [{ label: "Push", onClick: () => void act("Pushing…", () => api.push(feature.id, repo.name)) }] : []),
+        ...(b && b.behind > 0 ? [{ label: `Pull ${b.behind} commit(s) from ${b.upstream}`, onClick: () => void mergeLocally("pull") }] : []),
+        ...(b && b.behindBase > 0 ? [{ label: `Merge ${repo.baseRef} into this branch (${b.behindBase} new)`, onClick: () => void mergeLocally("base") }] : []),
         ...(live && ghPr && failing ? [{ label: "Ask the agent to fix the checks", onClick: () => void askAgent(fixChecksMessage(repo.name, ghPr)) }] : []),
         ...(live && ghPr && conflicts ? [{ label: "Ask the agent to resolve conflicts", onClick: () => void askAgent(resolveConflictsMessage(repo.name, ghPr)) }] : []),
         ...(live && !isDraft && !conflicts
@@ -213,6 +237,7 @@ export function RepoRow(props: {
                 · {b.upstream ? `pushed to ${b.upstream}` : "not pushed"}
                 {b.ahead ? ` · ${b.ahead} commit(s) ahead` : ""}
                 {b.uncommitted ? ` · ${b.uncommitted} uncommitted` : ""}
+                {b.behind ? ` · ${b.behind} to pull` : ""}
                 {b.behindBase ? ` · ${b.behindBase} behind ${repo.baseRef}` : ""}
               </span>
             )}

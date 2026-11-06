@@ -77,6 +77,8 @@ const api: CabooseApi = {
 
   githubStatus: invoke("github:status"),
   push: invoke("github:push"),
+  pull: invoke("github:pull"),
+  mergeBase: invoke("github:mergeBase"),
   merge: invoke("github:merge"),
   renameBranch: invoke("github:rename"),
   openUrl: invoke("shell:openUrl"),

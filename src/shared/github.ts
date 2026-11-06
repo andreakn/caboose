@@ -102,6 +102,18 @@ export function fixChecksMessage(repo: string, pr: PullRequest): string {
   ].join("\n");
 }
 
+/** A local merge (pull, or the base into the branch): the files that conflicted, if it was aborted. */
+export type MergeOutcome = { conflicts: string[] };
+
+export function mergeConflictsMessage(repo: string, from: string, files: string[]): string {
+  return [
+    `Merging ${from} into the ${repo} repo's branch (the ${repo}/ folder) conflicts in:`,
+    ...files.map((f) => `- ${f}`),
+    "",
+    `Fetch, merge ${from} into this branch, resolve the conflicts carefully, run the tests, then commit (and push if the branch is pushed).`,
+  ].join("\n");
+}
+
 export function resolveConflictsMessage(repo: string, pr: PullRequest): string {
   return `PR #${pr.number} of the ${repo} repo (the ${repo}/ folder) has merge conflicts with ${pr.baseRefName}. Fetch, merge origin/${pr.baseRefName} into this branch (rebase only if this repo clearly prefers it), resolve the conflicts carefully, run the tests, then commit and push.`;
 }
