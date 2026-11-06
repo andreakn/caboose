@@ -251,7 +251,8 @@ own folder; it can span several repos; it can be tied to Jira.
     or in the feature folder ("+" menu).
 71. **Branch names**: `<prefix>/<station>`, or `<prefix>/<KEY>-<station>` with
     the repo's subtask key (else the feature's task key), so the branch
-    contains the Jira key. PR messages ask for titles starting `<KEY> - `.
+    contains the Jira key — that is what links work to Jira. PR titles need no
+    key prefix.
 72. **Jira levels** (config): Off / Optional (link by hand, create subtasks on
     request) / Expected (new features ask, one click to skip; Create PR warns
     without a key) / Required (no feature without a task; each repo's subtask
@@ -324,9 +325,9 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
     every repo's scripts; "Run all" starts each repo's first script. Each runs
     in its own terminal tab (`<repo>: <script>`).
 87. **PR instructions** in the config are added to every Create PR request.
-    *(Note: with a Jira key, Caboose also asks for the title to start with the
-    key; your imported Conductor prompt says "no ticket prefix" — edit one of
-    them if they disagree.)*
+    With a Jira key, Caboose only asks the agent to mention the key in the
+    description: the branch name is what links a PR to Jira (Andreas), so a
+    key prefix in the title is neither required nor forbidden.
 88. **Open in** per repo and for the feature folder: VS Code everywhere;
     Rider on macOS/Windows (the single `.sln`/`.slnx` if there is one); Visual
     Studio on Windows (`devenv`, newest year/edition found); terminal = iTerm,

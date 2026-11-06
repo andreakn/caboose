@@ -83,6 +83,7 @@ test("the create-PR message names the branch and the base", () => {
   assert.match(m, /the web\/ folder/);
   assert.match(m, /git push -u origin caboose\/finse/);
   assert.match(m, /gh pr create --base main --draft/);
-  assert.match(m, /start the title with "NWP-9 - "/);
+  assert.match(m, /Jira issue NWP-9/);
+  assert.doesNotMatch(m, /start the title/);
   assert.doesNotMatch(createPrMessage("web", "b", "origin/main", false), /Jira/);
 });

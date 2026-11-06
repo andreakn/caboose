@@ -53,7 +53,7 @@ export function createPrMessage(
     `2. Push with \`git push -u origin ${branch}\`.`,
     `3. Create it with \`gh pr create --base ${baseBranch(baseRef)}${draft ? " --draft" : ""}\`, with a clear title and a description of what changed and why. Follow the repo's conventions (CLAUDE.md, PR templates, commit style).`,
     jiraKey
-      ? `The PR belongs to Jira issue ${jiraKey}: start the title with "${jiraKey} - " and mention ${jiraKey} in the description.`
+      ? `The PR belongs to Jira issue ${jiraKey} (the branch name carries the key, which is what links it); mention ${jiraKey} in the description.`
       : "",
     instructions?.trim() ? `How I want PRs written:\n${instructions.trim()}` : "",
     "Reply with the PR's URL.",
