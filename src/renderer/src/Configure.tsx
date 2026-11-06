@@ -408,7 +408,8 @@ export function Configure({ onDone, onSaved }: { onDone: () => void; onSaved?: (
           disabled={!repos.length}
           title={repos.length ? undefined : "Add at least one repository"}
           onClick={async () => {
-            if ((await save()) && first) onDone();
+            // Save closes the screen when it worked (first run: and starts the app).
+            if (await save()) onDone();
           }}
         >
           {first ? "Save and start" : "Save"}
