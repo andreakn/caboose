@@ -58,6 +58,9 @@ export type LastingEvent =
   | { t: "question"; id: string; questions: Question[] }
   /** null: the user dismissed the questions or replied in the chat instead. */
   | { t: "question_answer"; id: string; answers: Record<string, string> | null }
+  /** The agent suggests repos to add to the feature; the user confirms, corrects or declines. */
+  | { t: "proposal"; id: string; repos: { name: string; reason: string }[] }
+  | { t: "proposal_answer"; id: string; added: string[]; declined: string[]; failed?: string[] }
   | { t: "result"; id: string; ok: boolean; durationMs: number; turns: number; error?: string }
   | { t: "error"; id: string; text: string };
 
@@ -87,6 +90,12 @@ export type ChatItem =
   | { kind: "tool"; id: string; name: string; input: unknown; result?: { content: string; isError: boolean } }
   | { kind: "permission"; id: string; tool: string; input: unknown; answer?: boolean }
   | { kind: "question"; id: string; questions: Question[]; answered: boolean; answers: Record<string, string> | null }
+  | {
+      kind: "proposal";
+      id: string;
+      repos: { name: string; reason: string }[];
+      answer?: { added: string[]; declined: string[]; failed?: string[] };
+    }
   | { kind: "result"; id: string; ok: boolean; durationMs: number; turns: number; error?: string }
   | { kind: "error"; id: string; text: string };
 
@@ -126,6 +135,15 @@ export function applyEvent(v: ChatView, e: ChatEvent): ChatView {
       return {
         ...v,
         items: upsert(v.items, { kind: "question", id: e.id, questions: e.questions, answered: false, answers: null }),
+      };
+    case "proposal":
+      return { ...v, items: upsert(v.items, { kind: "proposal", id: e.id, repos: e.repos }) };
+    case "proposal_answer":
+      return {
+        ...v,
+        items: v.items.map((i) =>
+          i.kind === "proposal" && i.id === e.id ? { ...i, answer: { added: e.added, declined: e.declined, failed: e.failed } } : i,
+        ),
       };
     case "question_answer":
       return {

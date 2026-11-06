@@ -46,6 +46,7 @@ const api: CabooseApi = {
 
   createChat: invoke("chat:create"),
   startRepoChat: invoke("chat:startRepo"),
+  answerProposal: invoke("chat:answerProposal"),
   docs: invoke("docs:get"),
   writeDoc: invoke("docs:write"),
   writeRepoBrief: invoke("docs:writeRepoBrief"),

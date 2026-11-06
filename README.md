@@ -38,6 +38,10 @@ for what needs you); a feature's repo rows are one line each with the action
 that matters now, and its **Pull requests** and **Activity** tabs gather every
 PR and every chat in one place.
 
+**New feature** is one optional text box: press Enter for an empty feature,
+or describe the work and the feature's agent proposes which repos to add
+(you confirm, correct or decline).
+
 Each feature has a **central chat** (in the feature folder, seeing every repo)
 and can **break out a chat per repo** (in that repo's worktree) when some repos
 need focused follow-up; the central chat can do that itself and follow up. The

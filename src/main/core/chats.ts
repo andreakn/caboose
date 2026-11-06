@@ -50,7 +50,7 @@ export class Chats {
     const inWs = this.store.get().chats.filter((c) => c.featureId === featureId);
     const kind = agent ?? (inWs.length ? agentOf(inWs.at(-1)!) : "claude");
     if (!this.providers[kind]) return { ok: false, error: `${kind} is not available.` };
-    const last = inWs.filter((c) => agentOf(c) === kind).at(-1);
+    const last = inWs.filter((c) => agentOf(c) === kind).at(-1) ?? this.store.get().chats.filter((c) => agentOf(c) === kind).at(-1);
     const chat: Chat = {
       id: randomUUID(),
       featureId,
@@ -64,6 +64,24 @@ export class Chats {
     };
     this.store.update((s) => ({ ...s, chats: [...s.chats, chat] }));
     return { ok: true, value: chat };
+  }
+
+  /** Shows the agent's repo suggestions as a card in the chat. */
+  propose(chatId: string, repos: { name: string; reason: string }[]): string {
+    const id = randomUUID();
+    this.record(chatId, { t: "proposal", id, repos });
+    return id;
+  }
+
+  /** The proposal card's answer; null if it is unknown or already answered. */
+  openProposal(chatId: string, id: string): { name: string; reason: string }[] | null {
+    const view = this.events(chatId).reduce(applyEvent, emptyView());
+    const p = view.items.find((i) => i.kind === "proposal" && i.id === id);
+    return p && p.kind === "proposal" && !p.answer ? p.repos : null;
+  }
+
+  settleProposal(chatId: string, id: string, answer: { added: string[]; declined: string[]; failed?: string[] }): void {
+    this.record(chatId, { t: "proposal_answer", id, ...answer });
   }
 
   /** The feature's most recent chat for a repo (or its central chat, without one). */

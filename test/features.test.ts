@@ -218,6 +218,17 @@ test("local files: each repo's patterns pick the gitignored files to bring; copy
   await until(settled(store));
 });
 
+test("a feature can start with no repos and get them later", async () => {
+  const store = new Store(join(tmp, "s7", "state.json"));
+  const features = new Features(store, config(), join(tmp, "s7", "logs"));
+  const r = await features.create({ title: "Just an idea" });
+  assert.ok(r.ok, !r.ok ? r.error : "");
+  assert.deepEqual(r.value.repos, []);
+  assert.ok(existsSync(r.value.folder));
+  assert.ok((await features.addRepo(r.value.id, "api")).ok);
+  await until(settled(store));
+});
+
 test("repos are found by folder and by scanning a parent folder", async () => {
   const c = await checkRepo(join(web));
   assert.ok(c.ok && c.value.name === "web");

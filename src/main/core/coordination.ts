@@ -3,7 +3,7 @@
 // how everything stands; every chat reports status and notes to log.md; the
 // user's notes go to the chats they are for.
 import type { Agent, Chat } from "../../shared/chat.ts";
-import type { Feature, FeatureJira, FeatureRepo, RepoStatus, Result } from "../../shared/types.ts";
+import type { Feature, FeatureJira, FeatureRepo, RepoEntry, RepoStatus, Result } from "../../shared/types.ts";
 import type { Chats } from "./chats.ts";
 import { appendLog, readDocs, reportedStatuses } from "./docs.ts";
 import type { Store } from "./store.ts";
@@ -21,6 +21,10 @@ export type CoordinatorDeps = {
   chats: Chats;
   jiraOf: (featureId: string) => FeatureJira;
   facts?: (repo: FeatureRepo) => Promise<RepoFacts | null>;
+  /** The repos in the config (what a feature can add). */
+  repos?: () => RepoEntry[];
+  addRepo?: (featureId: string, repo: string) => Promise<Result<void>>;
+  setTitle?: (featureId: string, title: string) => Result<void>;
 };
 
 /** The names the agents know Caboose's tools by. */
@@ -96,6 +100,59 @@ export class Coordinator {
     const s = this.d.chats.state(chat.id);
     const doing = s.waiting ? "waiting for the user (a question or approval)" : s.running ? "working" : "idle";
     return `${repo}'s chat (${chat.agent ?? "claude"}, ${s.turns} message(s) so far) is ${doing}.${s.lastText ? `\n\nIts last reply:\n${clip(s.lastText, 3000)}` : ""}`;
+  }
+
+  /**
+   * The agent suggests repos to add. Shown as a card in its chat; nothing is
+   * added until the user answers (see answerProposal), and the answer comes
+   * back to the chat as a message, so the agent does not wait on a tool call.
+   */
+  proposeRepos(featureId: string, chatId: string, repos: { name: string; reason: string }[]): Result<string> {
+    const f = this.feature(featureId);
+    if (!f || f.archived) return fail("Unknown or archived feature.");
+    const known = this.d.repos?.() ?? [];
+    const unknown = repos.filter((r) => !known.some((k) => k.name === r.name)).map((r) => r.name);
+    if (unknown.length) return fail(`Not repos Caboose knows: ${unknown.join(", ")}. The repos are: ${known.map((k) => k.name).join(", ")}.`);
+    const fresh = repos.filter((r, i) => !f.repos.some((x) => x.name === r.name) && repos.findIndex((x) => x.name === r.name) === i);
+    if (!fresh.length) return fail("Those repos are already in the feature.");
+    this.d.chats.propose(chatId, fresh);
+    return ok(
+      `The user sees your suggestion (${fresh.map((r) => r.name).join(", ")}) and can confirm, correct or decline it. Their answer comes back as a message; until then, do not assume the repos are there.`,
+    );
+  }
+
+  /** The user's answer to a proposal: adds the chosen repos (worktrees, Jira subtasks) and tells the chat. */
+  async answerProposal(featureId: string, chatId: string, id: string, chosen: string[]): Promise<Result<string[]>> {
+    const f = this.feature(featureId);
+    if (!f) return fail("Unknown feature.");
+    const proposed = this.d.chats.openProposal(chatId, id);
+    if (!proposed) return fail("That suggestion was already answered.");
+    const added: string[] = [];
+    const failed: string[] = [];
+    for (const name of chosen) {
+      if (f.repos.some((r) => r.name === name)) continue;
+      const r = (await this.d.addRepo?.(featureId, name)) ?? fail("Adding repos is not available.");
+      if (r.ok) added.push(name);
+      else failed.push(`${name} (${r.error})`);
+    }
+    const declined = proposed.map((p) => p.name).filter((n) => !chosen.includes(n));
+    this.d.chats.settleProposal(chatId, id, { added, declined, ...(failed.length ? { failed } : {}) });
+    const now = this.feature(featureId)!;
+    const lines = [
+      added.length
+        ? `I added ${added.join(", ")} to the feature. Their worktrees: ${added.map((n) => `${n}/ (branch ${now.repos.find((r) => r.name === n)?.branch})`).join(", ")}.`
+        : "",
+      declined.length ? `Not ${declined.join(", ")}.` : "",
+      failed.length ? `Could not add: ${failed.join("; ")}.` : "",
+      !added.length && !failed.length ? "None of those, thanks." : "",
+    ].filter(Boolean);
+    this.d.chats.send(chatId, lines.join("\n"));
+    if (added.length) appendLog(f.folder, { from: "you", text: `Added ${added.join(", ")} to the feature.` });
+    return ok(added);
+  }
+
+  setTitle(featureId: string, title: string): Result<void> {
+    return this.d.setTitle?.(featureId, title) ?? fail("Not available.");
   }
 
   /** A note from the user: logged, and sent to the chats it is for (a repo's, else the central one; "all" = every chat). */

@@ -58,11 +58,15 @@ function setup() {
   store.update((s) => ({ ...s, features: [feature] }));
   const agent = fakeAgent();
   const chats = new Chats(store, join(tmp, `${Math.random()}`), { claude: new ClaudeProvider(agent.fn) }, () => {});
+  const added: string[] = [];
   const coord = new Coordinator({
     store, chats, jiraOf: () => ({ task: "NWP-1", subtasks: { web: "NWP-2", api: "NWP-3" } }),
+    repos: () => [{ name: "web", path: "/src/web" }, { name: "api", path: "/src/api" }, { name: "cms", path: "/src/cms" }, { name: "bff", path: "/src/bff" }],
+    addRepo: async (_f, name) => (name === "bff" ? { ok: false, error: "no access" } : (added.push(name), { ok: true, value: undefined })),
+    setTitle: () => ({ ok: true, value: undefined }),
     facts: async (r) => ({ uncommitted: r.name === "web" ? 2 : 0, ahead: 1, pushed: false, pr: null }),
   });
-  return { store, chats, coord, agent };
+  return { store, chats, coord, agent, added };
 }
 const until = async (fn: () => boolean) => {
   for (let i = 0; i < 400 && !fn(); i++) await new Promise((r) => setTimeout(r, 5));
@@ -159,4 +163,52 @@ test("the central chat and repo chats get their own system notes", () => {
   assert.match(repo, /agent for the api repo/);
   assert.match(repo, /You work in .*\/api, a git worktree on branch caboose\/NWP-3-finse/);
   assert.doesNotMatch(repo, /central chat/);
+});
+
+test("repo proposals: shown as a card, only real repos, answered with confirm / correct / decline", async () => {
+  const { chats, coord, agent, added } = setup();
+  const central = chats.create("f1");
+  assert.ok(central.ok);
+  const unknown = coord.proposeRepos("f1", central.value.id, [{ name: "nope", reason: "x" }]);
+  assert.ok(!unknown.ok && /Not repos Caboose knows: nope\. The repos are: web, api, cms, bff/.test(unknown.error));
+  assert.equal(coord.proposeRepos("f1", central.value.id, [{ name: "web", reason: "already there" }]).ok, false);
+
+  const r = coord.proposeRepos("f1", central.value.id, [
+    { name: "cms", reason: "content model" },
+    { name: "web", reason: "already in" },
+    { name: "bff", reason: "API" },
+  ]);
+  assert.ok(r.ok && /confirm, correct or decline/.test(r.value));
+  const view = chats.events(central.value.id);
+  const card = view.find((e) => e.t === "proposal");
+  assert.ok(card && card.t === "proposal");
+  assert.deepEqual(card.repos.map((x) => x.name), ["cms", "bff"], "repos already in the feature are left out");
+
+  // The user unticks cms and adds api (a correction), and bff fails to add.
+  const answer = await coord.answerProposal("f1", central.value.id, card.id, ["api", "bff"]);
+  assert.ok(answer.ok);
+  assert.deepEqual(added, []); // api is already in the fixture feature, so nothing to add for it
+  await until(() => agent.sessions[0]?.prompts.length === 1);
+  assert.match(agent.sessions[0].prompts[0], /Not cms\.\nCould not add: bff \(no access\)\./);
+  assert.equal((await coord.answerProposal("f1", central.value.id, card.id, [])).ok, false, "answered once only");
+
+  const r2 = coord.proposeRepos("f1", central.value.id, [{ name: "cms", reason: "content" }]);
+  assert.ok(r2.ok);
+  const card2 = chats.events(central.value.id).filter((e) => e.t === "proposal").at(-1)!;
+  await coord.answerProposal("f1", central.value.id, (card2 as { id: string }).id, ["cms"]);
+  assert.deepEqual(added, ["cms"]);
+  await until(() => agent.sessions[0].prompts.length === 2);
+  assert.match(agent.sessions[0].prompts[1], /^I added cms to the feature\./);
+});
+
+test("the central note lists the repos that can be added; an empty feature is told to propose them", () => {
+  const empty = { ...feature, repos: [] };
+  const note = cabooseInstructions(empty, "claude", undefined, [{ name: "web", path: "/src/web" }, { name: "cms", path: "/src/cms" }]);
+  assert.match(note, /has no repos yet/);
+  assert.match(note, /- web: \/src\/web\n- cms: \/src\/cms/);
+  assert.match(note, /mcp__caboose__ProposeRepos/);
+  assert.match(note, /mcp__caboose__SetFeatureTitle/);
+  const withRepos = cabooseInstructions(feature, "claude", undefined, [{ name: "web", path: "/src/web" }, { name: "cms", path: "/src/cms" }]);
+  assert.doesNotMatch(withRepos, /- web: \/src\/web/, "repos already in the feature are not offered");
+  assert.match(withRepos, /- cms: \/src\/cms/);
 });

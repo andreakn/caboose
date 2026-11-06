@@ -54,8 +54,7 @@ export class Features {
 
   async create(input: NewFeature): Promise<Result<Feature>> {
     try {
-      const repos = input.repos.map((name) => this.repoEntry(name));
-      if (!repos.length) return fail("Pick at least one repository.");
+      const repos = (input.repos ?? []).map((name) => this.repoEntry(name));
       const level = this.config.jira.level;
       if (level === "required" && !input.jira) return fail("Jira is required: link a task or create one.");
 

@@ -30,13 +30,14 @@ import { TerminalPanel, useTerminals } from "./Terminals.tsx";
 
 const api = window.caboose;
 
-type Screen = "feature" | "configure" | "new" | "board";
+type Screen = "feature" | "configure" | "board";
 
 export function App() {
   const terminals = useTerminals();
   const [state, setState] = useState<State>({ features: [], chats: [], comments: [] });
   const [config, setConfig] = useState<ConfigInfo | null>(null);
   const [screen, setScreen] = useState<Screen>("feature");
+  const [creating, setCreating] = useState(false);
   const [selected, setSelectedRaw] = useState<string | null>(() => localStorage.getItem("caboose-selected"));
   const select = (id: string) => {
     setSelectedRaw(id);
@@ -112,7 +113,7 @@ export function App() {
 
   useCommand((c) => {
     if (c === "settings" || c === "addRepo") setScreen((s) => (s === "configure" ? "feature" : "configure"));
-    if (c === "newFeature") setScreen("new");
+    if (c === "newFeature") setCreating(true);
     if ((c === "nextFeature" || c === "prevFeature") && live.length) {
       const i = live.findIndex((f) => f.id === feature?.id);
       select(live[(i + (c === "nextFeature" ? 1 : -1) + live.length) % live.length].id);
@@ -138,7 +139,7 @@ export function App() {
         <button className={`board-link${screen === "board" ? " active" : ""}`} onClick={() => setScreen("board")}>
           ▦ Board
         </button>
-        <button className="new-feature" onClick={() => setScreen("new")}>
+        <button className="new-feature" onClick={() => setCreating(true)}>
           + New feature
         </button>
         <section className="repo">
@@ -173,7 +174,7 @@ export function App() {
       <main className="main">
         {(busy || error) && <div className={busy ? "banner" : "banner error"}>{busy ?? error}</div>}
         {screen === "board" ? (
-          <Board features={state.features} chats={state.chats} onOpen={select} onNew={() => setScreen("new")} />
+          <Board features={state.features} chats={state.chats} onOpen={select} onNew={() => setCreating(true)} />
         ) : screen === "configure" ? (
           <Configure
             onDone={() => {
@@ -181,8 +182,6 @@ export function App() {
               setScreen("feature");
             }}
           />
-        ) : screen === "new" ? (
-          <NewFeature config={config.config} onCreated={(f) => select(f.id)} onCancel={() => setScreen("feature")} />
         ) : feature ? (
           <FeatureView
             key={feature.id}
@@ -199,9 +198,19 @@ export function App() {
             onRestore={() => act(`Restoring ${feature.name}…`, () => api.restoreFeature(feature.id))}
           />
         ) : (
-          <Empty hasRepos={(config.config.repos ?? []).length > 0} onNew={() => setScreen("new")} />
+          <Empty hasRepos={(config.config.repos ?? []).length > 0} onNew={() => setCreating(true)} />
         )}
       </main>
+      {creating && (
+        <NewFeature
+          config={config.config}
+          onCreated={(f) => {
+            setCreating(false);
+            select(f.id);
+          }}
+          onCancel={() => setCreating(false)}
+        />
+      )}
       <DialogHost />
     </div>
   );

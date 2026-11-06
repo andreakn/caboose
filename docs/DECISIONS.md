@@ -417,6 +417,32 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      merge state) on the board, the repo row and the PR tab. Jira statuses
      from a fake Jira server.
 
+## New feature, Conductor-style (2026-11-06)
+
+106. **The New feature dialog is one optional text box** (plus the Jira task
+     when Jira is on). Enter with it empty creates an empty feature (no repos)
+     to build out with "+ Add a repo"; with a description, the feature is
+     created, titled from the first line, and the text goes to its central
+     chat as the first message.
+107. **The agent proposes repos; the user decides.** The central chat's
+     system note lists the configured repos it can add (main checkouts, to
+     read but never change) and, for an empty feature, asks it to work out
+     which repos the request needs. `ProposeRepos` shows a card: each
+     suggestion with its reason, ticked; the user can untick, add other repos
+     ("+ another repo…"), add the chosen ones, or decline all. Caboose adds
+     the worktrees (and Jira subtasks), then tells the chat what was added and
+     what was not. The agent can propose repos at any time, not just at start.
+108. **Proposals do not block the agent**: the tool returns at once and the
+     answer arrives as a message, so a long wait cannot time out a tool call,
+     and a card can still be answered after a restart. Unknown repo names are
+     refused with the list of real ones; repos already in the feature are
+     dropped from the card.
+109. **`SetFeatureTitle`** lets the central chat give the feature a short
+     title (it replaced "Add a line saying…" with "Touched by Caboose README
+     note" in the test).
+110. New chats take their settings (model, effort, mode) from the latest chat
+     anywhere when their feature has none yet.
+
 ## Answered (2026-11-05)
 
 - Private GitHub repo `andreakn/caboose`: yes.

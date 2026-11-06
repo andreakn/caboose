@@ -217,8 +217,11 @@ export type JiraAlignment = { created: string[]; renamed: { repo: string; from: 
 export type FeatureJira = { task?: string; subtasks: Record<string, string> };
 
 export type NewFeature = {
-  repos: string[];
+  /** Repos to add right away (none = an empty feature, built out later). */
+  repos?: string[];
   title?: string;
+  /** What the user wants, in their words: sent to the feature's central chat, which proposes the repos. */
+  text?: string;
   /** An existing task key, or the summary of a task to create in the configured project. */
   jira?: { key: string } | { create: string };
 };
@@ -300,6 +303,8 @@ export type CabooseApi = {
 
   /** A chat in the feature folder (central), or in one repo's worktree. */
   createChat(featureId: string, agent?: Agent, repo?: string): Promise<Result<Chat>>;
+  /** Answers a repo proposal card: the repos to add (empty = none). */
+  answerProposal(featureId: string, chatId: string, id: string, repos: string[]): Promise<Result<string[]>>;
   /** Breaks out a chat for a repo with a task (or sends the task to the repo's chat if it has one). */
   startRepoChat(featureId: string, repo: string, message: string, agent?: Agent): Promise<Result<Chat>>;
 

@@ -8,7 +8,7 @@ import { createSdkMcpServer, tool } from "@anthropic-ai/claude-agent-sdk";
 import { defineTool, type Tool } from "@github/copilot-sdk";
 import { z } from "zod";
 import { type Agent, type Chat } from "../../shared/chat.ts";
-import { type Feature, type FeatureRepo, REPO_STATUSES, type RepoStatus, type Terminal } from "../../shared/types.ts";
+import { type Feature, type FeatureRepo, REPO_STATUSES, type RepoEntry, type RepoStatus, type Terminal } from "../../shared/types.ts";
 import type { Comments } from "./comments.ts";
 import type { Coordinator } from "./coordination.ts";
 import { changes, fullPatch } from "./diff.ts";
@@ -148,6 +148,19 @@ export function cabooseHandlers(feature: () => Feature, comments: Comments, term
     getRepoChat(args: { repo: string }): string {
       return coord ? coord.repoChat(feature().id, args.repo) : noCoord;
     },
+
+    proposeRepos(args: { repos: { name: string; reason: string }[] }): string {
+      const c = chat();
+      if (!coord || !c) return noCoord;
+      const r = coord.proposeRepos(feature().id, c.id, args.repos);
+      return r.ok ? r.value : r.error;
+    },
+
+    setFeatureTitle(args: { title: string }): string {
+      if (!coord) return noCoord;
+      const r = coord.setTitle(feature().id, args.title);
+      return r.ok ? `Title set: ${args.title}` : r.error;
+    },
   };
 }
 
@@ -262,6 +275,27 @@ const TOOLS: ToolDef[] = [
     run: (h, a: { repo: string; message: string }) => h.messageRepoChat(a),
   },
   {
+    claude: "ProposeRepos",
+    copilot: "caboose_propose_repos",
+    description:
+      "Suggests repos to add to the feature (each becomes a git worktree in the feature folder). The user sees a card with your suggestions and confirms, corrects or declines them; their answer comes back as a message. Only repos from the list in your instructions can be added.",
+    shape: {
+      repos: z
+        .array(z.object({ name: z.string().describe("The repo's name, as listed"), reason: z.string().describe("One line: why this feature needs it") }))
+        .min(1),
+    },
+    run: (h, a: { repos: { name: string; reason: string }[] }) => h.proposeRepos(a),
+    only: "central",
+  },
+  {
+    claude: "SetFeatureTitle",
+    copilot: "caboose_set_feature_title",
+    description: "Gives the feature a short title (a few words), shown next to its station name.",
+    shape: { title: z.string() },
+    run: (h, a: { title: string }) => h.setFeatureTitle(a),
+    only: "central",
+  },
+  {
     claude: "GetRepoChat",
     copilot: "caboose_get_repo_chat",
     description: "What a repo's chat is doing (working, waiting for the user, idle) and its last reply.",
@@ -304,7 +338,7 @@ const name = (agent: "claude" | "copilot", claude: string) => {
 };
 
 /** Appended to the agent's system prompt for every Caboose chat (the central chat, or a repo chat). */
-export function cabooseInstructions(f: Feature, agent: "claude" | "copilot" = "claude", chat?: Chat): string {
+export function cabooseInstructions(f: Feature, agent: "claude" | "copilot" = "claude", chat?: Chat, available: RepoEntry[] = []): string {
   const n = (claude: string) => name(agent, claude);
   const jira = readFeatureJira(f.folder);
   const repos = f.repos.map(
@@ -331,10 +365,19 @@ export function cabooseInstructions(f: Feature, agent: "claude" | "copilot" = "c
       .filter(Boolean)
       .join("\n");
   }
+  const addable = available.filter((r) => !f.repos.some((x) => x.name === r.name));
   return [
     "You are running inside Caboose, a desktop app where the user works on several features side by side.",
-    `This is the central chat of the feature "${f.title || f.name}" (${f.name}). You are in its folder, ${f.folder}, which is not a git repository itself. Each repo of the feature is a git worktree in a subfolder:`,
+    f.repos.length
+      ? `This is the central chat of the feature "${f.title || f.name}" (${f.name}). You are in its folder, ${f.folder}, which is not a git repository itself. Each repo of the feature is a git worktree in a subfolder:`
+      : `This is the central chat of the feature "${f.title || f.name}" (${f.name}), in its folder ${f.folder}. The feature has no repos yet.`,
     ...repos,
+    addable.length
+      ? `Repos that can be added to the feature (their main checkouts; read them to find out what the work touches, but never change them):\n${addable.map((r) => `- ${r.name}: ${r.path}`).join("\n")}\nWhen the work needs repos the feature does not have, suggest them with ${n("ProposeRepos")} (one line of reason each) and let the user decide; the answer comes back as a message. Do not create worktrees or branches yourself.`
+      : "",
+    !f.repos.length
+      ? `If the user describes what they want, work out which repos it needs and propose them, and give the feature a short title with ${n("SetFeatureTitle")}. If the request is unclear, ask first.`
+      : "",
     "Run git commands inside the repo's folder. Each repo gets its own commits, branch and pull request. Stay inside this feature's folder.",
     `You can do the work here yourself, across repos. When some repos need a lot of focused work or follow-up, break out a chat for a repo with ${n("StartRepoChat")} (give it a task that stands alone), then follow it with ${n("GetRepoChat")} / ${n("GetFeatureStatus")} and steer it with ${n("MessageRepoChat")}. The user can see and talk to every chat. When you plan cross-repo work, write brief.md, plan.md and briefs/<repo>.md first.`,
     ...common,

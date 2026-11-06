@@ -109,11 +109,11 @@ const toolContext = (chat: Chat, f: Feature) => ({
 });
 const claude = new ClaudeProvider(query, (chat, f) => ({
   mcpServers: { caboose: cabooseMcp(toolContext(chat, f)) },
-  systemPrompt: { type: "preset", preset: "claude_code", append: cabooseInstructions(f, "claude", chat) },
+  systemPrompt: { type: "preset", preset: "claude_code", append: cabooseInstructions(f, "claude", chat, localConfig.repos) },
 }));
 const copilot = new CopilotProvider(
   () => new CopilotClient({ logLevel: "error", env: copilotEnv() }),
-  (chat, f) => ({ tools: cabooseCopilotTools(toolContext(chat, f)), instructions: cabooseInstructions(f, "copilot", chat) }),
+  (chat, f) => ({ tools: cabooseCopilotTools(toolContext(chat, f)), instructions: cabooseInstructions(f, "copilot", chat, localConfig.repos) }),
 );
 const chats = new Chats(store, dataDir, { claude, copilot }, (chatId, e) => win?.webContents.send("chat:event", chatId, e));
 const github = new GitHub();
@@ -121,6 +121,9 @@ const coordinator = new Coordinator({
   store,
   chats,
   jiraOf: (id) => features.jiraOf(id),
+  repos: () => localConfig.repos,
+  addRepo: (featureId, repo) => features.addRepo(featureId, repo),
+  setTitle: (featureId, title) => features.setDetails(featureId, { title }),
   facts: async (r) => {
     const b = await github.branchStatus(r.path, r.baseRef);
     const pr = await github.pr(r.path, r.branch).catch(() => null);
@@ -284,7 +287,17 @@ ipcMain.handle("jira:setSubtask", (_e, featureId: string, repo: string, key: str
 ipcMain.handle("jira:createSubtask", (_e, featureId: string, repo: string) => features.createSubtask(featureId, repo));
 
 // --- features
-ipcMain.handle("feature:create", (_e, input: NewFeature) => features.create(input));
+ipcMain.handle("feature:create", async (_e, input: NewFeature) => {
+  const text = input.text?.trim();
+  const firstLine = text?.split("\n")[0] ?? "";
+  const r = await features.create({ ...input, title: input.title ?? (firstLine.length > 60 ? `${firstLine.slice(0, 59)}…` : firstLine || undefined) });
+  // With a description, the central chat starts on it right away (and proposes the repos).
+  if (r.ok && text) {
+    const chat = chats.create(r.value.id);
+    if (chat.ok) chats.send(chat.value.id, text);
+  }
+  return r;
+});
 ipcMain.handle("feature:addRepo", (_e, featureId: string, repo: string) => features.addRepo(featureId, repo));
 ipcMain.handle("feature:archive", (_e, id: string) => {
   chats.stopFeature(id);
@@ -305,6 +318,9 @@ ipcMain.handle("shell:openUrl", (_e, url: string) => {
 
 // --- chats
 ipcMain.handle("chat:create", (_e, featureId: string, agent?: Agent, repo?: string) => chats.create(featureId, agent, repo));
+ipcMain.handle("chat:answerProposal", (_e, featureId: string, chatId: string, id: string, repos: string[]) =>
+  coordinator.answerProposal(featureId, chatId, id, repos),
+);
 ipcMain.handle("chat:startRepo", (_e, featureId: string, repo: string, message: string, agent?: Agent) =>
   coordinator.startRepoChat(featureId, repo, message, { agent, from: "you" }),
 );

@@ -285,6 +285,8 @@ function Item(props: { item: ChatItem; chatId: string; agent: string; rel: (p: s
       );
     case "question":
       return <QuestionCard item={item} chatId={chatId} agent={agent} />;
+    case "proposal":
+      return <ProposalCard item={item} chatId={chatId} agent={agent} />;
     case "result":
       return (
         <div className={`turn-end${item.ok ? "" : " failed"}`}>
@@ -294,6 +296,104 @@ function Item(props: { item: ChatItem; chatId: string; agent: string; rel: (p: s
     case "error":
       return <div className="msg-error">{item.text}</div>;
   }
+}
+
+/** The agent's repo suggestions: tick, untick, add others, then add them (or none). */
+function ProposalCard({ item, chatId, agent }: { item: Extract<ChatItem, { kind: "proposal" }>; chatId: string; agent: string }) {
+  const [picked, setPicked] = useState<Set<string>>(() => new Set(item.repos.map((r) => r.name)));
+  const [extra, setExtra] = useState<string[]>([]);
+  const [all, setAll] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const chat = useChat(chatId);
+  useEffect(() => {
+    void api.config().then((c) => setAll((c.config.repos ?? []).map((r) => r.name)));
+  }, []);
+
+  if (item.answer) {
+    const { added, declined, failed } = item.answer;
+    return (
+      <div className="question done">
+        <div className="muted">
+          {agent} suggested {item.repos.map((r) => r.name).join(", ")}.{" "}
+          {added.length ? `Added ${added.join(", ")}.` : "None added."}
+          {declined.length ? ` Not ${declined.join(", ")}.` : ""}
+          {failed?.length ? ` Failed: ${failed.join("; ")}.` : ""}
+        </div>
+      </div>
+    );
+  }
+  const suggested = item.repos.map((r) => r.name);
+  const others = all.filter((n) => !suggested.includes(n) && !extra.includes(n));
+  const chosen = [...suggested.filter((n) => picked.has(n)), ...extra];
+  const answer = async (repos: string[]) => {
+    if (!chat) return;
+    setBusy(true);
+    const r = await api.answerProposal(chat.featureId, chatId, item.id, repos);
+    setBusy(false);
+    if (!r.ok) alert(r.error);
+  };
+  return (
+    <div className="question open proposal">
+      <div className="q-title">{agent} suggests adding {item.repos.length === 1 ? "this repo" : "these repos"} to the feature:</div>
+      <div className="q-options">
+        {item.repos.map((r) => (
+          <label key={r.name} className={`q-option proposal-repo${picked.has(r.name) ? " picked" : ""}`}>
+            <span>
+              <input
+                type="checkbox"
+                checked={picked.has(r.name)}
+                onChange={(e) => {
+                  const n = new Set(picked);
+                  if (e.target.checked) n.add(r.name);
+                  else n.delete(r.name);
+                  setPicked(n);
+                }}
+              />{" "}
+              <b>{r.name}</b>
+            </span>
+            <span className="muted">{r.reason}</span>
+          </label>
+        ))}
+        {extra.map((n) => (
+          <label key={n} className="q-option proposal-repo picked">
+            <span>
+              <input type="checkbox" checked onChange={() => setExtra(extra.filter((x) => x !== n))} /> <b>{n}</b>
+            </span>
+            <span className="muted">added by you</span>
+          </label>
+        ))}
+        {others.length > 0 && (
+          <select className="q-other" value="" onChange={(e) => e.target.value && setExtra([...extra, e.target.value])}>
+            <option value="">+ another repo…</option>
+            {others.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+      <div className="permission-actions">
+        <button className="primary" disabled={busy || !chosen.length} onClick={() => answer(chosen)}>
+          {busy ? "Adding…" : `Add ${chosen.length ? chosen.join(", ") : "them"}`}
+        </button>
+        <button disabled={busy} onClick={() => answer([])}>
+          None of these
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** The chat (for its feature id), from the app state. */
+function useChat(chatId: string): Chat | undefined {
+  const [chat, setChat] = useState<Chat>();
+  useEffect(() => {
+    const pick = (s: { chats: Chat[] }) => setChat(s.chats.find((c) => c.id === chatId));
+    void api.getState().then(pick);
+    return api.onStateChanged(pick);
+  }, [chatId]);
+  return chat;
 }
 
 function QuestionCard({ item, chatId, agent }: { item: Extract<ChatItem, { kind: "question" }>; chatId: string; agent: string }) {
