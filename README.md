@@ -64,6 +64,19 @@ In a repo you add to Caboose, an optional `caboose.json` sets its scripts:
 { "setup": "npm install", "run": "PORT=$CABOOSE_PORT npm run dev", "archive": "", "copy": [".env"] }
 ```
 
+The **Run** tab lists every repo's programs: `run.sh` and `run_<moniker>.sh`
+at the root of its worktree (as cross_conductor found them), plus the run
+scripts from Configure / `caboose.json`. ▶ starts one in a terminal tab, ■
+stops it (Ctrl-C, then a hang-up after 10 s), ↻ runs one that exited again;
+"▶ all" per repo, "▶ Run feature" (Cmd/Ctrl+R) and "■ Stop all" for the lot.
+A script that serves a website declares its URL for a 🌐 button:
+`# url: http://localhost:15081/customer-data-api/ swagger` (or just a
+localhost URL in its header comment). Programs listening from a worktree that
+the Run tab did not start (by hand, by an agent, from an IDE) are flagged with
+a stop button, as is whatever holds a port a script declares. An optional
+**moniker file** (Configure → Terminals; `moniker path description` per line)
+labels repos and their `run_<moniker>.sh`.
+
 Scripts run through bash on every OS (Git Bash on Windows). They get
 `CABOOSE_PORT` (the first of 10 ports reserved for the workspace),
 `CABOOSE_WORKSPACE_NAME`, `CABOOSE_WORKSPACE_PATH`, `CABOOSE_ROOT_PATH` and
@@ -85,7 +98,7 @@ Cmd on macOS, Ctrl on Windows/Linux.
 | Focus the message box | L |
 | Next / previous chat tab | Shift+] / Shift+[ |
 | Next / previous workspace | Alt+Down / Alt+Up |
-| Run (or restart) the run script | R |
+| Run every program of the feature (Run tab) | R |
 | Stop Claude | . (or Esc in the message box) |
 | Settings | , |
 

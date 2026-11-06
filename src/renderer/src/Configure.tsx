@@ -18,10 +18,15 @@ import { applyTheme, getTheme, notificationsOn, setNotifications } from "./prefs
 
 const api = window.caboose;
 
-const TERMINAL_FIELDS: { key: "shellPath" | "bashPath" | "terminalFont"; label: string; hint: string }[] = [
+const TERMINAL_FIELDS: { key: "shellPath" | "bashPath" | "terminalFont" | "monikersFile"; label: string; hint: string }[] = [
   { key: "shellPath", label: "Terminal shell", hint: "$SHELL on macOS/Linux, PowerShell on Windows." },
   { key: "bashPath", label: "bash for scripts", hint: "On Windows: Git for Windows' bash.exe, found automatically." },
   { key: "terminalFont", label: "Terminal font", hint: "E.g. a Nerd Font your prompt needs." },
+  {
+    key: "monikersFile",
+    label: "Moniker file",
+    hint: "Optional, e.g. ~/home/varner/monikers.txt: \"moniker path description\" per line. Names repos and describes their run_<moniker>.sh in the Run tab.",
+  },
 ];
 
 /** The setup screen: shown on first run, and from the Configure button. */

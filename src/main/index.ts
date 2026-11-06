@@ -40,6 +40,7 @@ import { cabooseCopilotTools, cabooseInstructions, cabooseMcp } from "./core/mcp
 import { featureOverview } from "./core/overview.ts";
 import { PrDetailsCache } from "./core/prdetails.ts";
 import { Store } from "./core/store.ts";
+import { Runner } from "./core/runner.ts";
 import { Terminals } from "./core/terminals.ts";
 import { checkForUpdate, update } from "./core/updater.ts";
 import { installMenu } from "./menu.ts";
@@ -97,6 +98,14 @@ const terminals = new Terminals({
     }, 16);
   },
   onChange: () => win?.webContents.send("term:list", terminals.list()),
+});
+const runner = new Runner({
+  terminals,
+  features: () => store.get().features,
+  repos: () => localConfig.repos,
+  scriptsFor: (repo, source) => features.scriptsFor(repo, source),
+  scriptEnv: (featureId, repo) => features.scriptEnv(featureId, repo),
+  monikersFile: () => localConfig.monikersFile,
 });
 const current = (f: Feature) => () => featureById(f.id) ?? f;
 /** What Caboose's tools work with, for one chat. `coordinator` is set below (the tools only run later). */
@@ -305,8 +314,9 @@ ipcMain.handle("feature:create", async (_e, input: NewFeature) => {
   return r;
 });
 ipcMain.handle("feature:addRepo", (_e, featureId: string, repo: string) => features.addRepo(featureId, repo));
-ipcMain.handle("feature:archive", (_e, id: string) => {
+ipcMain.handle("feature:archive", async (_e, id: string) => {
   chats.stopFeature(id);
+  await runner.stopAll(id); // Ctrl-C first, so programs shut down cleanly
   terminals.closeFeature(id);
   return features.archive(id);
 });
@@ -515,20 +525,22 @@ ipcMain.handle("term:openShell", (_e, featureId: string, repo?: string) =>
     return terminals.openShell(f.id, { cwd, env: features.scriptEnv(f.id, repo) }, repo);
   }),
 );
-ipcMain.handle("term:run", (_e, featureId: string, repo: string, script?: string) =>
-  attempt(() => {
-    const { f, r } = liveRepo(featureId, repo);
-    const runs = features.scriptsFor(r.name, r.source).run ?? [];
-    const run = runs.find((x) => x.name === script) ?? (script ? undefined : runs[0]);
-    if (!run) throw new Error(`No run script${script ? ` "${script}"` : ""} for ${r.name}. Add one in Configure → Repositories.`);
-    return terminals.run(f.id, r.name, run.command, { cwd: r.path, env: features.scriptEnv(f.id, r.name) }, run.name);
-  }),
-);
 ipcMain.handle("term:stop", (_e, id: string) => terminals.stop(id));
 ipcMain.handle("term:close", (_e, id: string) => terminals.close(id));
 ipcMain.handle("term:buffer", (_e, id: string) => terminals.buffer(id));
 ipcMain.on("term:write", (_e, id: string, data: string) => terminals.write(id, data));
 ipcMain.on("term:resize", (_e, id: string, cols: number, rows: number) => terminals.resize(id, cols, rows));
+
+// --- the Run tab
+ipcMain.handle("run:overview", (_e, featureId: string) => runner.overview(featureId));
+ipcMain.handle("run:start", (_e, featureId: string, repo: string, script?: string) => attempt(() => runner.start(featureId, repo, script)));
+ipcMain.handle("run:startAll", (_e, featureId: string, repo?: string) => attempt(() => runner.startAll(featureId, repo)));
+ipcMain.handle("run:stop", (_e, terminalId: string) => runner.stop(terminalId));
+ipcMain.handle("run:stopAll", (_e, featureId: string) => runner.stopAll(featureId));
+ipcMain.handle("run:stopHolder", (_e, featureId: string, pid: number) => attempt(() => runner.stopHolder(featureId, pid)));
+ipcMain.handle("run:browse", (_e, featureId: string, repo: string, script: string, url: string) =>
+  attempt(() => shell.openExternal(runner.browseUrl(featureId, repo, script, url))),
+);
 
 store.subscribe((s: State) => win?.webContents.send("state:changed", s));
 

@@ -25,5 +25,6 @@
   },
   "shellPath": "/bin/zsh",
   "bashPath": "C:\\Program Files\\Git\\bin\\bash.exe",
-  "terminalFont": "MesloLGS NF"
+  "terminalFont": "MesloLGS NF",
+  "monikersFile": "~/code/monikers.txt"
 }

@@ -473,6 +473,37 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      starts in the configured mode (model and effort still follow the last
      chat with the same agent), so the setting is what you get.
 
+## The Run tab (2026-11-06)
+
+117. **A Run tab like cross_conductor's runner**: per repo, `run.sh` and
+     `run_<moniker>.sh` at the worktree's root (same regex), `# url:` lines
+     or a localhost URL in the header comment for 🌐, ▶ / ■ / ↻, "▶ all",
+     "▶ Run feature", "■ Stop all". The run scripts from Configure and
+     `caboose.json` are listed too, unless they only call one of those files.
+     The header's ▶ Run opens the tab; Cmd/Ctrl+R runs the whole feature.
+118. **Programs run in Caboose's own terminal tabs, not iTerm**, so it works
+     the same on macOS, Windows and Linux; "show" opens the terminal panel
+     on that tab. A program's state comes from its pty: running, exited (its
+     tab stays so you can read why; ↻ or ■ to close), or stopped (no tab).
+119. **Stop is graceful everywhere**: Ctrl-C into the pty, up to 10 s, then a
+     hang-up; the Run tab then closes the tab. The terminal panel's stop
+     button and archiving a feature use the same Ctrl-C-first stop.
+120. **Programs outside the Run tab** (cross_conductor's "strays"): anything
+     listening on TCP whose command line names a file in one of the
+     feature's worktrees and is not a descendant of a Caboose terminal.
+     Stopping one sends SIGTERM to it and up to three launchers above it
+     (`dotnet run`, `npm run dev`), never a shell, Caboose or Caboose's
+     direct children (the agents), then SIGKILL after 8 s. Whatever holds a
+     port a script's URL uses is shown on that script too, with where it
+     runs from (another feature, a main checkout). Caboose only stops
+     programs that run from a folder it knows or from its own terminals.
+     *Linux:* needs `lsof` or `ss` (iproute2) for this; without either the
+     tab works and says it cannot see strays. *Windows:* PowerShell's
+     Get-NetTCPConnection and Win32_Process (untested so far).
+121. **The moniker file is optional** (`monikersFile`, Configure →
+     Terminals), the same format cross_conductor reads; nothing depends on
+     it but labels.
+
 ## Answered (2026-11-05)
 
 - Private GitHub repo `andreakn/caboose`: yes.

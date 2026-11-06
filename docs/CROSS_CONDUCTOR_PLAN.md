@@ -74,6 +74,10 @@ linking a task later renames unpushed branches to carry the keys. Not built
   run scripts (`dev`, `test`, `migrate`…), one marked default. `caboose.json` in a
   repo still adds to them. The Run menu lists them; each runs in its own terminal tab.
 
+**Run tab (done 2026-11-06):** cross_conductor's runner (run.sh /
+run_<moniker>.sh, URLs, stop with Ctrl-C, programs outside the dashboard)
+in Caboose's own terminals; see decisions 117–121.
+
 ### 3. ✅ Feature docs (done 2026-11-06) — plain files, not git
 - In the feature folder: `brief.md`, `plan.md` (checklist), `repos/<repo>.md`
   (brief per repo), `log.md` (append-only: who, to whom, status, text) — the same

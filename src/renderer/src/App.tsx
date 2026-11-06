@@ -8,7 +8,6 @@ import {
   type FeatureJira,
   type JiraAlignment,
   type LogEntry,
-  type RepoScripts,
   type Result,
   type State,
   type Terminal,
@@ -20,12 +19,13 @@ import { dispatch, useCommand } from "./commands.ts";
 import { Configure } from "./Configure.tsx";
 import { JiraChip, RepoRow } from "./GitHub.tsx";
 import { ActivityView } from "./Activity.tsx";
-import { MenuButton, OpenInMenu } from "./Menu.tsx";
+import { OpenInMenu } from "./Menu.tsx";
 import { Board, JiraStatusChip, PrsView, useOverview } from "./Overview.tsx";
 import { DialogHost } from "./Dialog.tsx";
 import { NewFeature } from "./NewFeature.tsx";
 import { PlanView, StatusChip, useDocs } from "./Plan.tsx";
 import { notificationsOn } from "./prefs.ts";
+import { RunView, useRunOverview } from "./Run.tsx";
 import { TerminalPanel, useTerminals } from "./Terminals.tsx";
 
 const api = window.caboose;
@@ -252,7 +252,9 @@ function FeatureView(props: {
   onRestore: () => void;
 }) {
   const { feature: f, config } = props;
-  const [tab, setTab] = useState<"chat" | "changes" | "plan" | "prs" | "activity">(location.hash === "#changes" ? "changes" : "chat");
+  const [tab, setTab] = useState<"chat" | "changes" | "plan" | "run" | "prs" | "activity">(
+    location.hash === "#changes" ? "changes" : location.hash === "#run" ? "run" : "chat",
+  );
   const overview = useOverview(f);
   const openChat = (id: string) => {
     setTab("chat");
@@ -273,15 +275,8 @@ function FeatureView(props: {
   const loadJira = () => api.featureJira(f.id).then(setJira);
   useEffect(() => void loadJira(), [f.id]);
 
-  // Each repo's run scripts.
-  const [scripts, setScripts] = useState<Record<string, RepoScripts>>({});
-  const repoKey = f.repos.map((r) => r.name).join();
-  useEffect(() => {
-    void Promise.all(f.repos.map(async (r) => [r.name, await api.repoScripts(f.id, r.name)] as const)).then((e) =>
-      setScripts(Object.fromEntries(e)),
-    );
-  }, [f.id, repoKey, config]);
-  const runs = f.repos.flatMap((r) => (scripts[r.name]?.run ?? []).map((s) => ({ repo: r.name, script: s.name })));
+  const runs = useRunOverview(f, props.terminals, tab === "run");
+  const running = runs.ov?.repos.reduce((n, r) => n + r.scripts.filter((x) => x.state === "running").length, 0) ?? 0;
 
   const [termOpen, setTermOpenRaw] = useState(() => localStorage.getItem(`caboose-term-open-${f.id}`) === "1");
   const [termActive, setTermActive] = useState<string | null>(null);
@@ -289,14 +284,16 @@ function FeatureView(props: {
     setTermOpenRaw(open);
     localStorage.setItem(`caboose-term-open-${f.id}`, open ? "1" : "0");
   };
-  async function run(repo: string, script?: string) {
-    const r = await api.runScript(f.id, repo, script);
-    if (!r.ok) return alert(r.error);
-    setTermActive(r.value.id);
+  const showTerminal = (id: string) => {
+    setTermActive(id);
     setTermOpen(true);
-  }
-  /** Each repo's first (default) script. */
-  const runAll = () => f.repos.filter((r) => scripts[r.name]?.run?.length).forEach((r) => void run(r.name));
+  };
+  /** Every program of every repo that is not running. */
+  const runAll = async () => {
+    const r = await api.runStartAll(f.id);
+    if (!r.ok) alert(r.error);
+    void runs.reload();
+  };
 
   /** Says what linking Jira changed. */
   const reportAlignment = (r: Result<JiraAlignment>) => {
@@ -314,7 +311,10 @@ function FeatureView(props: {
     if (c === "showChat" || c === "focusComposer") setTab("chat");
     if (c === "showChanges") setTab("changes");
     if (c === "toggleTerminal" && !f.archived) setTermOpen(!termOpen);
-    if (c === "run" && !f.archived) runAll();
+    if (c === "run" && !f.archived) {
+      setTab("run");
+      void runAll();
+    }
     if (c === "newTerminal" && !f.archived) {
       const r = await api.openShell(f.id, f.repos[0]?.name);
       if (!r.ok) return alert(r.error);
@@ -380,18 +380,9 @@ function FeatureView(props: {
             <button onClick={props.onRestore}>Restore</button>
           ) : (
             <>
-              {runs.length > 0 && (
-                <MenuButton
-                  className="primary"
-                  title="Run a repo's script in a terminal (Cmd/Ctrl+R runs each repo's first one)"
-                  label="▶ Run ▾"
-                  align="right"
-                  items={[
-                    ...runs.map((x) => ({ label: `${x.repo} · ${x.script}`, onClick: () => void run(x.repo, x.script) })),
-                    ...(runs.length > 1 ? (["separator", { label: "Run all (first script of each repo)", onClick: runAll }] as const) : []),
-                  ]}
-                />
-              )}
+              <button className="primary" onClick={() => setTab("run")} title="The Run tab: start and stop each repo's programs (Cmd/Ctrl+R runs them all)">
+                ▶ Run{running > 0 ? ` (${running})` : ""}
+              </button>
               <OpenInMenu path={f.folder} only={["vscode", "terminal", "files"]} />
               <button className="danger" onClick={props.onArchive}>
                 Archive
@@ -486,6 +477,9 @@ function FeatureView(props: {
           Changes{fileCount > 0 && <span className="badge">{fileCount}</span>}
           {openComments > 0 && <span className="badge comments">💬{openComments}</span>}
         </button>
+        <button className={tab === "run" ? "active" : ""} onClick={() => setTab("run")}>
+          Run{running > 0 && <span className="badge ok">{running}</span>}
+        </button>
         <button className={tab === "prs" ? "active" : ""} onClick={() => setTab("prs")}>
           Pull requests
           {(() => {
@@ -510,6 +504,7 @@ function FeatureView(props: {
 
       <ChatArea ws={f} chats={props.chats} hidden={tab !== "chat"} />
       {tab === "plan" && <PlanView f={f} docs={docs} reload={() => void reloadDocs()} />}
+      {tab === "run" && <RunView f={f} ov={runs.ov} reload={runs.reload} onShow={showTerminal} />}
       {tab === "prs" && <PrsView f={f} ov={overview.ov} loading={overview.loading} refresh={() => void overview.refresh()} />}
       {tab === "activity" && <ActivityView f={f} chats={props.chats} onOpenChat={openChat} />}
       {tab === "changes" && shownRepo && (

@@ -9,7 +9,7 @@ import { findBash } from "./scripts.ts";
 
 const MAX_BUFFER = 256 * 1024;
 
-type Entry = Terminal & { pty: IPty; buffer: string };
+type Entry = Terminal & { pty: IPty; buffer: string; exited: Promise<void> };
 
 export type TerminalEnv = { cwd: string; env: Record<string, string> };
 
@@ -40,7 +40,12 @@ export class Terminals {
   list(featureId?: string): Terminal[] {
     return [...this.entries.values()]
       .filter((t) => !featureId || t.featureId === featureId)
-      .map(({ pty: _p, buffer: _b, ...t }) => t);
+      .map(view);
+  }
+
+  /** Process id → terminal id, for the terminals still running. */
+  pids(): Map<number, string> {
+    return new Map([...this.entries.values()].filter((t) => t.exitCode === undefined).map((t) => [t.pty.pid, t.id]));
   }
 
   /** An interactive shell in one of the feature's repos, or (no repo) in the feature folder. */
@@ -51,13 +56,17 @@ export class Terminals {
     return this.start(featureId, repo, "shell", n === 1 ? base : `${base} ${n}`, file, args, where);
   }
 
-  /** Runs one of a repo's run scripts through bash (Git Bash on Windows), replacing the previous run of the same script. */
-  async run(featureId: string, repo: string, command: string, where: TerminalEnv, script = "run"): Promise<Terminal> {
-    const title = script === "run" ? `run ${repo}` : `${repo}: ${script}`;
-    const old = this.list(featureId).find((t) => t.kind === "run" && t.title === title);
+  /**
+   * Runs one of a repo's run scripts through bash (Git Bash on Windows),
+   * replacing the previous run of the same script. `script` identifies it
+   * (its file name, or `config:<name>`); `label` is its short name.
+   */
+  async run(featureId: string, repo: string, command: string, where: TerminalEnv, script = "run", label = script): Promise<Terminal> {
+    const old = this.list(featureId).find((t) => t.kind === "run" && t.repo === repo && t.script === script);
     if (old) this.close(old.id);
     const bash = await findBash(this.bashPath);
-    return this.start(featureId, repo, "run", title, bash, ["-lc", command], where);
+    const title = label === "run" ? `run ${repo}` : `${repo}: ${label}`;
+    return this.start(featureId, repo, "run", title, bash, ["-lc", command], where, script);
   }
 
   write(id: string, data: string): void {
@@ -90,10 +99,22 @@ export class Terminals {
     this.emitList();
   }
 
-  /** Stops the process but keeps its output on screen. */
-  stop(id: string): void {
+  /**
+   * Stops the process but keeps its output on screen: Ctrl-C first, so
+   * programs shut down cleanly (docker compose stops its containers), and a
+   * hang-up after `graceMs` if it is still running.
+   */
+  async stop(id: string, graceMs = 10_000): Promise<void> {
     const t = this.entries.get(id);
-    if (t && t.exitCode === undefined) kill(t.pty);
+    if (!t || t.exitCode !== undefined) return;
+    try {
+      t.pty.write("\x03");
+    } catch {
+      // gone
+    }
+    const timer = new Promise<boolean>((r) => setTimeout(() => r(false), graceMs));
+    if (!(await Promise.race([t.exited.then(() => true), timer]))) kill(t.pty);
+    await Promise.race([t.exited, new Promise((r) => setTimeout(r, 2000))]);
   }
 
   closeFeature(featureId: string): void {
@@ -112,6 +133,7 @@ export class Terminals {
     file: string,
     args: string[],
     where: TerminalEnv,
+    script?: string,
   ): Terminal {
     const pty = spawn(file, args, {
       name: "xterm-256color",
@@ -120,7 +142,19 @@ export class Terminals {
       cwd: where.cwd,
       env: { ...process.env, ...where.env, TERM: "xterm-256color", COLORTERM: "truecolor" } as Record<string, string>,
     });
-    const entry: Entry = { id: randomUUID(), featureId, ...(repo ? { repo } : {}), kind, title, startedAt: new Date().toISOString(), pty, buffer: "" };
+    let exited = () => {};
+    const entry: Entry = {
+      id: randomUUID(),
+      featureId,
+      ...(repo ? { repo } : {}),
+      kind,
+      ...(script ? { script } : {}),
+      title,
+      startedAt: new Date().toISOString(),
+      pty,
+      buffer: "",
+      exited: new Promise((r) => (exited = r)),
+    };
     this.entries.set(entry.id, entry);
     pty.onData((d) => {
       entry.buffer += d;
@@ -129,6 +163,7 @@ export class Terminals {
     });
     pty.onExit(({ exitCode }) => {
       entry.exitCode = exitCode;
+      exited();
       const note = `\r\n\x1b[2m[process exited with code ${exitCode}]\x1b[0m\r\n`;
       entry.buffer += note;
       if (this.entries.has(entry.id)) {
@@ -137,10 +172,11 @@ export class Terminals {
       }
     });
     this.emitList();
-    const { pty: _p, buffer: _b, ...t } = entry;
-    return t;
+    return view(entry);
   }
 }
+
+const view = ({ pty: _p, buffer: _b, exited: _e, ...t }: Entry): Terminal => t;
 
 /** The user's shell: $SHELL on macOS/Linux, PowerShell on Windows, unless caboose.local.json says otherwise. */
 function defaultShell(configured?: string): [string, string[]] {

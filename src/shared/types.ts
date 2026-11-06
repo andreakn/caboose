@@ -67,10 +67,62 @@ export type Terminal = {
   /** The repo it was opened in; none = the feature folder. */
   repo?: string;
   kind: "shell" | "run";
+  /** Which run script it runs: the file name (run_cda.sh), or config:<name>. */
+  script?: string;
   title: string;
   startedAt: string;
   /** Set once the process has exited. */
   exitCode?: number;
+};
+
+/** A URL a run script declares (`# url: http://localhost:5173/ app`). */
+export type RunUrl = { url: string; label?: string };
+
+/** running: in its terminal; exited: ended by itself, its terminal still open; stopped: no terminal. */
+export type RunState = "running" | "exited" | "stopped";
+
+/** A program holding a port: one outside the Run tab (stray), or whatever holds a port a script wants. */
+export type PortHolder = {
+  pid: number;
+  name: string;
+  ports: number[];
+  command: string;
+  /** Where it runs from: "oslo/web", "web (main checkout)", "oslo: run web"; absent = somewhere Caboose does not know. */
+  where?: string;
+  /** Caboose may stop it: it runs from a feature or a configured repo, or in one of Caboose's terminals. */
+  stoppable: boolean;
+};
+
+export type RunScript = {
+  /** The file name (run_cda.sh), or config:<name>. */
+  id: string;
+  /** The moniker (cda), "run" for run.sh, or the configured name. */
+  label: string;
+  /** From the moniker file. */
+  description?: string;
+  command: string;
+  urls: RunUrl[];
+  state: RunState;
+  terminalId?: string;
+  exitCode?: number;
+  /** While it is not running: what already listens on a port its URLs use. */
+  busy?: PortHolder[];
+};
+
+export type RunRepo = {
+  repo: string;
+  path: string;
+  moniker?: string;
+  description?: string;
+  scripts: RunScript[];
+  /** Programs listening from this worktree that the Run tab did not start. */
+  strays: PortHolder[];
+};
+
+export type RunOverview = {
+  repos: RunRepo[];
+  /** Why programs outside the Run tab cannot be seen (lsof/ss/PowerShell missing). */
+  strayError?: string;
 };
 
 export type State = {
@@ -131,6 +183,8 @@ export type LocalConfig = {
   defaultAgent?: Agent;
   /** The permission mode new chats start in. Default: bypass (like Conductor). */
   defaultMode?: Mode;
+  /** A moniker file (moniker, path, description per line) that names and describes repos and their run_<moniker>.sh scripts. */
+  monikersFile?: string;
   /** How PRs should be written (title, description style); added to Create PR requests to the agent. */
   prInstructions?: string;
   /** Commands to open a folder in an app, overriding detection; "{path}" is replaced. */
@@ -373,8 +427,20 @@ export type CabooseApi = {
   terminals(): Promise<Terminal[]>;
   /** A shell in one of the feature's repos, or in the feature folder. */
   openShell(featureId: string, repo?: string): Promise<Result<Terminal>>;
-  /** Runs one of the repo's run scripts (by name; absent = the first). */
-  runScript(featureId: string, repo: string, script?: string): Promise<Result<Terminal>>;
+  /** Every repo's run scripts with their state, and programs running outside the Run tab. */
+  runOverview(featureId: string): Promise<RunOverview>;
+  /** Starts a run script (by id; absent = the repo's first). */
+  runStart(featureId: string, repo: string, script?: string): Promise<Result<Terminal>>;
+  /** Starts every script that is not running, of one repo or (no repo) of the whole feature. */
+  runStartAll(featureId: string, repo?: string): Promise<Result<number>>;
+  /** Ctrl-C, then hang up after a grace period, and close its terminal. */
+  runStop(terminalId: string): Promise<void>;
+  /** Stops every running script of the feature. */
+  runStopAll(featureId: string): Promise<void>;
+  /** Stops a program holding a port (a stray, or the holder of a port a script needs). */
+  runStopHolder(featureId: string, pid: number): Promise<Result<void>>;
+  /** Opens a URL a run script declares. */
+  runBrowse(featureId: string, repo: string, script: string, url: string): Promise<Result<void>>;
   stopTerminal(id: string): Promise<void>;
   closeTerminal(id: string): Promise<void>;
   termWrite(id: string, data: string): void;
