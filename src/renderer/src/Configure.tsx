@@ -5,10 +5,13 @@ import {
   type DoctorCheck,
   JIRA_LEVELS,
   type JiraLevel,
+  type ConductorImport,
   type RepoEntry,
+  type RepoScripts,
   type Theme,
   type UpdateInfo,
 } from "../../shared/types.ts";
+import { useApps } from "./Menu.tsx";
 import { applyTheme, getTheme, notificationsOn, setNotifications } from "./prefs.ts";
 
 const api = window.caboose;
@@ -30,6 +33,8 @@ export function Configure({ onDone }: { onDone: () => void }) {
   const [notify, setNotify] = useState(notificationsOn);
   const [scan, setScan] = useState<{ folder: string; found: RepoEntry[]; picked: Set<string> } | null>(null);
   const [jiraTest, setJiraTest] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const apps = useApps();
 
   const load = () =>
     api.config().then((c) => {
@@ -50,7 +55,7 @@ export function Configure({ onDone }: { onDone: () => void }) {
     const fresh = more.filter((r) => !paths.has(r.path));
     const clash = fresh.find((r) => names.has(r.name));
     if (clash) return alert(`There is already a repo called "${clash.name}". Repo names must be unique (they are folder names in a feature).`);
-    setForm({ ...form, repos: [...repos, ...fresh].sort((a, b) => a.name.localeCompare(b.name)) });
+    setForm((f) => ({ ...f, repos: [...(f.repos ?? []), ...fresh].sort((a, b) => a.name.localeCompare(b.name)) }));
   };
 
   async function save(): Promise<boolean> {
@@ -144,8 +149,10 @@ export function Configure({ onDone }: { onDone: () => void }) {
               const folder = await api.pickFolder("Add a repository");
               if (!folder) return;
               const r = await api.checkRepo(folder);
-              if (r.ok) addRepos([r.value]);
-              else alert(r.error);
+              if (!r.ok) return alert(r.error);
+              // Rules the repo already declares for Conductor (.worktreeinclude, .conductor/*.toml)
+              const rules = await api.repoRules(r.value.path);
+              addRepos([{ ...r.value, ...(rules ? { localFiles: rules.patterns } : {}) }]);
             }}
           >
             Add a repository…
@@ -160,7 +167,18 @@ export function Configure({ onDone }: { onDone: () => void }) {
           >
             Find repositories in a folder…
           </button>
+          <button onClick={() => setImporting(!importing)}>Import from Conductor…</button>
         </div>
+        {importing && (
+          <ImportFromConductor
+            onCancel={() => setImporting(false)}
+            onImport={(picked, prInstructions) => {
+              addRepos(picked);
+              if (prInstructions) setForm((f) => ({ ...f, prInstructions }));
+              setImporting(false);
+            }}
+          />
+        )}
         {scan && (
           <div className="scan">
             <div className="muted">
@@ -186,8 +204,15 @@ export function Configure({ onDone }: { onDone: () => void }) {
                 <button
                   className="primary"
                   disabled={!scan.picked.size}
-                  onClick={() => {
-                    addRepos(scan.found.filter((r) => scan.picked.has(r.path)));
+                  onClick={async () => {
+                    const picked = scan.found.filter((r) => scan.picked.has(r.path));
+                    const withRules = await Promise.all(
+                      picked.map(async (r) => {
+                        const rules = await api.repoRules(r.path);
+                        return rules ? { ...r, localFiles: rules.patterns } : r;
+                      }),
+                    );
+                    addRepos(withRules);
                     setScan(null);
                   }}
                 >
@@ -258,6 +283,26 @@ export function Configure({ onDone }: { onDone: () => void }) {
       </section>
 
       <section>
+        <h2>Pull requests</h2>
+        <p className="muted">How you want PRs written. Added to every "Create PR" request to the agent.</p>
+        <textarea
+          className="wide"
+          rows={Math.min(14, Math.max(4, (form.prInstructions ?? "").split("\n").length + 1))}
+          value={form.prInstructions ?? ""}
+          placeholder="e.g. Imperative title. Open with what changed and why. State build and test status."
+          onChange={(e) => setForm({ ...form, prInstructions: e.target.value })}
+        />
+      </section>
+
+      <section>
+        <h2>Open in</h2>
+        <p className="muted">
+          Found on this machine: {apps.map((a) => a.label).join(", ") || "nothing yet"}. To use another app or path, add{" "}
+          <code>"openWith": {"{"} "rider": "/path/to/rider {"{path}"}" {"}"}</code> to the config file.
+        </p>
+      </section>
+
+      <section>
         <h2>Terminals</h2>
         <div className="form">
           {TERMINAL_FIELDS.map((f) => (
@@ -324,6 +369,8 @@ export function Configure({ onDone }: { onDone: () => void }) {
 function RepoItem(props: { repo: RepoEntry; defaults: string[]; onChange: (r: RepoEntry) => void; onRemove: () => void }) {
   const { repo, defaults } = props;
   const [open, setOpen] = useState(false);
+  const [scriptsOpen, setScriptsOpen] = useState(false);
+  const runCount = repo.scripts?.run?.length ?? 0;
   const patterns = repo.localFiles ?? defaults;
   const [text, setText] = useState(patterns.join("\n"));
   const [preview, setPreview] = useState<{ files?: string[]; notIgnored?: string[]; error?: string } | null>(null);
@@ -351,6 +398,9 @@ function RepoItem(props: { repo: RepoEntry; defaults: string[]; onChange: (r: Re
         <button className="link" onClick={() => setOpen(!open)}>
           {open ? "▾" : "▸"} local files: {patterns.join(", ") || "none"}
           {preview?.files && ` (${preview.files.length} file${preview.files.length === 1 ? "" : "s"} now)`}
+        </button>
+        <button className="link" onClick={() => setScriptsOpen(!scriptsOpen)}>
+          {scriptsOpen ? "▾" : "▸"} scripts: {[repo.scripts?.setup && "setup", runCount && `${runCount} run`, repo.scripts?.archive && "archive"].filter(Boolean).join(", ") || "none"}
         </button>
         <span className="spacer" />
         <button className="link" onClick={props.onRemove}>
@@ -389,7 +439,124 @@ function RepoItem(props: { repo: RepoEntry; defaults: string[]; onChange: (r: Re
           </div>
         </div>
       )}
+      {scriptsOpen && <ScriptsEditor scripts={repo.scripts ?? {}} onChange={(scripts) => props.onChange({ ...repo, scripts })} />}
     </li>
+  );
+}
+
+/** A repo's setup, run and archive scripts (run through bash in the worktree, with CABOOSE_PORT etc.). */
+function ScriptsEditor({ scripts, onChange }: { scripts: RepoScripts; onChange: (s: RepoScripts | undefined) => void }) {
+  const set = (patch: Partial<RepoScripts>) => {
+    const next = { ...scripts, ...patch };
+    const clean: RepoScripts = {
+      ...(next.setup?.trim() ? { setup: next.setup } : {}),
+      ...(next.archive?.trim() ? { archive: next.archive } : {}),
+      ...(next.run?.length ? { run: next.run } : {}),
+    };
+    onChange(Object.keys(clean).length ? clean : undefined);
+  };
+  const run = scripts.run ?? [];
+  return (
+    <div className="scripts-editor">
+      <label>
+        <span>Setup</span>
+        <input value={scripts.setup ?? ""} placeholder="runs in each new worktree, e.g. npm ci" onChange={(e) => set({ setup: e.target.value })} />
+      </label>
+      {run.map((r, i) => (
+        <label key={i}>
+          <input className="script-name" value={r.name} placeholder="name" onChange={(e) => set({ run: run.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)) })} />
+          <input value={r.command} placeholder="e.g. PORT=$CABOOSE_PORT npm run dev" onChange={(e) => set({ run: run.map((x, j) => (j === i ? { ...x, command: e.target.value } : x)) })} />
+          <button className="link" title="Remove" onClick={() => set({ run: run.filter((_, j) => j !== i) })}>
+            ×
+          </button>
+        </label>
+      ))}
+      <div className="row">
+        <button className="link" onClick={() => set({ run: [...run, { name: run.length ? `run${run.length + 1}` : "run", command: "" }] })}>
+          + run script
+        </button>
+        <small className="muted">The first one is what "Run all" starts. Scripts run through bash in the repo's worktree, with CABOOSE_PORT set.</small>
+      </div>
+      <label>
+        <span>Archive</span>
+        <input value={scripts.archive ?? ""} placeholder="runs before the worktree is removed" onChange={(e) => set({ archive: e.target.value })} />
+      </label>
+    </div>
+  );
+}
+
+/** Picks repos from Conductor's list, with their copy rules and scripts. */
+function ImportFromConductor(props: { onImport: (repos: RepoEntry[], prInstructions?: string) => void; onCancel: () => void }) {
+  const [data, setData] = useState<ConductorImport | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [usePrompt, setUsePrompt] = useState(true);
+  useEffect(() => {
+    void api.conductorImport().then((r) => {
+      if (!r.ok) return setError(r.error);
+      setData(r.value);
+      setPicked(new Set(r.value.repos.filter((x) => x.exists && !x.alreadyConfigured).map((x) => x.path)));
+    });
+  }, []);
+  if (error) return <div className="scan del">{error}</div>;
+  if (!data) return <div className="scan muted">Reading Conductor…</div>;
+  if (!data.available) return <div className="scan muted">Conductor is not installed on this machine (no database found). <button className="link" onClick={props.onCancel}>Close</button></div>;
+  const toggle = (path: string, on: boolean) => {
+    const next = new Set(picked);
+    if (on) next.add(path);
+    else next.delete(path);
+    setPicked(next);
+  };
+  return (
+    <div className="scan import">
+      <div className="row">
+        <span className="muted">Conductor's repos, with the files each copies into new workspaces and its scripts:</span>
+        <span className="spacer" />
+        <button className="link" onClick={() => setPicked(new Set(data.repos.filter((x) => x.exists && !x.alreadyConfigured).map((x) => x.path)))}>
+          all
+        </button>
+        <button className="link" onClick={() => setPicked(new Set())}>
+          none
+        </button>
+      </div>
+      <div className="import-list">
+        {data.repos.map((r) => (
+          <label key={r.path} className={`import-row${r.exists && !r.alreadyConfigured ? "" : " unavailable"}`} title={r.path}>
+            <input type="checkbox" disabled={!r.exists || r.alreadyConfigured} checked={picked.has(r.path)} onChange={(e) => toggle(r.path, e.target.checked)} />
+            <b>{r.name}</b>
+            <span className="muted">
+              {!r.exists ? "folder not found" : r.alreadyConfigured ? "already added" : `${(r.localFiles ?? []).join("  ")}  ·  from ${r.rulesFrom}`}
+              {r.scripts?.run?.length ? `  ·  ${r.scripts.run.length} run script(s)` : ""}
+              {r.scripts?.setup ? "  ·  setup" : ""}
+            </span>
+          </label>
+        ))}
+      </div>
+      {data.prInstructions && (
+        <label className="check">
+          <input type="checkbox" checked={usePrompt} onChange={(e) => setUsePrompt(e.target.checked)} />
+          Also use Conductor's "create PR" prompt as the PR instructions
+        </label>
+      )}
+      <div className="row">
+        <button
+          className="primary"
+          disabled={!picked.size}
+          onClick={() =>
+            props.onImport(
+              data.repos
+                .filter((r) => picked.has(r.path))
+                .map(({ name, path, localFiles, scripts }) => ({ name, path, localFiles, ...(scripts ? { scripts } : {}) })),
+              usePrompt ? data.prInstructions : undefined,
+            )
+          }
+        >
+          Add {picked.size} repo{picked.size === 1 ? "" : "s"}
+        </button>
+        <button onClick={props.onCancel}>Cancel</button>
+        <span className="muted">Then Save. Nothing is written to Conductor.</span>
+      </div>
+    </div>
   );
 }
 

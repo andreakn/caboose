@@ -8,6 +8,7 @@ export function NewFeature({ config, onCreated, onCancel }: { config: ConfigView
   const repos = config.repos ?? [];
   const level = config.jira?.level ?? "off";
   const jiraReady = level !== "off" && Boolean(config.jira?.site && config.jira?.email && config.jira?.hasToken);
+  const [title, setTitle] = useState("");
   const [picked, setPicked] = useState<Set<string>>(() => new Set(repos.length === 1 ? [repos[0].name] : []));
   const [mode, setMode] = useState<"none" | "key" | "create">(level === "required" || level === "expected" ? "key" : "none");
   const [key, setKey] = useState("");
@@ -39,7 +40,7 @@ export function NewFeature({ config, onCreated, onCancel }: { config: ConfigView
     setError(null);
     if (level === "expected" && !jiraInput && !confirm("Create the feature without a Jira task?")) return;
     setBusy(`Creating the feature${level === "required" ? " and Jira subtasks" : ""}…`);
-    const r = await api.createFeature({ repos: [...picked], jira: jiraInput });
+    const r = await api.createFeature({ repos: [...picked], jira: jiraInput, title });
     setBusy(null);
     if (r.ok) onCreated(r.value);
     else setError(r.error);
@@ -54,6 +55,15 @@ export function NewFeature({ config, onCreated, onCancel }: { config: ConfigView
         </div>
         <button onClick={onCancel}>Cancel</button>
       </header>
+
+      <section>
+        <div className="form">
+          <label>
+            <span>Title</span>
+            <input autoFocus value={title} placeholder="What is it about? (optional)" onChange={(e) => setTitle(e.target.value)} />
+          </label>
+        </div>
+      </section>
 
       <section>
         <h2>Repositories</h2>
@@ -129,7 +139,7 @@ export function NewFeature({ config, onCreated, onCancel }: { config: ConfigView
               </label>
             </div>
           )}
-          {level === "required" && <p className="muted">Each repo gets a subtask under the task, created if it does not exist.</p>}
+          <p className="muted">Each repo gets a subtask under the task (created when Jira is connected), and its key goes in that repo's branch name.</p>
         </section>
       )}
 

@@ -62,3 +62,18 @@ export async function removeWorktree(root: string, path: string): Promise<void> 
   await git(root, "worktree", "remove", "--force", path);
   await git(root, "worktree", "prune");
 }
+
+/** Whether the checked-out branch has an upstream (has been pushed). */
+export async function hasUpstream(path: string): Promise<boolean> {
+  try {
+    await git(path, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function renameBranch(path: string, from: string, to: string): Promise<void> {
+  await git(path, "check-ref-format", "--branch", to);
+  await git(path, "branch", "-m", from, to);
+}

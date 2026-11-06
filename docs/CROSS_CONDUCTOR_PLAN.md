@@ -23,9 +23,30 @@ of the plumbing exists. This plan covers what is missing, and a calmer UI.
 | Repo registry from Conductor's DB | repos in config | one-time import |
 | Overview of all projects (cards) | sidebar list | an overview board |
 
+## Decisions (Andreas, 2026-11-06)
+
+- **No migration** of xc projects: a clean slate. But **import repos and their
+  copy rules from Conductor** (done, phase 1).
+- **Project files are plain files** in the feature folder, not in git (the git
+  versioning was a consequence of xc's tooling).
+- **Agents: both ways, at the same time.** Start with one central chat for the
+  feature; it (or you) can break out a sub-chat per repo when only some repos
+  need a lot of follow-up. Choosing per feature is fine too.
+- **Branches:** with Jira, every repo has its own subtask and its key is in that
+  repo's branch name; without Jira, the station name. (Already Caboose's
+  pattern: `<prefix>/<SUBTASK>-<station>` / `<prefix>/<station>`.)
+- **Apps:** VS Code everywhere, Rider on macOS and Windows, Visual Studio on
+  Windows, the OS's own terminal.
+
 ## Phases
 
-### 1. Continuity: import, branches, titles (small)
+### 1. ✅ Continuity: import, branches, titles (done 2026-11-06)
+Built: Conductor import (repos, copy rules in Conductor's order, scripts, the
+global create-PR prompt as PR instructions), rules read from `.worktreeinclude`
+/ `.conductor/*.toml` when adding a repo by hand (any OS), feature title and
+status, subtasks per repo whenever a feature has a task (any level), and
+linking a task later renames unpushed branches to carry the keys. Not built
+(clean slate): adopting xc projects, reusing existing branches.
 - **Import from Conductor** in Configure: repos (name, path, default branch), their
   local-file rules (`.worktreeinclude` / `file_include_globs`, incl. your global
   `.env`, `.env.local`, `**/appsettings.local.json`) and their run scripts from
@@ -41,7 +62,7 @@ of the plumbing exists. This plan covers what is missing, and a calmer UI.
   **Reuse a branch** that already exists locally or on origin instead of always
   branching fresh (picking up work started elsewhere).
 
-### 2. Open in apps and startup scripts (small)
+### 2. ✅ Open in apps and startup scripts (done 2026-11-06)
 - **Open in** per repo and for the feature folder: VS Code, Rider (the `.sln`/`.slnx`
   when there is exactly one), terminal app, file manager. Commands per OS, with
   overrides in config:
@@ -53,18 +74,16 @@ of the plumbing exists. This plan covers what is missing, and a calmer UI.
   run scripts (`dev`, `test`, `migrate`…), one marked default. `caboose.json` in a
   repo still adds to them. The Run menu lists them; each runs in its own terminal tab.
 
-### 3. Feature docs (medium)
+### 3. Feature docs (medium) — plain files, not git
 - In the feature folder: `brief.md`, `plan.md` (checklist), `repos/<repo>.md`
   (brief per repo), `log.md` (append-only: who, to whom, status, text) — the same
   formats as xc, so imported projects carry over and agents can read them.
 - Plan ticks, brief and log are editable in the app (markdown preview, edit in place).
-- **Versioning** (question 1): xc commits these to git. Proposal: if the features
-  folder is a git repo, Caboose commits doc changes there with a short message.
 
 ### 4. Repo agents (large; the core of xc's workflow)
-Instead of Claude subagents hidden inside one coordinator chat, Caboose runs
-**one agent chat per repo** (in that repo's folder, started with its brief), next
-to the feature-level **coordinator** chat. Every agent is visible, can be talked to
+The feature's central chat stays the starting point. When some repos need a lot
+of follow-up, it (or you) **breaks out a chat per repo** (in that repo's folder,
+started with its brief and the context so far), next to the central chat. Every agent is visible, can be talked to
 directly, and can ask *you* (question cards) instead of relaying through the
 coordinator. Works with Claude and Copilot.
 - Caboose tools for agents (MCP for Claude, SDK tools for Copilot):
@@ -116,13 +135,3 @@ should show **signals first, words on demand**:
 1 and 2 first (small, immediately useful, and they make your three live xc
 projects openable in Caboose). Then 3 → 4 (the workflow), then 5 (the views,
 which need 3 and 4's data). 6 last, if at all.
-
-## Questions
-1. **Feature docs in git?** Commit brief/plan/log to a git repo (the features
-   folder as a repo), or plain files only?
-2. **Agents:** visible per-repo agent chats coordinated through Caboose (proposed),
-   or xc's model of Claude subagents inside one coordinator chat?
-3. **Branch names:** one shared branch per feature (xc: `TPM-11500_NightlyBatchSync`)
-   or one per repo with its subtask key (Caboose today)? Default template?
-4. **Import:** bring your current xc projects and Conductor repos over (phase 1)?
-5. **Apps on Windows/Linux:** VS Code and Rider everywhere? Which terminal app on Windows (Windows Terminal?) and Linux?

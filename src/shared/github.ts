@@ -39,7 +39,14 @@ export function baseBranch(baseRef: string): string {
   return baseRef.replace(/^origin\//, "");
 }
 
-export function createPrMessage(repo: string, branch: string, baseRef: string, draft: boolean, jiraKey?: string): string {
+export function createPrMessage(
+  repo: string,
+  branch: string,
+  baseRef: string,
+  draft: boolean,
+  jiraKey?: string,
+  instructions?: string,
+): string {
   return [
     `Open a ${draft ? "draft " : ""}pull request for the ${repo} repo of this feature (its worktree is the ${repo}/ folder; run git and gh there):`,
     "1. Commit the uncommitted changes in it that belong in the PR, in small logical commits with clear messages (leave out scratch files).",
@@ -48,6 +55,7 @@ export function createPrMessage(repo: string, branch: string, baseRef: string, d
     jiraKey
       ? `The PR belongs to Jira issue ${jiraKey}: start the title with "${jiraKey} - " and mention ${jiraKey} in the description.`
       : "",
+    instructions?.trim() ? `How I want PRs written:\n${instructions.trim()}` : "",
     "Reply with the PR's URL.",
   ]
     .filter(Boolean)

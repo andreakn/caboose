@@ -1,13 +1,24 @@
 import { useEffect, useRef, useState } from "react";
 import type { Chat } from "../../shared/chat.ts";
 import type { DiffComment } from "../../shared/diff.ts";
-import type { ConfigInfo, Feature, FeatureJira, RepoConfig, Result, State, Terminal } from "../../shared/types.ts";
+import {
+  type ConfigInfo,
+  type Feature,
+  FEATURE_STATUSES,
+  type FeatureJira,
+  type JiraAlignment,
+  type RepoScripts,
+  type Result,
+  type State,
+  type Terminal,
+} from "../../shared/types.ts";
 import { type Activity, activityOf, onActivityNotice, useActivityVersion } from "./activity.ts";
 import { ChangesView, useFeatureChanges } from "./Changes.tsx";
 import { activeChat, ChatArea } from "./Chat.tsx";
 import { dispatch, useCommand } from "./commands.ts";
 import { Configure } from "./Configure.tsx";
 import { JiraChip, RepoRow } from "./GitHub.tsx";
+import { MenuButton, OpenInMenu } from "./Menu.tsx";
 import { NewFeature } from "./NewFeature.tsx";
 import { notificationsOn } from "./prefs.ts";
 import { TerminalPanel, useTerminals } from "./Terminals.tsx";
@@ -198,8 +209,13 @@ function FeatureRow(props: { f: Feature; activity?: Activity; active: boolean; o
   return (
     <button className={`ws-row${active ? " active" : ""}${f.archived ? " is-archived" : ""}`} onClick={onClick}>
       <span className={`dot ${cls}`} title={title} />
-      <span className="ws-name">{f.name}</span>
-      <span className="ws-branch">{f.repos.map((r) => r.name).join(" · ") || "no repos"}</span>
+      <span className="ws-name">
+        {f.name}
+        {f.status && f.status !== "active" && <span className={`status-mini st-${f.status}`}>{f.status}</span>}
+      </span>
+      <span className="ws-branch" title={f.repos.map((r) => r.name).join(" · ")}>
+        {f.title || f.repos.map((r) => r.name).join(" · ") || "no repos"}
+      </span>
     </button>
   );
 }
@@ -227,15 +243,15 @@ function FeatureView(props: {
   const loadJira = () => api.featureJira(f.id).then(setJira);
   useEffect(() => void loadJira(), [f.id]);
 
-  // Which repos have a run script.
-  const [configs, setConfigs] = useState<Record<string, RepoConfig>>({});
+  // Each repo's run scripts.
+  const [scripts, setScripts] = useState<Record<string, RepoScripts>>({});
   const repoKey = f.repos.map((r) => r.name).join();
   useEffect(() => {
-    void Promise.all(f.repos.map(async (r) => [r.name, await api.repoConfig(f.id, r.name)] as const)).then((e) =>
-      setConfigs(Object.fromEntries(e)),
+    void Promise.all(f.repos.map(async (r) => [r.name, await api.repoScripts(f.id, r.name)] as const)).then((e) =>
+      setScripts(Object.fromEntries(e)),
     );
-  }, [f.id, repoKey]);
-  const runnable = f.repos.filter((r) => configs[r.name]?.run);
+  }, [f.id, repoKey, config]);
+  const runs = f.repos.flatMap((r) => (scripts[r.name]?.run ?? []).map((s) => ({ repo: r.name, script: s.name })));
 
   const [termOpen, setTermOpenRaw] = useState(() => localStorage.getItem(`caboose-term-open-${f.id}`) === "1");
   const [termActive, setTermActive] = useState<string | null>(null);
@@ -243,16 +259,26 @@ function FeatureView(props: {
     setTermOpenRaw(open);
     localStorage.setItem(`caboose-term-open-${f.id}`, open ? "1" : "0");
   };
-  const [runMenu, setRunMenu] = useState<{ x: number; y: number } | null>(null);
-
-  async function run(repo: string) {
-    setRunMenu(null);
-    const r = await api.runScript(f.id, repo);
+  async function run(repo: string, script?: string) {
+    const r = await api.runScript(f.id, repo, script);
     if (!r.ok) return alert(r.error);
     setTermActive(r.value.id);
     setTermOpen(true);
   }
-  const runAll = () => runnable.forEach((r) => void run(r.name));
+  /** Each repo's first (default) script. */
+  const runAll = () => f.repos.filter((r) => scripts[r.name]?.run?.length).forEach((r) => void run(r.name));
+
+  /** Says what linking Jira changed. */
+  const reportAlignment = (r: Result<JiraAlignment>) => {
+    if (!r.ok) return alert(r.error);
+    const { created, renamed, skipped } = r.value;
+    const lines = [
+      created.length ? `Created subtasks: ${created.join(", ")}` : "",
+      ...renamed.map((x) => `${x.repo}: branch renamed to ${x.to}`),
+      skipped.length ? `Not renamed (already pushed): ${skipped.join(", ")}` : "",
+    ].filter(Boolean);
+    if (lines.length) alert(lines.join("\n"));
+  };
 
   useCommand(async (c) => {
     if (c === "showChat" || c === "focusComposer") setTab("chat");
@@ -276,52 +302,51 @@ function FeatureView(props: {
         <div>
           <h1>
             {f.name}{" "}
+            <select
+              className={`status-chip st-${f.status ?? "active"}`}
+              value={f.status ?? "active"}
+              disabled={f.archived}
+              title="Status"
+              onChange={(e) => void api.setFeatureDetails(f.id, { status: e.target.value as Feature["status"] })}
+            >
+              {FEATURE_STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
             {level !== "off" && (
               <JiraChip
                 label="Jira task"
                 jiraKey={jira.task}
                 site={site}
                 onSet={async (key) => {
-                  const r = await api.setFeatureTask(f.id, key);
-                  if (!r.ok) alert(r.error);
+                  reportAlignment(await api.setFeatureTask(f.id, key));
                   void loadJira();
                 }}
               />
             )}
           </h1>
-          <div className="muted">
-            <code>{f.folder}</code>
-          </div>
+          <FeatureTitle f={f} />
         </div>
         <div className="actions">
           {f.archived ? (
             <button onClick={props.onRestore}>Restore</button>
           ) : (
             <>
-              {runnable.length > 0 && (
-                <button
+              {runs.length > 0 && (
+                <MenuButton
                   className="primary"
-                  title="Run a repo's run script (Cmd/Ctrl+R runs all)"
-                  onClick={(e) => {
-                    if (runnable.length === 1) return void run(runnable[0].name);
-                    const r = e.currentTarget.getBoundingClientRect();
-                    setRunMenu(runMenu ? null : { x: r.left, y: r.bottom });
-                  }}
-                >
-                  ▶ Run{runnable.length > 1 ? " ▾" : ""}
-                </button>
+                  title="Run a repo's script in a terminal (Cmd/Ctrl+R runs each repo's first one)"
+                  label="▶ Run ▾"
+                  align="right"
+                  items={[
+                    ...runs.map((x) => ({ label: `${x.repo} · ${x.script}`, onClick: () => void run(x.repo, x.script) })),
+                    ...(runs.length > 1 ? (["separator", { label: "Run all (first script of each repo)", onClick: runAll }] as const) : []),
+                  ]}
+                />
               )}
-              {runMenu && (
-                <div className="menu" style={{ left: runMenu.x, top: runMenu.y }} onMouseLeave={() => setRunMenu(null)}>
-                  {runnable.map((r) => (
-                    <button key={r.name} onClick={() => run(r.name)}>
-                      Run {r.name}
-                    </button>
-                  ))}
-                  <button onClick={runAll}>Run all</button>
-                </div>
-              )}
-              <button onClick={() => api.openPath(f.folder)}>Open folder</button>
+              <OpenInMenu path={f.folder} only={["vscode", "terminal", "files"]} />
               <button className="danger" onClick={props.onArchive}>
                 Archive
               </button>
@@ -342,6 +367,7 @@ function FeatureView(props: {
             subtask={jira.subtasks[r.name]}
             hasTask={Boolean(jira.task)}
             jiraSite={site}
+            prInstructions={config.config.prInstructions}
             onJiraChanged={() => void loadJira()}
             onAskedAgent={() => setTab("chat")}
           />
@@ -374,6 +400,10 @@ function FeatureView(props: {
           Feature details · ports {f.port}–{f.port + 99}
         </summary>
         <dl className="facts">
+          <dt>Folder</dt>
+          <dd>
+            <code>{f.folder}</code>
+          </dd>
           {f.repos.map((r, i) => (
             <SetupFacts key={r.name} f={f} repo={r.name} setup={r.setup} port={f.port + 10 * i} path={r.path} copied={r.copied} />
           ))}
@@ -430,6 +460,41 @@ function FeatureView(props: {
         activeId={termActive}
         setActiveId={setTermActive}
       />
+    </div>
+  );
+}
+
+/** The feature's title, edited in place (click it). */
+function FeatureTitle({ f }: { f: Feature }) {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(f.title ?? "");
+  useEffect(() => setText(f.title ?? ""), [f.title]);
+  const save = () => {
+    setEditing(false);
+    if (text.trim() !== (f.title ?? "")) void api.setFeatureDetails(f.id, { title: text });
+  };
+  if (editing) {
+    return (
+      <input
+        className="title-edit"
+        autoFocus
+        value={text}
+        placeholder="What is this feature about?"
+        onChange={(e) => setText(e.target.value)}
+        onBlur={save}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") save();
+          if (e.key === "Escape") {
+            setText(f.title ?? "");
+            setEditing(false);
+          }
+        }}
+      />
+    );
+  }
+  return (
+    <div className="feature-title" onClick={() => !f.archived && setEditing(true)} title={f.folder}>
+      {f.title ? <span>{f.title}</span> : <span className="muted">{f.archived ? "" : "+ add a title"}</span>}
     </div>
   );
 }

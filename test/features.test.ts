@@ -133,24 +133,60 @@ test("required Jira: no task, no feature; with one, each repo gets a subtask and
   await until(settled(store));
 });
 
-test("optional Jira: links are set by hand, subtasks created on request", async () => {
+test("linking a task later: each repo gets a subtask and its key in the branch, unless already pushed", async () => {
+  let n = 7;
   const fake = {
     issue: async (key: string) => ({ key, summary: "Thing", status: "", type: "", url: "" }),
-    createSubtask: async () => "NWP-7",
+    createSubtask: async () => `NWP-${n++}`,
   } as unknown as Jira;
   const store = new Store(join(tmp, "s4", "state.json"));
   const features = new Features(store, config({ jira: { level: "optional" } }), join(tmp, "s4", "logs"), () => fake);
-  const r = await features.create({ repos: ["api"] });
-  assert.ok(r.ok);
+  const r = await features.create({ repos: ["api", "web"], title: "  Checkout v2 " });
+  assert.ok(r.ok, !r.ok ? r.error : "");
+  assert.equal(r.value.title, "Checkout v2");
+  assert.equal(r.value.status, "active");
   assert.equal(r.value.repos[0].branch, `caboose/${r.value.name}`);
-  assert.equal(features.setTask(r.value.id, "nope").ok, false);
-  assert.ok(features.setTask(r.value.id, "NWP-5").ok);
-  const sub = await features.createSubtask(r.value.id, "api");
-  assert.ok(sub.ok && sub.value === "NWP-7");
-  assert.deepEqual(features.jiraOf(r.value.id), { task: "NWP-5", subtasks: { api: "NWP-7" } });
-  assert.ok(features.setSubtask(r.value.id, "api", null).ok);
-  assert.ok(features.setTask(r.value.id, null).ok);
-  assert.equal(existsSync(join(r.value.folder, "jira.txt")), false);
+  // web gets pushed before the task is linked
+  const web = r.value.repos[1];
+  sh(web.path, "push", "-q", "-u", "origin", web.branch);
+
+  assert.equal((await features.setTask(r.value.id, "nope")).ok, false);
+  const linked = await features.setTask(r.value.id, "NWP-5");
+  assert.ok(linked.ok, !linked.ok ? linked.error : "");
+  assert.deepEqual(linked.value.created, ["NWP-7", "NWP-8"]);
+  assert.deepEqual(linked.value.renamed.map((x) => [x.repo, x.to]), [["api", `caboose/NWP-7-${r.value.name}`]]);
+  assert.deepEqual(linked.value.skipped, ["web"]);
+  const api = features.get(r.value.id)!.repos[0];
+  assert.equal(sh(api.path, "branch", "--show-current"), `caboose/NWP-7-${r.value.name}`);
+  assert.deepEqual(features.jiraOf(r.value.id), { task: "NWP-5", subtasks: { api: "NWP-7", web: "NWP-8" } });
+
+  assert.ok(features.setDetails(r.value.id, { status: "review", title: "" }).ok);
+  assert.equal(features.get(r.value.id)!.status, "review");
+  assert.equal(features.get(r.value.id)!.title, undefined);
+  await until(settled(store));
+});
+
+test("scripts come from the config, with the repo's caboose.json adding to them", () => {
+  const store = new Store(join(tmp, "s6", "state.json"));
+  const cfg = config({
+    repos: [
+      { name: "web", path: web, scripts: { run: [{ name: "dev", command: "npm run dev" }] } },
+      { name: "api", path: api, scripts: { setup: "dotnet restore", run: [{ name: "run", command: "dotnet run" }] } },
+    ],
+  });
+  const features = new Features(store, cfg, join(tmp, "s6", "logs"));
+  // web's caboose.json has a setup script and no run script
+  assert.deepEqual(features.scriptsFor("web", web), { setup: "echo port=$CABOOSE_PORT > setup.txt", archive: undefined, run: [{ name: "dev", command: "npm run dev" }] });
+  writeFileSync(join(api, "caboose.json"), JSON.stringify({ setup: "ignored: the config has one", run: "make serve" }));
+  assert.deepEqual(features.scriptsFor("api", api), {
+    setup: "dotnet restore",
+    archive: undefined,
+    run: [
+      { name: "run", command: "dotnet run" },
+      { name: "caboose.json", command: "make serve" },
+    ],
+  });
+  rmSync(join(api, "caboose.json"));
 });
 
 test("local files: each repo's patterns pick the gitignored files to bring; copy again overwrites", async () => {

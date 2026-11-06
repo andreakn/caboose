@@ -51,12 +51,13 @@ export class Terminals {
     return this.start(featureId, repo, "shell", n === 1 ? base : `${base} ${n}`, file, args, where);
   }
 
-  /** Runs a repo's run script through bash (Git Bash on Windows), replacing that repo's previous run. */
-  async run(featureId: string, repo: string, command: string, where: TerminalEnv): Promise<Terminal> {
-    const old = this.list(featureId).find((t) => t.kind === "run" && t.repo === repo);
+  /** Runs one of a repo's run scripts through bash (Git Bash on Windows), replacing the previous run of the same script. */
+  async run(featureId: string, repo: string, command: string, where: TerminalEnv, script = "run"): Promise<Terminal> {
+    const title = script === "run" ? `run ${repo}` : `${repo}: ${script}`;
+    const old = this.list(featureId).find((t) => t.kind === "run" && t.title === title);
     if (old) this.close(old.id);
     const bash = await findBash(this.bashPath);
-    return this.start(featureId, repo, "run", `run ${repo}`, bash, ["-lc", command], where);
+    return this.start(featureId, repo, "run", title, bash, ["-lc", command], where);
   }
 
   write(id: string, data: string): void {

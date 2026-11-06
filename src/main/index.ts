@@ -6,7 +6,7 @@ import { dirname, join } from "node:path";
 import type { Agent, Effort, Mode, Model } from "../shared/chat.ts";
 import { commentsMessage } from "../shared/diff.ts";
 import type { MergeMethod } from "../shared/github.ts";
-import type { ConfigInput, Feature, NewFeature, State, Theme } from "../shared/types.ts";
+import type { AppId, ConfigInput, Feature, FeatureStatus, NewFeature, State, Theme } from "../shared/types.ts";
 import { CopilotClient } from "@github/copilot-sdk";
 import { ClaudeProvider, Inbox } from "./core/agents/claude.ts";
 import { copilotEnv, CopilotProvider } from "./core/agents/copilot.ts";
@@ -25,6 +25,8 @@ import {
   saveLocalConfig,
   type SecretCodec,
 } from "./core/config.ts";
+import { availableApps, openIn, realMachine } from "./core/apps.ts";
+import { conductorImport, conductorRules } from "./core/conductor.ts";
 import { changes, filePatch } from "./core/diff.ts";
 import { doctor } from "./core/doctor.ts";
 import { checkRepo, Features, scanRepos } from "./core/features.ts";
@@ -221,6 +223,26 @@ ipcMain.handle("jira:issue", (_e, key: string) => attempt(() => needJira().issue
 ipcMain.handle("jira:mine", () => attempt(() => needJira().myIssues()));
 ipcMain.handle("jira:feature", (_e, featureId: string) => features.jiraOf(featureId));
 ipcMain.handle("jira:setTask", (_e, featureId: string, key: string | null) => features.setTask(featureId, key));
+ipcMain.handle("feature:details", (_e, featureId: string, details: { title?: string; status?: FeatureStatus }) =>
+  features.setDetails(featureId, details),
+);
+ipcMain.handle("feature:scripts", (_e, featureId: string, repo: string) => {
+  const r = featureById(featureId)?.repos.find((x) => x.name === repo);
+  return r ? features.scriptsFor(r.name, r.source) : {};
+});
+ipcMain.handle("conductor:import", () => attempt(() => conductorImport(new Set(localConfig.repos.map((r) => r.path)))));
+ipcMain.handle("config:repoRules", (_e, path: string) => conductorRules(path));
+ipcMain.handle("apps:list", () => availableApps(realMachine(), localConfig.openWith));
+ipcMain.handle("apps:open", (_e, app: AppId, path: string) =>
+  attempt(() => {
+    // Only folders Caboose knows: features, their worktrees, configured repos.
+    const known =
+      store.get().features.some((f) => f.folder === path || f.repos.some((r) => r.path === path)) ||
+      localConfig.repos.some((r) => r.path === path);
+    if (!known) throw new Error(`Not a folder Caboose knows: ${path}`);
+    openIn(app, path, realMachine(), localConfig.openWith?.[app]);
+  }),
+);
 ipcMain.handle("jira:setSubtask", (_e, featureId: string, repo: string, key: string | null) =>
   features.setSubtask(featureId, repo, key),
 );
@@ -237,13 +259,6 @@ ipcMain.handle("feature:archive", (_e, id: string) => {
 ipcMain.handle("feature:copyLocalFiles", (_e, featureId: string, repo: string) => features.copyLocalFilesAgain(featureId, repo));
 ipcMain.handle("feature:restore", (_e, id: string) => features.restore(id));
 ipcMain.handle("feature:setupLog", (_e, id: string, repo: string) => features.setupLog(id, repo));
-ipcMain.handle("feature:repoConfig", (_e, featureId: string, repo: string) => {
-  try {
-    return loadRepoConfig(liveRepo(featureId, repo).r.source);
-  } catch {
-    return {};
-  }
-});
 ipcMain.handle("shell:openPath", (_e, path: string) => {
   // Only folders Caboose knows about.
   const known = store.get().features.some((f) => f.folder === path || f.repos.some((r) => r.path === path));
@@ -393,12 +408,13 @@ ipcMain.handle("term:openShell", (_e, featureId: string, repo?: string) =>
     return terminals.openShell(f.id, { cwd, env: features.scriptEnv(f.id, repo) }, repo);
   }),
 );
-ipcMain.handle("term:run", (_e, featureId: string, repo: string) =>
+ipcMain.handle("term:run", (_e, featureId: string, repo: string, script?: string) =>
   attempt(() => {
     const { f, r } = liveRepo(featureId, repo);
-    const run = loadRepoConfig(r.source).run;
-    if (!run) throw new Error(`No run script. Add "run" to caboose.json in ${r.name}.`);
-    return terminals.run(f.id, r.name, run, { cwd: r.path, env: features.scriptEnv(f.id, r.name) });
+    const runs = features.scriptsFor(r.name, r.source).run ?? [];
+    const run = runs.find((x) => x.name === script) ?? (script ? undefined : runs[0]);
+    if (!run) throw new Error(`No run script${script ? ` "${script}"` : ""} for ${r.name}. Add one in Configure → Repositories.`);
+    return terminals.run(f.id, r.name, run.command, { cwd: r.path, env: features.scriptEnv(f.id, r.name) }, run.name);
   }),
 );
 ipcMain.handle("term:stop", (_e, id: string) => terminals.stop(id));

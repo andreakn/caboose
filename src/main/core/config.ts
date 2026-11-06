@@ -28,6 +28,8 @@ export type ResolvedLocalConfig = {
   bashPath?: string;
   shellPath?: string;
   terminalFont?: string;
+  prInstructions?: string;
+  openWith?: LocalConfig["openWith"];
 };
 
 export const configFile = (cabooseDir: string) => join(cabooseDir, FILE);
@@ -53,6 +55,8 @@ export function loadLocalConfig(cabooseDir: string): ResolvedLocalConfig {
     bashPath: c.bashPath,
     shellPath: c.shellPath,
     terminalFont: c.terminalFont,
+    prInstructions: c.prInstructions,
+    openWith: c.openWith,
   };
 }
 

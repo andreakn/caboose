@@ -10,6 +10,7 @@ import {
 } from "../../shared/github.ts";
 import type { Feature, FeatureRepo, JiraLevel } from "../../shared/types.ts";
 import { activeChat } from "./Chat.tsx";
+import { OpenInMenu } from "./Menu.tsx";
 
 const api = window.caboose;
 
@@ -61,6 +62,7 @@ export function RepoRow(props: {
   subtask?: string;
   hasTask: boolean;
   jiraSite?: string;
+  prInstructions?: string;
   onJiraChanged: () => void;
   onAskedAgent: () => void;
 }) {
@@ -89,7 +91,7 @@ export function RepoRow(props: {
 
   function createPr(draft: boolean) {
     if (props.jiraLevel === "expected" && !jiraKey && !confirm("This PR has no Jira issue. Create it anyway?")) return;
-    void askAgent(createPrMessage(repo.name, repo.branch, repo.baseRef, draft, jiraKey));
+    void askAgent(createPrMessage(repo.name, repo.branch, repo.baseRef, draft, jiraKey, props.prInstructions));
   }
 
   const b = status?.branch;
@@ -120,12 +122,22 @@ export function RepoRow(props: {
             jiraKey={props.subtask}
             site={props.jiraSite}
             onSet={(key) => act("Saving…", () => api.setRepoSubtask(feature.id, repo.name, key))}
-            onCreate={props.hasTask ? () => act("Creating subtask…", () => api.createSubtask(feature.id, repo.name)) : undefined}
+            onCreate={
+              props.hasTask
+                ? () =>
+                    act("Creating subtask…", async () => {
+                      const r = await api.createSubtask(feature.id, repo.name);
+                      if (r.ok && r.value.renamed.length) alert(`Branch renamed to ${r.value.renamed[0].to}`);
+                      return r;
+                    })
+                : undefined
+            }
           />
         )}
         <span className="muted repo-local">{local.join(" · ")}</span>
         {busy && <span className="muted">{busy}</span>}
         <span className="spacer" />
+        {!feature.archived && <OpenInMenu path={repo.path} label="Open ▾" />}
 
         {status && !status.available && (
           <span className="muted" title={status.reason}>

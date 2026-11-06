@@ -4,7 +4,17 @@
 import { randomUUID } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import type { Feature, FeatureJira, FeatureRepo, NewFeature, RepoEntry, Result } from "../../shared/types.ts";
+import type {
+  Feature,
+  FeatureJira,
+  FeatureRepo,
+  FeatureStatus,
+  JiraAlignment,
+  NewFeature,
+  RepoEntry,
+  RepoScripts,
+  Result,
+} from "../../shared/types.ts";
 import { loadRepoConfig, type ResolvedLocalConfig } from "./config.ts";
 import * as g from "./git.ts";
 import { type Jira, parseKey, readFeatureJira, writeFeatureJira } from "./jira.ts";
@@ -75,6 +85,8 @@ export class Features {
         id: randomUUID(),
         name,
         folder,
+        ...(input.title?.trim() ? { title: input.title.trim() } : {}),
+        status: "active",
         createdAt: new Date().toISOString(),
         archived: false,
         port: this.freePort(),
@@ -101,24 +113,27 @@ export class Features {
       const root = await g.repoRoot(repo.path);
       if (!root) return fail(`${repo.path} is not a git repository.`);
 
+      // With a Jira task, every repo gets its own subtask, and its key goes in the branch.
       const jira = readFeatureJira(f.folder);
-      if (jira.task && !jira.subtasks[repo.name] && this.config.jira.level === "required") {
-        const j = this.requireJira();
-        const summary = taskSummary || (await j.issue(jira.task)).summary;
-        jira.subtasks[repo.name] = await j.createSubtask(jira.task, `${repo.name}: ${summary}`);
-        writeFeatureJira(f.folder, jira);
+      if (jira.task && !jira.subtasks[repo.name] && this.config.jira.level !== "off") {
+        const j = this.config.jira.level === "required" ? this.requireJira() : this.jira();
+        if (j) {
+          const summary = taskSummary || (await j.issue(jira.task)).summary;
+          jira.subtasks[repo.name] = await j.createSubtask(jira.task, `${repo.name}: ${summary}`);
+          writeFeatureJira(f.folder, jira);
+        }
       }
       const key = jira.subtasks[repo.name] ?? jira.task;
 
       await g.fetchOrigin(root).catch(() => {}); // offline is fine: branch from what we have
       const baseRef = await g.defaultBaseRef(root);
-      const branch = await this.freeBranch(root, `${this.config.branchPrefix}/${key ? `${key}-` : ""}${f.name}`);
+      const branch = await this.freeBranch(root, this.branchName(f, key));
       const path = join(f.folder, repo.name);
       if (existsSync(path)) return fail(`${path} already exists.`);
       await g.addWorktree(root, path, branch, baseRef);
 
       // The gitignored files it needs to run (.env, *.local.*), before setup runs.
-      const repoConfig = loadRepoConfig(root);
+      const scripts = this.scriptsFor(repo.name, root);
       const copied = await findLocalFiles(root, this.localFilePatterns(repo.name, root));
       copyLocalFiles(root, path, copied);
       const fr: FeatureRepo = {
@@ -127,11 +142,11 @@ export class Features {
         path,
         branch,
         baseRef,
-        setup: repoConfig.setup ? "running" : "none",
+        setup: scripts.setup ? "running" : "none",
         copied,
       };
       this.patch(featureId, (x) => ({ ...x, repos: [...x.repos, fr] }));
-      if (repoConfig.setup) void this.runSetup(featureId, fr, repoConfig.setup);
+      if (scripts.setup) void this.runSetup(featureId, fr, scripts.setup);
       return ok(undefined);
     } catch (e) {
       return fail(e);
@@ -144,7 +159,7 @@ export class Features {
     if (!f) return fail("Unknown feature.");
     try {
       for (const r of f.repos) {
-        const archive = loadRepoConfig(r.source).archive;
+        const archive = this.scriptsFor(r.name, r.source).archive;
         if (archive && existsSync(r.path)) {
           await runScript(archive, r.path, this.logFile(f, r.name), this.scriptEnv(featureId, r.name), this.config.bashPath);
         }
@@ -172,10 +187,10 @@ export class Features {
         ...x,
         archived: false,
         port: this.freePort(featureId),
-        repos: x.repos.map((r) => ({ ...r, setup: loadRepoConfig(r.source).setup ? "running" : "none" })),
+        repos: x.repos.map((r) => ({ ...r, setup: this.scriptsFor(r.name, r.source).setup ? "running" : "none" })),
       }));
       for (const r of this.get(featureId)!.repos) {
-        const setup = loadRepoConfig(r.source).setup;
+        const setup = this.scriptsFor(r.name, r.source).setup;
         if (setup) void this.runSetup(featureId, r, setup);
       }
       return ok(undefined);
@@ -216,13 +231,90 @@ export class Features {
     return f ? readFeatureJira(f.folder) : { subtasks: {} };
   }
 
-  setTask(featureId: string, key: string | null): Result<void> {
+  /**
+   * Links the feature's task (null unlinks it). Linking makes every repo match:
+   * a subtask per repo (when Jira is connected) and its key in the branch name
+   * of branches not pushed yet.
+   */
+  async setTask(featureId: string, key: string | null): Promise<Result<JiraAlignment>> {
     const f = this.get(featureId);
     if (!f) return fail("Unknown feature.");
     const parsed = key === null ? undefined : parseKey(key);
     if (key !== null && !parsed) return fail(`"${key}" is not a Jira key.`);
     writeFeatureJira(f.folder, { ...readFeatureJira(f.folder), task: parsed ?? undefined });
+    if (!parsed) return ok({ created: [], renamed: [], skipped: [] });
+    return this.alignWithJira(featureId);
+  }
+
+  /** Subtasks for repos without one (if Jira is connected), then keys into unpushed branches. */
+  async alignWithJira(featureId: string, only?: string): Promise<Result<JiraAlignment>> {
+    const f = this.get(featureId);
+    if (!f) return fail("Unknown feature.");
+    const out: JiraAlignment = { created: [], renamed: [], skipped: [] };
+    try {
+      const jira = readFeatureJira(f.folder);
+      if (!jira.task) return fail("Link the feature to a Jira task first.");
+      const j = this.jira();
+      const repos = f.repos.filter((r) => !only || r.name === only);
+      if (j) {
+        let summary: string | undefined;
+        for (const r of repos) {
+          if (jira.subtasks[r.name]) continue;
+          summary ??= (await j.issue(jira.task)).summary;
+          jira.subtasks[r.name] = await j.createSubtask(jira.task, `${r.name}: ${summary}`);
+          out.created.push(jira.subtasks[r.name]);
+          writeFeatureJira(f.folder, jira);
+        }
+      }
+      for (const r of repos) {
+        const key = jira.subtasks[r.name] ?? jira.task;
+        if (r.branch.includes(key) || f.archived) continue;
+        if (await g.hasUpstream(r.path)) {
+          out.skipped.push(r.name); // pushed: renaming would cut it off from its PR
+          continue;
+        }
+        const to = await this.freeBranch(r.source, this.branchName(f, key));
+        await g.renameBranch(r.path, r.branch, to);
+        this.setBranch(featureId, r.name, to);
+        out.renamed.push({ repo: r.name, from: r.branch, to });
+      }
+      return ok(out);
+    } catch (e) {
+      return out.created.length || out.renamed.length ? ok(out) : fail(e);
+    }
+  }
+
+  setDetails(featureId: string, details: { title?: string; status?: FeatureStatus }): Result<void> {
+    if (!this.get(featureId)) return fail("Unknown feature.");
+    this.patch(featureId, (f) => ({
+      ...f,
+      ...(details.title !== undefined ? { title: details.title.trim() || undefined } : {}),
+      ...(details.status ? { status: details.status } : {}),
+    }));
     return ok(undefined);
+  }
+
+  /** `<prefix>/<KEY>-<station>` with a Jira key, else `<prefix>/<station>`. */
+  private branchName(f: Feature, key?: string): string {
+    return `${this.config.branchPrefix}/${key ? `${key}-` : ""}${f.name}`;
+  }
+
+  /** A repo's scripts: the config's, plus what its caboose.json adds (setup/archive only where the config has none). */
+  scriptsFor(repoName: string, root: string): RepoScripts {
+    const configured = this.config.repos.find((r) => r.name === repoName)?.scripts ?? {};
+    let own: ReturnType<typeof loadRepoConfig> = {};
+    try {
+      own = loadRepoConfig(root);
+    } catch {
+      // a broken caboose.json should not stop the feature
+    }
+    const run = [...(configured.run ?? [])];
+    if (own.run && !run.some((r) => r.command === own.run)) run.push({ name: run.some((r) => r.name === "run") ? "caboose.json" : "run", command: own.run });
+    return {
+      setup: configured.setup || own.setup,
+      archive: configured.archive || own.archive,
+      ...(run.length ? { run } : {}),
+    };
   }
 
   setSubtask(featureId: string, repo: string, key: string | null): Result<void> {
@@ -239,20 +331,14 @@ export class Features {
     return ok(undefined);
   }
 
-  async createSubtask(featureId: string, repo: string): Promise<Result<string>> {
-    const f = this.get(featureId);
-    if (!f) return fail("Unknown feature.");
+  /** Creates the repo's subtask and puts its key in the repo's branch (if not pushed yet). */
+  async createSubtask(featureId: string, repo: string): Promise<Result<JiraAlignment>> {
     try {
-      const j = readFeatureJira(f.folder);
-      if (!j.task) return fail("Link the feature to a Jira task first.");
-      const jira = this.requireJira();
-      const key = await jira.createSubtask(j.task, `${repo}: ${(await jira.issue(j.task)).summary}`);
-      j.subtasks[repo] = key;
-      writeFeatureJira(f.folder, j);
-      return ok(key);
+      this.requireJira();
     } catch (e) {
       return fail(e);
     }
+    return this.alignWithJira(featureId, repo);
   }
 
   setBranch(featureId: string, repo: string, branch: string): void {

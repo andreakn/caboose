@@ -28,6 +28,12 @@ const api: CabooseApi = {
   setFeatureTask: invoke("jira:setTask"),
   setRepoSubtask: invoke("jira:setSubtask"),
   previewLocalFiles: invoke("config:previewLocalFiles"),
+  setFeatureDetails: invoke("feature:details"),
+  repoScripts: invoke("feature:scripts"),
+  conductorImport: invoke("conductor:import"),
+  repoRules: invoke("config:repoRules"),
+  apps: invoke("apps:list"),
+  openIn: invoke("apps:open"),
   copyLocalFilesAgain: invoke("feature:copyLocalFiles"),
   createSubtask: invoke("jira:createSubtask"),
 
@@ -37,7 +43,6 @@ const api: CabooseApi = {
   restoreFeature: invoke("feature:restore"),
   openPath: invoke("shell:openPath"),
   setupLog: invoke("feature:setupLog"),
-  repoConfig: invoke("feature:repoConfig"),
 
   createChat: invoke("chat:create"),
   models: invoke("chat:models"),

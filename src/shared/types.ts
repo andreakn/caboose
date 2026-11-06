@@ -5,10 +5,18 @@ import type { GitHubStatus, MergeMethod } from "./github.ts";
 
 export type SetupState = "none" | "running" | "ok" | "failed";
 
+/** A repo's scripts: setup when a worktree is made, named run scripts, archive before it is removed. */
+export type RepoScripts = {
+  setup?: string;
+  archive?: string;
+  run?: { name: string; command: string }[];
+};
+
 /** A repo the user works in, from the config: its name is also its folder name inside a feature. */
 export type RepoEntry = {
   name: string;
   path: string;
+  scripts?: RepoScripts;
   /**
    * Gitignored files to copy from the main checkout into each new worktree
    * (.env, *.local.*, …), as gitignore-style patterns. Absent: the defaults.
@@ -32,11 +40,18 @@ export type FeatureRepo = {
   copied?: string[];
 };
 
+export type FeatureStatus = "planning" | "active" | "review" | "done" | "paused";
+export const FEATURE_STATUSES: FeatureStatus[] = ["planning", "active", "review", "done", "paused"];
+
 /** A piece of work: a station name, a folder, and one worktree per repo. */
 export type Feature = {
   id: string;
   /** The station name, also the folder name. */
   name: string;
+  /** What it is about, in words (optional; the station name is the id). */
+  title?: string;
+  /** Absent = active. */
+  status?: FeatureStatus;
   /** Absolute path to the feature's folder. */
   folder: string;
   createdAt: string;
@@ -112,6 +127,29 @@ export type LocalConfig = {
   shellPath?: string;
   /** Font for terminals, e.g. a Nerd Font your prompt needs. Default: common Nerd/Powerline fonts, then monospace. */
   terminalFont?: string;
+  /** How PRs should be written (title, description style); added to Create PR requests to the agent. */
+  prInstructions?: string;
+  /** Commands to open a folder in an app, overriding detection; "{path}" is replaced. */
+  openWith?: Partial<Record<AppId, string>>;
+};
+
+/** Apps a folder can be opened in. */
+export type AppId = "vscode" | "rider" | "visualStudio" | "terminal" | "files";
+export type AppInfo = { id: AppId; label: string };
+
+/** A repo offered for import from Conductor, with what was found for it. */
+export type ImportCandidate = RepoEntry & {
+  exists: boolean;
+  /** Where its local-file rules came from (".worktreeinclude", ".conductor/settings.local.toml", …). */
+  rulesFrom: string;
+  alreadyConfigured: boolean;
+};
+
+export type ConductorImport = {
+  available: boolean;
+  repos: ImportCandidate[];
+  /** Conductor's global "create PR" prompt, if any. */
+  prInstructions?: string;
 };
 
 /** The config as the window sees it: the token is never sent, only whether there is one. */
@@ -133,11 +171,15 @@ export type ConfigInfo = {
 
 export type JiraIssue = { key: string; summary: string; status: string; type: string; url: string; subtasks?: { key: string; summary: string }[] };
 
+/** What linking Jira changed: subtasks created and branches renamed to carry their keys. */
+export type JiraAlignment = { created: string[]; renamed: { repo: string; from: string; to: string }[]; skipped: string[] };
+
 /** The Jira links of a feature, as written in its jira.txt. */
 export type FeatureJira = { task?: string; subtasks: Record<string, string> };
 
 export type NewFeature = {
   repos: string[];
+  title?: string;
   /** An existing task key, or the summary of a task to create in the configured project. */
   jira?: { key: string } | { create: string };
 };
@@ -193,13 +235,22 @@ export type CabooseApi = {
   jiraIssue(key: string): Promise<Result<JiraIssue>>;
   jiraMyIssues(): Promise<Result<JiraIssue[]>>;
   featureJira(featureId: string): Promise<FeatureJira>;
-  setFeatureTask(featureId: string, key: string | null): Promise<Result<void>>;
+  /** Links (or unlinks) the feature's task; linking adds subtasks and puts their keys in unpushed branches. */
+  setFeatureTask(featureId: string, key: string | null): Promise<Result<JiraAlignment>>;
+  setFeatureDetails(featureId: string, details: { title?: string; status?: FeatureStatus }): Promise<Result<void>>;
+  /** The repo's scripts: from the config, plus its own caboose.json. */
+  repoScripts(featureId: string, repo: string): Promise<RepoScripts>;
+  conductorImport(): Promise<Result<ConductorImport>>;
+  /** Local-file rules a repo itself declares (.worktreeinclude, .conductor/*.toml), if any. */
+  repoRules(repoPath: string): Promise<{ patterns: string[]; from: string } | null>;
+  apps(): Promise<AppInfo[]>;
+  openIn(app: AppId, path: string): Promise<Result<void>>;
   setRepoSubtask(featureId: string, repo: string, key: string | null): Promise<Result<void>>;
   /** The files these patterns would copy from a repo's main checkout. */
   previewLocalFiles(repoPath: string, patterns: string[]): Promise<Result<{ copy: string[]; notIgnored: string[] }>>;
   /** Copies the repo's local files into the feature again, overwriting. */
   copyLocalFilesAgain(featureId: string, repo: string): Promise<Result<string[]>>;
-  createSubtask(featureId: string, repo: string): Promise<Result<string>>;
+  createSubtask(featureId: string, repo: string): Promise<Result<JiraAlignment>>;
 
   createFeature(f: NewFeature): Promise<Result<Feature>>;
   addRepoToFeature(featureId: string, repo: string): Promise<Result<void>>;
@@ -207,7 +258,6 @@ export type CabooseApi = {
   restoreFeature(featureId: string): Promise<Result<void>>;
   openPath(path: string): Promise<void>;
   setupLog(featureId: string, repo: string): Promise<string>;
-  repoConfig(featureId: string, repo: string): Promise<RepoConfig>;
 
   createChat(featureId: string, agent?: Agent): Promise<Result<Chat>>;
   models(agent: Agent): Promise<Result<ModelOption[]>>;
@@ -256,7 +306,8 @@ export type CabooseApi = {
   terminals(): Promise<Terminal[]>;
   /** A shell in one of the feature's repos, or in the feature folder. */
   openShell(featureId: string, repo?: string): Promise<Result<Terminal>>;
-  runScript(featureId: string, repo: string): Promise<Result<Terminal>>;
+  /** Runs one of the repo's run scripts (by name; absent = the first). */
+  runScript(featureId: string, repo: string, script?: string): Promise<Result<Terminal>>;
   stopTerminal(id: string): Promise<void>;
   closeTerminal(id: string): Promise<void>;
   termWrite(id: string, data: string): void;

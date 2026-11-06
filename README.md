@@ -27,7 +27,9 @@ The first launch opens the **Configure** screen: pick where features go, add
 your repositories, and optionally connect Jira. It writes `caboose.local.json`
 (gitignored; see `caboose.local.example.json`). "⚙ Configure" opens it again.
 
-Each repo in Configure has **local files** rules: the gitignored files a new
+Configure can **import your repos from Conductor** (with their copy rules,
+scripts and your create-PR prompt). Each repo has **scripts** (setup, named run
+scripts, archive), and **local files** rules: the gitignored files a new
 feature copies from the repo's main checkout so it can run (defaults `.env*`
 and `*.local.*`; .gitignore-style patterns, with a live preview).
 

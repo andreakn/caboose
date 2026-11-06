@@ -304,6 +304,45 @@ own rules.
     "↻ copy again" brings them over again from the main checkout,
     overwriting the feature's copies.
 
+## cross_conductor parity, phases 1–2 (2026-11-06)
+
+See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
+
+84. **Import from Conductor** (Configure → Repositories): reads Conductor's
+    database read-only with Node's built-in `node:sqlite` (no native module;
+    works in Electron 45). Repos (one per checkout), their copy rules in
+    Conductor's order (`.worktreeinclude`, `file_include_globs` in
+    `.conductor/settings.local.toml` then `settings.toml`, the DB, the global
+    `~/.conductor/settings.toml`, else `.env*`), their scripts, and the global
+    create-PR prompt as Caboose's PR instructions. Only on macOS (where
+    Conductor is); nothing is written to Conductor.
+85. **Repos added by hand** pick up rules from `.worktreeinclude` /
+    `.conductor/*.toml` too, on any OS. A ~150-line TOML reader
+    (`core/toml.ts`) covers what those files use.
+86. **Scripts per repo in the machine config** (setup, named run scripts,
+    archive), with the repo's `caboose.json` adding to them. The Run menu lists
+    every repo's scripts; "Run all" starts each repo's first script. Each runs
+    in its own terminal tab (`<repo>: <script>`).
+87. **PR instructions** in the config are added to every Create PR request.
+    *(Note: with a Jira key, Caboose also asks for the title to start with the
+    key; your imported Conductor prompt says "no ticket prefix" — edit one of
+    them if they disagree.)*
+88. **Open in** per repo and for the feature folder: VS Code everywhere;
+    Rider on macOS/Windows (the single `.sln`/`.slnx` if there is one); Visual
+    Studio on Windows (`devenv`, newest year/edition found); terminal = iTerm,
+    Ghostty, Warp or Terminal on macOS, Windows Terminal (else PowerShell) on
+    Windows, the first of gnome-terminal/konsole/xfce4-terminal/kitty/alacritty/
+    wezterm/x-terminal-emulator/xterm on Linux; Finder/Explorer/xdg-open.
+    Only folders Caboose knows can be opened. `openWith` in the config
+    overrides any app with a command (`{path}`). *(Linux: no Rider/Visual
+    Studio, per Andreas; the terminal is whichever is installed.)*
+89. **Title and status** (planning, active, review, done, paused) on features;
+    the station name stays the id and folder name.
+90. **A feature with a Jira task gives every repo a subtask** (when Jira is
+    connected), at any level, not only "required". Linking a task later
+    creates the missing subtasks and renames branches that are not pushed yet
+    to `<prefix>/<SUBTASK>-<station>`; pushed ones are left alone and reported.
+
 ## Answered (2026-11-05)
 
 - Private GitHub repo `andreakn/caboose`: yes.
