@@ -12,6 +12,8 @@ export type OverviewDeps = {
   prs: PrDetailsCache;
   jira: () => Jira | null;
   jiraOf: (featureId: string) => FeatureJira;
+  /** Called when a worktree is on another branch than the one recorded (switched by an agent or by hand). */
+  onBranch?: (featureId: string, repo: string, branch: string) => void;
 };
 
 const jiraCache = new Map<string, { at: number; value: Promise<Record<string, JiraStatus>> }>();
@@ -37,7 +39,10 @@ export async function featureOverview(f: Feature, d: OverviewDeps, fresh = false
     Promise.all(f.repos.map((r) => (live ? d.github.branchStatus(r.path, r.baseRef).catch(() => null) : null))),
     Promise.all(f.repos.map((r) => slugOf(r.source))),
   ]);
-  const queries = f.repos.flatMap((r, i) => (slugs[i] ? [{ repo: r.name, slug: slugs[i]!, branch: r.branch }] : []));
+  // PRs are looked up by the branch checked out now, not the one Caboose made the worktree with.
+  const branches = f.repos.map((r, i) => locals[i]?.head ?? r.branch);
+  f.repos.forEach((r, i) => branches[i] !== r.branch && d.onBranch?.(f.id, r.name, branches[i]));
+  const queries = f.repos.flatMap((r, i) => (slugs[i] ? [{ repo: r.name, slug: slugs[i]!, branch: branches[i] }] : []));
   const prs = await d.prs.get(queries, fresh).catch((e: Error) => ({ prs: {}, error: e.message }) as { prs: Record<string, never>; error?: string });
   if (prs.error) errors.push(`GitHub: ${prs.error}`);
 
@@ -56,7 +61,7 @@ export async function featureOverview(f: Feature, d: OverviewDeps, fresh = false
       const b = locals[i];
       return {
         name: r.name,
-        branch: r.branch,
+        branch: branches[i],
         reported: reported[r.name],
         local: b ? { uncommitted: b.uncommitted, ahead: b.ahead, behindBase: b.behindBase, pushed: Boolean(b.upstream) } : undefined,
         pr: slugs[i] ? (r.name in prs.prs ? prs.prs[r.name] : undefined) : undefined,

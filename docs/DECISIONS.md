@@ -504,6 +504,12 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      Terminals), the same format cross_conductor reads; nothing depends on
      it but labels.
 
+122. **Caboose follows the branch a worktree is on now**, not only the one it
+     made: an agent (or you) may switch to a branch named after the Jira
+     task (`NWP-8241_FixViaStartupMapping`). PRs are looked up by the
+     checked-out branch, and the recorded branch is updated, so push, merge
+     and renames use it too. A detached HEAD keeps the recorded one.
+
 ## Answered (2026-11-05)
 
 - Private GitHub repo `andreakn/caboose`: yes.

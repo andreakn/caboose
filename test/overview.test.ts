@@ -46,3 +46,26 @@ test("the overview joins reports, git, PRs and Jira per repo", async () => {
   assert.equal((web.jira as { status: string }).status, "Done");
   assert.deepEqual(api.jira, { key: "NWP-3" }, "unknown to Jira: just the key");
 });
+
+test("PRs are looked up by the branch the worktree is on now, and the switch is recorded", async () => {
+  const src = join(tmp, "src-via");
+  execFileSync("git", ["init", "-q", src]);
+  execFileSync("git", ["remote", "add", "origin", "git@github.com:o/via.git"], { cwd: src });
+  const f: Feature = {
+    id: "g", name: "tinglev", folder: join(tmp, "tinglev"), createdAt: "", archived: false, port: 41000,
+    repos: [{ name: "via", source: src, path: src, branch: "caboose/tinglev", baseRef: "main", setup: "none" }],
+  };
+  const asked: unknown[] = [];
+  const switched: string[] = [];
+  const ov = await featureOverview(f, {
+    github: { branchStatus: async () => ({ head: "NWP-8241_FixViaStartupMapping", uncommitted: 0, ahead: 0, behind: 0, behindBase: 0 }) } as never,
+    prs: { get: async (qs: unknown) => (asked.push(qs), { prs: { via: { number: 546, state: "MERGED" } } }) } as never,
+    jira: () => null,
+    jiraOf: () => ({ subtasks: {} }),
+    onBranch: (id, repo, branch) => switched.push(`${id}/${repo}:${branch}`),
+  });
+  assert.deepEqual(asked, [[{ repo: "via", slug: "o/via", branch: "NWP-8241_FixViaStartupMapping" }]]);
+  assert.equal(ov.repos[0].branch, "NWP-8241_FixViaStartupMapping");
+  assert.equal(ov.repos[0].pr?.number, 546);
+  assert.deepEqual(switched, ["g/via:NWP-8241_FixViaStartupMapping"]);
+});

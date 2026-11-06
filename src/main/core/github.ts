@@ -19,13 +19,14 @@ export class GitHub {
     const branchStatus = await this.branchStatus(wsPath, baseRef);
     const reason = await this.unavailable(wsPath);
     if (reason) return { available: false, reason, branch: branchStatus };
-    return { available: true, branch: branchStatus, pr: await this.pr(wsPath, branch) };
+    return { available: true, branch: branchStatus, pr: await this.pr(wsPath, branchStatus.head ?? branch) };
   }
 
   async branchStatus(wsPath: string, baseRef: string): Promise<BranchStatus> {
     const out = await git(wsPath, "status", "--porcelain=v2", "--branch");
     const lines = out.split("\n");
     const upstream = lines.find((l) => l.startsWith("# branch.upstream "))?.slice(18);
+    const head = lines.find((l) => l.startsWith("# branch.head "))?.slice(14);
     const ab = /# branch\.ab \+(\d+) -(\d+)/.exec(out);
     const uncommitted = lines.filter((l) => l && !l.startsWith("#")).length;
     const count = (range: string) =>
@@ -33,6 +34,7 @@ export class GitHub {
         .then(Number)
         .catch(() => 0);
     return {
+      ...(head && head !== "(detached)" ? { head } : {}),
       uncommitted,
       upstream,
       ahead: ab ? Number(ab[1]) : await count(`${baseRef}..HEAD`),

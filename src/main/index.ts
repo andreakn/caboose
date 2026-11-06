@@ -366,7 +366,7 @@ ipcMain.handle("docs:note", (_e, featureId: string, to: string | undefined, text
 ipcMain.handle("docs:status", (_e, featureId: string) => coordinator.status(featureId));
 const prDetails = new PrDetailsCache();
 ipcMain.handle("feature:overview", (_e, featureId: string, fresh?: boolean) =>
-  featureOverview(featureOrThrow(featureId), { github, prs: prDetails, jira, jiraOf: (id) => features.jiraOf(id) }, Boolean(fresh)),
+  featureOverview(featureOrThrow(featureId), { github, prs: prDetails, jira, jiraOf: (id) => features.jiraOf(id), onBranch: (id, repo, branch) => features.setBranch(id, repo, branch) }, Boolean(fresh)),
 );
 ipcMain.handle("chat:models", (_e, agent: Agent) => attempt(() => chats.models(agent)));
 ipcMain.handle("chat:remove", (_e, chatId: string) => chats.remove(chatId));
@@ -416,9 +416,12 @@ ipcMain.handle("comments:send", (_e, featureId: string, chatId: string) => {
 
 // --- github
 ipcMain.handle("github:status", (_e, featureId: string, repo: string) =>
-  attempt(() => {
-    const { r } = liveRepo(featureId, repo);
-    return github.status(r.path, r.branch, r.baseRef);
+  attempt(async () => {
+    const { f, r } = liveRepo(featureId, repo);
+    const s = await github.status(r.path, r.branch, r.baseRef);
+    // Follow the branch the worktree is on now (an agent may have made one with the Jira key in it).
+    if (s.branch.head && s.branch.head !== r.branch) features.setBranch(f.id, r.name, s.branch.head);
+    return s;
   }),
 );
 ipcMain.handle("github:push", (_e, featureId: string, repo: string) =>

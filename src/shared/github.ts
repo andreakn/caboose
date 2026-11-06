@@ -16,6 +16,8 @@ export type PullRequest = {
 };
 
 export type BranchStatus = {
+  /** The branch checked out now (an agent or you may have switched it); absent when detached. */
+  head?: string;
   /** Changed or untracked files not committed yet. */
   uncommitted: number;
   /** The upstream branch, once pushed. */

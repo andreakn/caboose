@@ -28,7 +28,7 @@ test("branch status counts uncommitted files and unpushed commits, before and af
   sh(ws, "commit", "-q", "-m", "a");
   writeFileSync(join(ws, "b.txt"), "b");
   let s = await gh.branchStatus(ws, "origin/main");
-  assert.deepEqual(s, { uncommitted: 1, upstream: undefined, ahead: 1, behind: 0, behindBase: 0 });
+  assert.deepEqual(s, { head: "caboose/finse", uncommitted: 1, upstream: undefined, ahead: 1, behind: 0, behindBase: 0 });
 
   await gh.push(ws, "caboose/finse");
   s = await gh.branchStatus(ws, "origin/main");
