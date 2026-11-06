@@ -48,6 +48,13 @@ import { installMenu } from "./menu.ts";
 app.setName("Caboose");
 // CABOOSE_DATA points the app at another state folder (screenshots, experiments).
 if (process.env.CABOOSE_DATA) app.setPath("userData", process.env.CABOOSE_DATA);
+// One Caboose per state folder: a second start (e.g. typing `caboose` again) shows the open window instead.
+if (!app.requestSingleInstanceLock()) process.exit(0);
+app.on("second-instance", () => {
+  if (win?.isMinimized()) win.restore();
+  win?.show();
+  win?.focus();
+});
 
 const dataDir = app.getPath("userData");
 const store = new Store(join(dataDir, "state.json"));
