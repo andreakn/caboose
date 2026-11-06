@@ -7,6 +7,7 @@ import {
   FEATURE_STATUSES,
   type FeatureJira,
   type JiraAlignment,
+  type LogEntry,
   type RepoScripts,
   type Result,
   type State,
@@ -19,7 +20,9 @@ import { dispatch, useCommand } from "./commands.ts";
 import { Configure } from "./Configure.tsx";
 import { JiraChip, RepoRow } from "./GitHub.tsx";
 import { MenuButton, OpenInMenu } from "./Menu.tsx";
+import { DialogHost } from "./Dialog.tsx";
 import { NewFeature } from "./NewFeature.tsx";
+import { PlanView, StatusChip, useDocs } from "./Plan.tsx";
 import { notificationsOn } from "./prefs.ts";
 import { TerminalPanel, useTerminals } from "./Terminals.tsx";
 
@@ -121,6 +124,7 @@ export function App() {
         <main className="main">
           <Configure onDone={() => void loadConfig()} />
         </main>
+        <DialogHost />
       </div>
     );
   }
@@ -191,6 +195,7 @@ export function App() {
           <Empty hasRepos={(config.config.repos ?? []).length > 0} onNew={() => setScreen("new")} />
         )}
       </main>
+      <DialogHost />
     </div>
   );
 }
@@ -230,7 +235,10 @@ function FeatureView(props: {
   onRestore: () => void;
 }) {
   const { feature: f, config } = props;
-  const [tab, setTab] = useState<"chat" | "changes">(location.hash === "#changes" ? "changes" : "chat");
+  const [tab, setTab] = useState<"chat" | "changes" | "plan">(location.hash === "#changes" ? "changes" : "chat");
+  const { docs, reload: reloadDocs } = useDocs(f);
+  const reported: Record<string, LogEntry | undefined> = {};
+  for (const e of docs?.log ?? []) if (e.status) reported[e.from] = e;
   const [repoTab, setRepoTab] = useState<string | null>(null);
   const diff = useFeatureChanges(f);
   const fileCount = Object.values(diff.byRepo).reduce((n, c) => n + (c?.files.length ?? 0), 0);
@@ -355,6 +363,11 @@ function FeatureView(props: {
         </div>
       </header>
 
+      <NeedsYou f={f} chats={props.chats} reported={reported} onOpenChat={(id) => {
+        setTab("chat");
+        setTimeout(() => dispatch(`selectChat:${id}`));
+      }} />
+
       <div className="repos">
         {f.repos.map((r) => (
           <RepoRow
@@ -368,6 +381,12 @@ function FeatureView(props: {
             hasTask={Boolean(jira.task)}
             jiraSite={site}
             prInstructions={config.config.prInstructions}
+            reported={reported[r.name]}
+            hasChat={props.chats.some((c) => c.repo === r.name)}
+            onChat={() => {
+              setTab("chat");
+              setTimeout(() => dispatch(`breakOut:${r.name}`));
+            }}
             onJiraChanged={() => void loadJira()}
             onAskedAgent={() => setTab("chat")}
           />
@@ -416,6 +435,14 @@ function FeatureView(props: {
         <button className={tab === "chat" ? "active" : ""} onClick={() => setTab("chat")}>
           Chat
         </button>
+        <button className={tab === "plan" ? "active" : ""} onClick={() => setTab("plan")}>
+          Plan
+          {docs && docs.progress.total > 0 && (
+            <span className="badge">
+              {docs.progress.done}/{docs.progress.total}
+            </span>
+          )}
+        </button>
         <button className={tab === "changes" ? "active" : ""} onClick={() => setTab("changes")}>
           Changes{fileCount > 0 && <span className="badge">{fileCount}</span>}
           {openComments > 0 && <span className="badge comments">💬{openComments}</span>}
@@ -433,6 +460,7 @@ function FeatureView(props: {
       </div>
 
       <ChatArea ws={f} chats={props.chats} hidden={tab !== "chat"} />
+      {tab === "plan" && <PlanView f={f} docs={docs} reload={() => void reloadDocs()} />}
       {tab === "changes" && shownRepo && (
         <ChangesView
           key={shownRepo.name}
@@ -460,6 +488,32 @@ function FeatureView(props: {
         activeId={termActive}
         setActiveId={setTermActive}
       />
+    </div>
+  );
+}
+
+/** Only what waits for you: chats with a question or approval, repos that reported needs-input or blocked. */
+function NeedsYou(props: { f: Feature; chats: Chat[]; reported: Record<string, LogEntry | undefined>; onOpenChat: (id: string) => void }) {
+  useActivityVersion();
+  const waiting = props.chats.filter((c) => activityOf([c.id]).waiting > 0);
+  const stuck = Object.entries(props.reported).filter(([, e]) => e && (e.status === "needs-input" || e.status === "blocked"));
+  if (!waiting.length && !stuck.length) return null;
+  return (
+    <div className="needs-you">
+      <b>Needs you:</b>
+      {waiting.map((c) => (
+        <button key={c.id} className="link" onClick={() => props.onOpenChat(c.id)}>
+          {c.repo ? `${c.repo}'s chat` : c.title} is asking
+        </button>
+      ))}
+      {stuck.map(([repo, e]) => {
+        const chat = props.chats.filter((c) => c.repo === repo).at(-1);
+        return (
+          <button key={repo} className="link" title={e!.text} onClick={() => chat && props.onOpenChat(chat.id)}>
+            {repo}: {e!.status} — {e!.text.split("\n")[0].slice(0, 80)}
+          </button>
+        );
+      })}
     </div>
   );
 }

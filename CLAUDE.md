@@ -15,6 +15,12 @@ GitHub Copilot) in parallel git worktrees. Personal/team-internal, never commerc
   window (`configView`).
 - **Local files** (`core/localfiles.ts`): only files git *ignores* are copied
   into a feature, never merely untracked ones (they would become changes).
+- **Central chat + repo chats** (`core/coordination.ts`): a chat without a repo
+  works in the feature folder; with one, in that repo's worktree. Caboose's
+  tools for agents are one table in `core/mcp.ts` (Claude MCP and Copilot
+  tools from the same definitions). Feature files (`brief.md`, `plan.md`,
+  `briefs/`, `log.md`) are plain files (`core/docs.ts`); write the log only by
+  appending.
 - **One chat engine, one adapter per agent** (`src/main/core/chats.ts`,
   `src/main/core/agents/`). Agent-specific code stays in its adapter; the
   transcript format (`src/shared/chat.ts`) is Caboose's own.

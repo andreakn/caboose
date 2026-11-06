@@ -45,6 +45,13 @@ const api: CabooseApi = {
   setupLog: invoke("feature:setupLog"),
 
   createChat: invoke("chat:create"),
+  startRepoChat: invoke("chat:startRepo"),
+  docs: invoke("docs:get"),
+  writeDoc: invoke("docs:write"),
+  writeRepoBrief: invoke("docs:writeRepoBrief"),
+  tickPlan: invoke("docs:tick"),
+  note: invoke("docs:note"),
+  featureStatus: invoke("docs:status"),
   models: invoke("chat:models"),
   removeChat: invoke("chat:remove"),
   chatEvents: invoke("chat:events"),

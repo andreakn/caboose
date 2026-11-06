@@ -35,6 +35,8 @@ export type Chat = {
   featureId: string;
   /** Missing on chats from before Copilot support: those are Claude. */
   agent?: Agent;
+  /** A repo chat works in that repo's worktree; without it, the chat is the feature's central chat (the feature folder). */
+  repo?: string;
   title: string;
   /** The agent's session id, set once the first turn starts; used to resume. */
   sessionId?: string;

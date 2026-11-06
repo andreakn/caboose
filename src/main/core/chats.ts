@@ -4,7 +4,7 @@
 import { randomUUID } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import type { Agent, Chat, ChatEvent, Effort, LastingEvent, Mode, Model, ModelOption } from "../../shared/chat.ts";
+import { type Agent, applyEvent, type Chat, type ChatEvent, type Effort, emptyView, type LastingEvent, type Mode, type Model, type ModelOption } from "../../shared/chat.ts";
 import type { Result } from "../../shared/types.ts";
 import type { AgentHost, AgentProvider, AgentSession, PermissionAnswer, QuestionAnswer } from "./agents/types.ts";
 import type { Store } from "./store.ts";
@@ -42,10 +42,11 @@ export class Chats {
     this.emit = emit;
   }
 
-  /** A new chat; settings come from the feature's most recent chat with the same agent. */
-  create(featureId: string, agent?: Agent): Result<Chat> {
+  /** A new chat (in a repo's worktree, or the feature's central chat); settings come from the feature's latest chat with the same agent. */
+  create(featureId: string, agent?: Agent, repo?: string): Result<Chat> {
     const feature = this.store.get().features.find((f) => f.id === featureId);
     if (!feature) return { ok: false, error: "Unknown feature." };
+    if (repo && !feature.repos.some((r) => r.name === repo)) return { ok: false, error: `No repo "${repo}" in this feature.` };
     const inWs = this.store.get().chats.filter((c) => c.featureId === featureId);
     const kind = agent ?? (inWs.length ? agentOf(inWs.at(-1)!) : "claude");
     if (!this.providers[kind]) return { ok: false, error: `${kind} is not available.` };
@@ -54,7 +55,8 @@ export class Chats {
       id: randomUUID(),
       featureId,
       agent: kind,
-      title: "New chat",
+      ...(repo ? { repo } : {}),
+      title: repo ? repo : "New chat",
       model: last?.model ?? DEFAULTS.model,
       effort: last?.effort ?? DEFAULTS.effort,
       mode: last?.mode ?? DEFAULTS.mode,
@@ -62,6 +64,27 @@ export class Chats {
     };
     this.store.update((s) => ({ ...s, chats: [...s.chats, chat] }));
     return { ok: true, value: chat };
+  }
+
+  /** The feature's most recent chat for a repo (or its central chat, without one). */
+  latest(featureId: string, repo?: string): Chat | undefined {
+    return this.store
+      .get()
+      .chats.filter((c) => c.featureId === featureId && (c.repo ?? undefined) === (repo ?? undefined))
+      .at(-1);
+  }
+
+  /** What a chat is doing, from its transcript and live state. */
+  state(chatId: string): { running: boolean; waiting: boolean; lastText?: string; lastAt?: string; turns: number } {
+    const view = this.events(chatId).reduce(applyEvent, emptyView());
+    const texts = view.items.filter((i) => i.kind === "text");
+    const users = view.items.filter((i) => i.kind === "user");
+    return {
+      running: view.running,
+      waiting: view.items.some((i) => (i.kind === "permission" && i.answer === undefined) || (i.kind === "question" && !i.answered)),
+      lastText: texts.at(-1)?.kind === "text" ? (texts.at(-1) as { text: string }).text : undefined,
+      turns: users.length,
+    };
   }
 
   models(agent: Agent): Promise<ModelOption[]> {

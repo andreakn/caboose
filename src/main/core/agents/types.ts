@@ -40,6 +40,11 @@ export interface AgentProvider {
   models(): Promise<ModelOption[]>;
 }
 
+/** Where a chat's agent works: its repo's worktree, or the feature folder for the central chat. */
+export function chatCwd(chat: Chat, feature: Feature): string {
+  return (chat.repo && feature.repos.find((r) => r.name === chat.repo)?.path) || feature.folder;
+}
+
 export const MAX_RESULT_CHARS = 20_000;
 
 export function clip(s: string): string {

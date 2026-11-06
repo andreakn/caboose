@@ -8,9 +8,11 @@ import {
   type MergeMethod,
   resolveConflictsMessage,
 } from "../../shared/github.ts";
-import type { Feature, FeatureRepo, JiraLevel } from "../../shared/types.ts";
+import type { Feature, FeatureRepo, JiraLevel, LogEntry } from "../../shared/types.ts";
 import { activeChat } from "./Chat.tsx";
+import { askText } from "./Dialog.tsx";
 import { OpenInMenu } from "./Menu.tsx";
+import { StatusChip } from "./Plan.tsx";
 
 const api = window.caboose;
 
@@ -63,6 +65,10 @@ export function RepoRow(props: {
   hasTask: boolean;
   jiraSite?: string;
   prInstructions?: string;
+  /** What the repo's agent last reported. */
+  reported?: LogEntry;
+  hasChat?: boolean;
+  onChat?: () => void;
   onJiraChanged: () => void;
   onAskedAgent: () => void;
 }) {
@@ -115,6 +121,11 @@ export function RepoRow(props: {
       <div className="repo-line">
         <span className={`dot setup-${repo.setup}`} title={`Setup: ${repo.setup}`} />
         <b className="repo-name-cell">{repo.name}</b>
+        {props.reported?.status && (
+          <span title={`${props.reported.at}: ${props.reported.text}`}>
+            <StatusChip status={props.reported.status} />
+          </span>
+        )}
         <BranchName feature={feature} repo={repo} canRename={!!b && !b.upstream} onRenamed={refresh} />
         {jiraOn && (
           <JiraChip
@@ -137,6 +148,11 @@ export function RepoRow(props: {
         <span className="muted repo-local">{local.join(" · ")}</span>
         {busy && <span className="muted">{busy}</span>}
         <span className="spacer" />
+        {!feature.archived && props.onChat && (
+          <button onClick={props.onChat} title={props.hasChat ? `Open ${repo.name}'s chat` : `Break out a chat working in ${repo.name}/`}>
+            {props.hasChat ? "⑂ chat" : "⑂ break out"}
+          </button>
+        )}
         {!feature.archived && <OpenInMenu path={repo.path} label="Open ▾" />}
 
         {status && !status.available && (
@@ -250,7 +266,7 @@ function BranchName(props: { feature: Feature; repo: FeatureRepo; canRename: boo
           className="link"
           title="Rename branch"
           onClick={async () => {
-            const name = prompt("New branch name", repo.branch);
+            const name = await askText({ title: `Rename ${repo.name}'s branch`, value: repo.branch, ok: "Rename" });
             if (!name || name === repo.branch) return;
             const r = await api.renameBranch(feature.id, repo.name, name);
             if (!r.ok) alert(r.error);
@@ -296,8 +312,8 @@ export function JiraChip(props: {
     <span className="jira-chip empty">
       <button
         className="link"
-        onClick={() => {
-          const key = prompt(`Jira ${props.label} (key or URL)`);
+        onClick={async () => {
+          const key = await askText({ title: `Link a Jira ${props.label}`, label: "Its key or URL", placeholder: "e.g. NWP-1234", ok: "Link" });
           if (key) props.onSet(key);
         }}
       >

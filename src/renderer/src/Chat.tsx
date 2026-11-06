@@ -17,6 +17,8 @@ import {
 import type { Feature } from "../../shared/types.ts";
 import { activityOf, setVisibleChat, useActivityVersion } from "./activity.ts";
 import { useCommand } from "./commands.ts";
+import { askText } from "./Dialog.tsx";
+import { MenuButton } from "./Menu.tsx";
 
 const api = window.caboose;
 
@@ -58,16 +60,30 @@ export function ChatArea({ ws, chats, hidden }: { ws: Feature; chats: Chat[]; hi
     localStorage.setItem(key, id);
   };
 
-  // Where the agent menu opens (fixed, so the scrolling tab strip does not clip it).
-  const [picking, setPicking] = useState<{ x: number; y: number } | null>(null);
-
   async function newChat(agent?: Agent) {
     if (creating.current) return;
     creating.current = true;
-    setPicking(null);
-    const r = await api.createChat(ws.id, agent ?? (active ? agentOf(active) : undefined));
+    const central = chats.filter((c) => !c.repo).at(-1);
+    const r = await api.createChat(ws.id, agent ?? (central ? agentOf(central) : active ? agentOf(active) : undefined));
     creating.current = false;
     if (r.ok) select(r.value.id);
+  }
+
+  /** A chat of its own for one repo, in its worktree, with a task. */
+  async function breakOut(repo: string) {
+    const existing = chats.filter((c) => c.repo === repo).at(-1);
+    if (existing) return select(existing.id);
+    const task = await askText({
+      title: `Break out a chat for ${repo}`,
+      label: "It works in the repo's worktree and has not seen the central chat, so give it a task that stands alone.",
+      value: `Do your part of the feature, as described in briefs/${repo}.md.`,
+      multiline: true,
+      ok: "Start",
+    });
+    if (!task) return;
+    const r = await api.startRepoChat(ws.id, repo, task, active ? agentOf(active) : undefined);
+    if (r.ok) select(r.value.id);
+    else alert(r.error);
   }
 
   // Every live feature has at least one chat.
@@ -84,6 +100,7 @@ export function ChatArea({ ws, chats, hidden }: { ws: Feature; chats: Chat[]; hi
 
   useCommand((c) => {
     if (c === "newChat" && !ws.archived) void newChat();
+    if (c.startsWith("breakOut:")) void breakOut(c.slice("breakOut:".length));
     if ((c === "nextChat" || c === "prevChat") && active && chats.length > 1) {
       const i = chats.findIndex((x) => x.id === active.id);
       select(chats[(i + (c === "nextChat" ? 1 : -1) + chats.length) % chats.length].id);
@@ -102,7 +119,13 @@ export function ChatArea({ ws, chats, hidden }: { ws: Feature; chats: Chat[]; hi
           <div key={c.id} className={`tab${c.id === active?.id ? " active" : ""}`} onClick={() => select(c.id)}>
             <TabState chatId={c.id} />
             {agentOf(c) === "copilot" && <span className="agent-chip">Copilot</span>}
-            <span className="tab-title">{c.title}</span>
+            {c.repo ? (
+              <span className="tab-title repo-tab" title={`Works in ${c.repo}/`}>
+                ⑂ {c.title}
+              </span>
+            ) : (
+              <span className="tab-title">{c.title}</span>
+            )}
             <button
               className="tab-close"
               title="Close chat"
@@ -116,27 +139,20 @@ export function ChatArea({ ws, chats, hidden }: { ws: Feature; chats: Chat[]; hi
           </div>
         ))}
         {!ws.archived && (
-          <div className="tab-new-wrap">
-            <button
-              className="tab-new"
-              title="New chat"
-              onClick={(e) => {
-                const r = e.currentTarget.getBoundingClientRect();
-                setPicking(picking ? null : { x: r.left, y: r.bottom });
-              }}
-            >
-              +
-            </button>
-            {picking && (
-              <div className="menu" style={{ left: picking.x, top: picking.y }} onMouseLeave={() => setPicking(null)}>
-                {AGENTS.map((a) => (
-                  <button key={a.value} onClick={() => newChat(a.value)}>
-                    New {a.label} chat
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          <MenuButton
+            className="tab-new"
+            title="New chat"
+            label="+"
+            items={[
+              ...AGENTS.map((a) => ({ label: `New ${a.label} chat (whole feature)`, onClick: () => void newChat(a.value) })),
+              ...(ws.repos.length ? (["separator"] as const) : []),
+              ...ws.repos.map((r) => ({
+                label: chats.some((c) => c.repo === r.name) ? `${r.name}'s chat` : `Break out a chat for ${r.name}…`,
+                title: `A chat working in ${r.name}/`,
+                onClick: () => void breakOut(r.name),
+              })),
+            ]}
+          />
         )}
       </div>
       {active ? <ChatPanel key={active.id} chat={active} ws={ws} /> : <div className="chat-empty muted">No chats.</div>}

@@ -74,13 +74,13 @@ linking a task later renames unpushed branches to carry the keys. Not built
   run scripts (`dev`, `test`, `migrate`…), one marked default. `caboose.json` in a
   repo still adds to them. The Run menu lists them; each runs in its own terminal tab.
 
-### 3. Feature docs (medium) — plain files, not git
+### 3. ✅ Feature docs (done 2026-11-06) — plain files, not git
 - In the feature folder: `brief.md`, `plan.md` (checklist), `repos/<repo>.md`
   (brief per repo), `log.md` (append-only: who, to whom, status, text) — the same
   formats as xc, so imported projects carry over and agents can read them.
 - Plan ticks, brief and log are editable in the app (markdown preview, edit in place).
 
-### 4. Repo agents (large; the core of xc's workflow)
+### 4. ✅ Repo agents (done 2026-11-06; dependencies/waves not built yet)
 The feature's central chat stays the starting point. When some repos need a lot
 of follow-up, it (or you) **breaks out a chat per repo** (in that repo's folder,
 started with its brief and the context so far), next to the central chat. Every agent is visible, can be talked to

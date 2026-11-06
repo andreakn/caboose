@@ -6,7 +6,7 @@ import type { CopilotClient, CopilotSession, ModelInfo, PermissionRequest, Permi
 import { isAbsolute, relative } from "node:path";
 import type { Chat, Mode, ModelOption } from "../../../shared/chat.ts";
 import type { Feature } from "../../../shared/types.ts";
-import { type AgentHost, type AgentProvider, type AgentSession, clip, errorText } from "./types.ts";
+import { type AgentHost, type AgentProvider, type AgentSession, chatCwd, clip, errorText } from "./types.ts";
 
 /** Caboose's tools and system-prompt note for one chat. */
 export type CopilotExtras = (chat: Chat, feature: Feature) => { tools: Tool[]; instructions: string };
@@ -83,7 +83,8 @@ export class CopilotProvider implements AgentProvider {
       const { tools, instructions } = this.extras(chat, feature);
       const config: SessionConfig = {
         clientName: "Caboose",
-        workingDirectory: feature.folder,
+        workingDirectory: chatCwd(chat, feature),
+        ...(chat.repo ? { additionalDirectories: [feature.folder] } : {}),
         model: model === "default" ? undefined : model,
         reasoningEffort: model === "default" ? undefined : effortFor(model),
         streaming: true,

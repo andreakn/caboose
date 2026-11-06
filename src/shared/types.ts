@@ -171,6 +171,23 @@ export type ConfigInfo = {
 
 export type JiraIssue = { key: string; summary: string; status: string; type: string; url: string; subtasks?: { key: string; summary: string }[] };
 
+/** What a repo's agent last reported about its work. */
+export type RepoStatus = "queued" | "working" | "blocked" | "needs-input" | "ready" | "in-review" | "done";
+export const REPO_STATUSES: RepoStatus[] = ["queued", "working", "blocked", "needs-input", "ready", "in-review", "done"];
+
+export type PlanTask = { line: number; done: boolean; text: string; depth: number };
+export type LogEntry = { at: string; from: string; to?: string; status?: RepoStatus; text: string };
+
+/** The feature's working documents (plain files in its folder). */
+export type FeatureDocs = {
+  brief: string;
+  plan: string;
+  tasks: PlanTask[];
+  progress: { done: number; total: number };
+  repoBriefs: Record<string, string>;
+  log: LogEntry[];
+};
+
 /** What linking Jira changed: subtasks created and branches renamed to carry their keys. */
 export type JiraAlignment = { created: string[]; renamed: { repo: string; from: string; to: string }[]; skipped: string[] };
 
@@ -259,7 +276,18 @@ export type CabooseApi = {
   openPath(path: string): Promise<void>;
   setupLog(featureId: string, repo: string): Promise<string>;
 
-  createChat(featureId: string, agent?: Agent): Promise<Result<Chat>>;
+  /** A chat in the feature folder (central), or in one repo's worktree. */
+  createChat(featureId: string, agent?: Agent, repo?: string): Promise<Result<Chat>>;
+  /** Breaks out a chat for a repo with a task (or sends the task to the repo's chat if it has one). */
+  startRepoChat(featureId: string, repo: string, message: string, agent?: Agent): Promise<Result<Chat>>;
+
+  docs(featureId: string): Promise<FeatureDocs>;
+  writeDoc(featureId: string, doc: "brief" | "plan", text: string): Promise<Result<void>>;
+  writeRepoBrief(featureId: string, repo: string, text: string): Promise<Result<void>>;
+  tickPlan(featureId: string, line: number, done: boolean): Promise<Result<void>>;
+  /** Logs a note from the user and sends it to the chats it is for ("all"/absent: every chat). */
+  note(featureId: string, to: string | undefined, text: string): Promise<Result<string[]>>;
+  featureStatus(featureId: string): Promise<string>;
   models(agent: Agent): Promise<Result<ModelOption[]>>;
   removeChat(chatId: string): Promise<void>;
   chatEvents(chatId: string): Promise<ChatEvent[]>;

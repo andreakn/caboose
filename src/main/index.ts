@@ -3,7 +3,8 @@ import { query, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, safeStorage, screen, shell } from "electron";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import type { Agent, Effort, Mode, Model } from "../shared/chat.ts";
+import type { Agent, Chat, Effort, Mode, Model } from "../shared/chat.ts";
+import { checksSummary } from "../shared/github.ts";
 import { commentsMessage } from "../shared/diff.ts";
 import type { MergeMethod } from "../shared/github.ts";
 import type { AppId, ConfigInput, Feature, FeatureStatus, NewFeature, State, Theme } from "../shared/types.ts";
@@ -11,6 +12,8 @@ import { CopilotClient } from "@github/copilot-sdk";
 import { ClaudeProvider, Inbox } from "./core/agents/claude.ts";
 import { copilotEnv, CopilotProvider } from "./core/agents/copilot.ts";
 import { Chats } from "./core/chats.ts";
+import { Coordinator } from "./core/coordination.ts";
+import { readDocs, setTask, writeDoc, writeRepoBrief } from "./core/docs.ts";
 import { Comments } from "./core/comments.ts";
 import {
   applyConfigInput,
@@ -94,15 +97,45 @@ const terminals = new Terminals({
   onChange: () => win?.webContents.send("term:list", terminals.list()),
 });
 const current = (f: Feature) => () => featureById(f.id) ?? f;
-const claude = new ClaudeProvider(query, (_chat, f) => ({
-  mcpServers: { caboose: cabooseMcp(current(f), comments, terminals) },
-  systemPrompt: { type: "preset", preset: "claude_code", append: cabooseInstructions(f, "claude") },
+/** What Caboose's tools work with, for one chat. `coordinator` is set below (the tools only run later). */
+const toolContext = (chat: Chat, f: Feature) => ({
+  feature: current(f),
+  chat: () => store.get().chats.find((c) => c.id === chat.id) ?? chat,
+  comments,
+  terminals,
+  coord: coordinator,
+});
+const claude = new ClaudeProvider(query, (chat, f) => ({
+  mcpServers: { caboose: cabooseMcp(toolContext(chat, f)) },
+  systemPrompt: { type: "preset", preset: "claude_code", append: cabooseInstructions(f, "claude", chat) },
 }));
 const copilot = new CopilotProvider(
   () => new CopilotClient({ logLevel: "error", env: copilotEnv() }),
-  (_chat, f) => ({ tools: cabooseCopilotTools(current(f), comments, terminals), instructions: cabooseInstructions(f, "copilot") }),
+  (chat, f) => ({ tools: cabooseCopilotTools(toolContext(chat, f)), instructions: cabooseInstructions(f, "copilot", chat) }),
 );
 const chats = new Chats(store, dataDir, { claude, copilot }, (chatId, e) => win?.webContents.send("chat:event", chatId, e));
+const github = new GitHub();
+const coordinator = new Coordinator({
+  store,
+  chats,
+  jiraOf: (id) => features.jiraOf(id),
+  facts: async (r) => {
+    const b = await github.branchStatus(r.path, r.baseRef);
+    const pr = await github.pr(r.path, r.branch).catch(() => null);
+    const c = pr && checksSummary(pr.checks);
+    return {
+      uncommitted: b.uncommitted,
+      ahead: b.ahead,
+      pushed: Boolean(b.upstream),
+      pr: pr && {
+        number: pr.number,
+        state: pr.isDraft ? "DRAFT" : pr.state,
+        checks: !pr.checks.length ? "none" : c!.failed ? "failing" : c!.pending ? "running" : "passing",
+        url: pr.url,
+      },
+    };
+  },
+});
 
 // The window opens where it was last closed, if that place is still on a screen.
 const boundsFile = join(dataDir, "window.json");
@@ -269,7 +302,34 @@ ipcMain.handle("shell:openUrl", (_e, url: string) => {
 });
 
 // --- chats
-ipcMain.handle("chat:create", (_e, featureId: string, agent?: Agent) => chats.create(featureId, agent));
+ipcMain.handle("chat:create", (_e, featureId: string, agent?: Agent, repo?: string) => chats.create(featureId, agent, repo));
+ipcMain.handle("chat:startRepo", (_e, featureId: string, repo: string, message: string, agent?: Agent) =>
+  coordinator.startRepoChat(featureId, repo, message, { agent, from: "you" }),
+);
+
+// --- feature documents (plain files in the feature folder)
+const featureOrThrow = (id: string) => {
+  const f = featureById(id);
+  if (!f) throw new Error("Unknown feature.");
+  return f;
+};
+ipcMain.handle("docs:get", (_e, featureId: string) => {
+  const f = featureOrThrow(featureId);
+  return readDocs(f.folder, f.repos.map((r) => r.name));
+});
+ipcMain.handle("docs:write", (_e, featureId: string, doc: "brief" | "plan", text: string) =>
+  attempt(() => writeDoc(featureOrThrow(featureId).folder, doc, text)),
+);
+ipcMain.handle("docs:writeRepoBrief", (_e, featureId: string, repo: string, text: string) =>
+  attempt(() => writeRepoBrief(featureOrThrow(featureId).folder, repo, text)),
+);
+ipcMain.handle("docs:tick", (_e, featureId: string, line: number, done: boolean) =>
+  attempt(() => setTask(featureOrThrow(featureId).folder, line, done)),
+);
+ipcMain.handle("docs:note", (_e, featureId: string, to: string | undefined, text: string) =>
+  coordinator.noteFromUser(featureId, to, text),
+);
+ipcMain.handle("docs:status", (_e, featureId: string) => coordinator.status(featureId));
 ipcMain.handle("chat:models", (_e, agent: Agent) => attempt(() => chats.models(agent)));
 ipcMain.handle("chat:remove", (_e, chatId: string) => chats.remove(chatId));
 // Synchronous on purpose: chat events sent after this reply are newer than the file it read.
@@ -317,7 +377,6 @@ ipcMain.handle("comments:send", (_e, featureId: string, chatId: string) => {
 });
 
 // --- github
-const github = new GitHub();
 ipcMain.handle("github:status", (_e, featureId: string, repo: string) =>
   attempt(() => {
     const { r } = liveRepo(featureId, repo);

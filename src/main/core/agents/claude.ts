@@ -11,7 +11,7 @@ import type {
 } from "@anthropic-ai/claude-agent-sdk";
 import { CLAUDE_MODELS, type Chat, type Effort, type Question } from "../../../shared/chat.ts";
 import type { Feature } from "../../../shared/types.ts";
-import { type AgentHost, type AgentProvider, type AgentSession, clip, errorText } from "./types.ts";
+import { type AgentHost, type AgentProvider, type AgentSession, chatCwd, clip, errorText } from "./types.ts";
 
 /** The part of the SDK's Query that Caboose uses. */
 export type QueryLike = AsyncIterable<SDKMessage> & {
@@ -44,7 +44,9 @@ export class ClaudeProvider implements AgentProvider {
       prompt: inbox,
       options: {
         ...this.extras(chat, feature),
-        cwd: feature.folder,
+        cwd: chatCwd(chat, feature),
+        // A repo chat also reads the feature's files (brief, plan, its brief) one folder up.
+        ...(chat.repo ? { additionalDirectories: [feature.folder] } : {}),
         resume: chat.sessionId,
         model: chat.model === "default" ? undefined : chat.model,
         effort: chat.effort,

@@ -33,6 +33,13 @@ scripts, archive), and **local files** rules: the gitignored files a new
 feature copies from the repo's main checkout so it can run (defaults `.env*`
 and `*.local.*`; .gitignore-style patterns, with a live preview).
 
+Each feature has a **central chat** (in the feature folder, seeing every repo)
+and can **break out a chat per repo** (in that repo's worktree) when some repos
+need focused follow-up; the central chat can do that itself and follow up. The
+**Plan** tab holds the feature's plain-file brief, plan (checklist), per-repo
+briefs and log; agents report their status there, and your notes go to the
+chats they are for.
+
 A **feature** gets a railway-station name and a folder with a git worktree for
 each repo you pick (`<features folder>/<station>/<repo>/`). The agents work in
 the feature folder and see all of its repos. With Jira on, a feature can be

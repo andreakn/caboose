@@ -344,6 +344,44 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
     creates the missing subtasks and renames branches that are not pushed yet
     to `<prefix>/<SUBTASK>-<station>`; pushed ones are left alone and reported.
 
+## cross_conductor parity, phases 3–4 (2026-11-06)
+
+91. **Feature files** in the feature folder, plain markdown, not in git:
+    `brief.md`, `plan.md` (a checklist; progress = share ticked),
+    `briefs/<repo>.md`, `log.md` (append-only; entries
+    `### <time> · <from>[ → <to>][ · status: <s>]`, xc's format). The Plan tab
+    shows them collapsed (first lines only) and edits them in place; it re-reads
+    them every 4 s while open, since agents write them too.
+92. **A chat can belong to a repo** (`Chat.repo`): it works in that repo's
+    worktree, can also read the feature folder (`additionalDirectories`), and
+    gets its own system note. Chats without a repo are the feature's central
+    chat (feature folder). Both kinds live side by side as tabs (⑂ marks repo
+    chats); start with the central chat and break out repos that need focused
+    follow-up, from the "+" menu, the repo row, the Plan tab, or by the central
+    chat itself.
+93. **Coordination tools** for the agents (Claude MCP / Copilot tools, one
+    table in `core/mcp.ts`): `ReportStatus` (queued, working, blocked,
+    needs-input, ready, in-review, done), `Log`, `GetFeatureStatus` (per repo:
+    reported status, chat state, git, PR and checks, Jira; plan progress; recent
+    log), `StartRepoChat` (creates the repo chat with a standalone kickoff: the
+    feature's files, how to report, "don't push/PR/Jira unless asked", the
+    task; if the repo has a chat, the task goes there), `MessageRepoChat`
+    (queued if busy), `GetRepoChat`.
+94. **Repo agents ask the user directly** (question cards in their own chat)
+    instead of relaying through the coordinator as xc's subagents had to. The
+    feature view's **Needs you** strip lists chats waiting for an answer or
+    approval and repos that reported needs-input/blocked; it is empty most of
+    the time.
+95. **Notes from the user** (Plan tab → Log) are logged and sent to the chats
+    they are for: a repo's chat (else the central chat, "about <repo>"), or
+    every chat. This replaces xc's inbox polling.
+96. **`prompt()` replaced** by an in-app dialog (`Dialog.tsx`): Electron has no
+    `window.prompt`, so the branch-rename and Jira-link buttons did nothing
+    before.
+97. **Tested for real** (Claude Haiku): the central chat wrote brief, plan and
+    a repo brief, broke out a `sheets` chat, which edited and committed in its
+    worktree, reported working → ready, logged the commit and ticked the plan.
+
 ## Answered (2026-11-05)
 
 - Private GitHub repo `andreakn/caboose`: yes.
