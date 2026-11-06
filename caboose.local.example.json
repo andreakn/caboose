@@ -18,6 +18,6 @@
     "project": "NWP"
   },
   "shellPath": "/bin/zsh",
-  "bashPath": "C:\\Program Files\\\\Git\\\\bin\\\\bash.exe",
+  "bashPath": "C:\\Program Files\\Git\\bin\\bash.exe",
   "terminalFont": "MesloLGS NF"
 }
