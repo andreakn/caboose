@@ -127,6 +127,8 @@ export type LocalConfig = {
   shellPath?: string;
   /** Font for terminals, e.g. a Nerd Font your prompt needs. Default: common Nerd/Powerline fonts, then monospace. */
   terminalFont?: string;
+  /** Which agent new chats use unless you pick another: Claude Code or GitHub Copilot. */
+  defaultAgent?: Agent;
   /** How PRs should be written (title, description style); added to Create PR requests to the agent. */
   prInstructions?: string;
   /** Commands to open a folder in an app, overriding detection; "{path}" is replaced. */
@@ -222,11 +224,16 @@ export type NewFeature = {
   title?: string;
   /** What the user wants, in their words: sent to the feature's central chat, which proposes the repos. */
   text?: string;
+  /** Which agent the feature's first chat uses (default: the main agent). */
+  agent?: Agent;
   /** An existing task key, or the summary of a task to create in the configured project. */
   jira?: { key: string } | { create: string };
 };
 
-export type DoctorCheck = { name: string; ok: boolean; detail: string; hint?: string };
+export type DoctorCheck = { name: string; ok: boolean; detail: string; hint?: string; optional?: boolean };
+
+/** Whether each agent can run here (logged in), for choosing the main agent. */
+export type AgentLogins = Record<Agent, { ok: boolean; detail: string }>;
 
 export type UpdateInfo = {
   branch: string;
@@ -350,6 +357,7 @@ export type CabooseApi = {
   openUrl(url: string): Promise<void>;
 
   doctor(): Promise<DoctorCheck[]>;
+  agentLogins(): Promise<AgentLogins>;
   checkForUpdate(): Promise<Result<UpdateInfo>>;
   /** Pulls, installs and builds, then restarts the app. Resolves only on failure. */
   update(): Promise<Result<void>>;

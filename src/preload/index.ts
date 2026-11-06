@@ -82,6 +82,7 @@ const api: CabooseApi = {
   openUrl: invoke("shell:openUrl"),
 
   doctor: invoke("app:doctor"),
+  agentLogins: invoke("agents:logins"),
   checkForUpdate: invoke("app:checkForUpdate"),
   update: invoke("app:update"),
   onUpdateLog: (listener) => {

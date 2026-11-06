@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { AGENTS, type Agent } from "../../shared/chat.ts";
 import type { ConfigView, Feature, JiraIssue } from "../../shared/types.ts";
 
 const api = window.caboose;
@@ -12,6 +13,7 @@ export function NewFeature({ config, onCreated, onCancel }: { config: ConfigView
   const level = config.jira?.level ?? "off";
   const jiraReady = level !== "off" && Boolean(config.jira?.site && config.jira?.email && config.jira?.hasToken);
   const [text, setText] = useState("");
+  const [agent, setAgent] = useState<Agent>(config.defaultAgent ?? "claude");
   const [key, setKey] = useState("");
   const [mine, setMine] = useState<JiraIssue[]>([]);
   const [busy, setBusy] = useState(false);
@@ -29,7 +31,7 @@ export function NewFeature({ config, onCreated, onCancel }: { config: ConfigView
     if (level === "expected" && !key.trim() && !confirm("Create the feature without a Jira task?")) return;
     setBusy(true);
     setError(null);
-    const r = await api.createFeature({ text: text.trim() || undefined, jira: key.trim() ? { key: key.trim() } : undefined });
+    const r = await api.createFeature({ text: text.trim() || undefined, jira: key.trim() ? { key: key.trim() } : undefined, agent });
     setBusy(false);
     if (r.ok) onCreated(r.value);
     else setError(r.error);
@@ -38,7 +40,17 @@ export function NewFeature({ config, onCreated, onCancel }: { config: ConfigView
   return (
     <div className="dialog-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onCancel()}>
       <div className="dialog new-feature-dialog" role="dialog">
-        <h2>New feature</h2>
+        <div className="row">
+          <h2>New feature</h2>
+          <span className="spacer" />
+          <div className="segmented small" title="Which agent the feature's chat uses">
+            {AGENTS.map((a) => (
+              <button key={a.value} className={agent === a.value ? "active" : ""} onClick={() => setAgent(a.value)}>
+                {a.label}
+              </button>
+            ))}
+          </div>
+        </div>
         <textarea
           ref={input}
           rows={Math.min(12, Math.max(4, text.split("\n").length + 1))}

@@ -74,7 +74,7 @@ export class Coordinator {
       const sent = this.d.chats.send(existing.id, `Message from ${opts.from ?? "the coordinator"}:\n${message}`);
       return sent.ok ? ok(existing) : sent;
     }
-    const agent = opts.agent ?? this.d.chats.latest(featureId)?.agent ?? "claude";
+    const agent = opts.agent ?? this.d.chats.latest(featureId)?.agent ?? this.d.chats.mainAgent();
     const created = this.d.chats.create(featureId, agent, repo);
     if (!created.ok) return created;
     const sent = this.d.chats.send(created.value.id, kickoff(f, r, message, agent, opts.from ?? "the coordinator"));

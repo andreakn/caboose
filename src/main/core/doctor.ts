@@ -1,5 +1,5 @@
 // Checks the prerequisites on this machine, for the Settings page.
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import type { DoctorCheck } from "../../shared/types.ts";
@@ -12,14 +12,17 @@ export async function doctor(opts: {
   bashPath?: string;
   claudeAccount: () => Promise<string>;
   copilotAccount: () => Promise<string>;
+  /** The main agent: the other one is optional. */
+  mainAgent?: "claude" | "copilot";
 }): Promise<DoctorCheck[]> {
-  const check = async (name: string, fn: () => Promise<string>, hint: string): Promise<DoctorCheck> => {
+  const check = async (name: string, fn: () => Promise<string>, hint: string, optional = false): Promise<DoctorCheck> => {
     try {
       return { name, ok: true, detail: await fn() };
     } catch (e) {
-      return { name, ok: false, detail: first((e as Error).message), hint };
+      return { name, ok: false, detail: first((e as Error).message), hint, ...(optional ? { optional } : {}) };
     }
   };
+  const main = opts.mainAgent ?? "claude";
   return Promise.all([
     check("git", async () => first(await run("git", ["--version"])), "Install git (on Windows: Git for Windows)."),
     check(
@@ -32,13 +35,15 @@ export async function doctor(opts: {
     ),
     check(
       "Claude Code",
-      async () => `${claudeCodeVersion()} (bundled with the Agent SDK) · ${await opts.claudeAccount()}`,
-      "Run `claude` in a terminal and log in with /login.",
+      async () => `${claudeCodeVersion()} (comes with Caboose) · ${await opts.claudeAccount()}`,
+      `${main === "copilot" ? "Optional: your main agent is Copilot. " : ""}Needs a Claude subscription or API key. Log in once in a terminal with Claude Code${claudeBinary() ? ` ("${claudeBinary()}", the copy that comes with Caboose, or your own \`claude\`)` : " (`claude`)"}, then /login.`,
+      main === "copilot",
     ),
     check(
       "GitHub Copilot",
-      async () => `${copilotVersion()} (bundled with the Copilot SDK) · ${await opts.copilotAccount()}`,
-      "Optional. Needs a Copilot plan; log in with `gh auth login` (or the Copilot CLI's /login).",
+      async () => `${copilotVersion()} (comes with Caboose) · ${await opts.copilotAccount()}`,
+      `${main === "claude" ? "Optional: your main agent is Claude. " : ""}Needs a Copilot plan. Log in with \`gh auth login\` (a classic ghp_ token in GH_TOKEN does not work for Copilot).`,
+      main === "claude",
     ),
     check("GitHub CLI", async () => first(await run("gh", ["--version"])), "Install gh from https://cli.github.com."),
     check(
@@ -51,6 +56,19 @@ export async function doctor(opts: {
     ),
     check("Node.js (in Electron)", async () => `${process.versions.node} · Electron ${process.versions.electron ?? "–"}`, ""),
   ]);
+}
+
+/** The Claude Code binary that comes with the Agent SDK for this OS, if found. */
+export function claudeBinary(): string | null {
+  try {
+    const require = createRequire(import.meta.url);
+    const pkg = `@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}`;
+    const dir = dirname(require.resolve(`${pkg}/package.json`));
+    const bin = join(dir, process.platform === "win32" ? "claude.exe" : "claude");
+    return existsSync(bin) ? bin : null;
+  } catch {
+    return null;
+  }
 }
 
 export function copilotVersion(): string {

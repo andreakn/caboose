@@ -8,8 +8,12 @@ macOS, Windows and Linux, run straight from a clone.
 
 - Node 22.12+ (developed on Node 26) and npm
 - git (on Windows: Git for Windows, which Claude Code needs too)
-- Claude Code, logged in (`claude` then `/login`), for Claude chats
-- A GitHub Copilot plan and `gh auth login`, for Copilot chats (optional)
+- One of the two agents, logged in (Configure → Main agent picks which one
+  new chats use; both can be used side by side):
+  - **Claude Code**: a Claude subscription or API key; log in once with
+    `/login` in Claude Code (the copy that comes with Caboose works:
+    `node_modules/@anthropic-ai/claude-agent-sdk-<os>-<arch>/claude`).
+  - **GitHub Copilot**: a Copilot plan and `gh auth login`.
 - `gh`, logged in (`gh auth login`), for PRs
 
 ## Run

@@ -177,6 +177,7 @@ export function App() {
           <Board features={state.features} chats={state.chats} onOpen={select} onNew={() => setCreating(true)} />
         ) : screen === "configure" ? (
           <Configure
+            onSaved={() => void loadConfig()}
             onDone={() => {
               void loadConfig();
               setScreen("feature");

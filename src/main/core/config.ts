@@ -30,6 +30,7 @@ export type ResolvedLocalConfig = {
   terminalFont?: string;
   prInstructions?: string;
   openWith?: LocalConfig["openWith"];
+  defaultAgent: "claude" | "copilot";
 };
 
 export const configFile = (cabooseDir: string) => join(cabooseDir, FILE);
@@ -56,6 +57,7 @@ export function loadLocalConfig(cabooseDir: string): ResolvedLocalConfig {
     shellPath: c.shellPath,
     terminalFont: c.terminalFont,
     prInstructions: c.prInstructions,
+    defaultAgent: c.defaultAgent ?? "claude",
     openWith: c.openWith,
   };
 }

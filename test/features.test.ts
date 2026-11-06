@@ -45,6 +45,7 @@ function config(over: Partial<ResolvedLocalConfig> = {}): ResolvedLocalConfig {
     branchPrefix: "caboose",
     repos: [{ name: "web", path: web }, { name: "api", path: api }],
     jira: { level: "off" },
+    defaultAgent: "claude",
     ...over,
   };
 }

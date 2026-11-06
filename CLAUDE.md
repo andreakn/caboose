@@ -21,6 +21,9 @@ GitHub Copilot) in parallel git worktrees. Personal/team-internal, never commerc
   tools from the same definitions). Feature files (`brief.md`, `plan.md`,
   `briefs/`, `log.md`) are plain files (`core/docs.ts`); write the log only by
   appending.
+- **Claude and Copilot are equals.** The main agent is a setting
+  (`defaultAgent`); never assume Claude where a chat's agent or the setting
+  decides.
 - **One chat engine, one adapter per agent** (`src/main/core/chats.ts`,
   `src/main/core/agents/`). Agent-specific code stays in its adapter; the
   transcript format (`src/shared/chat.ts`) is Caboose's own.

@@ -5,6 +5,7 @@ import {
   type DoctorCheck,
   JIRA_LEVELS,
   type JiraLevel,
+  type AgentLogins,
   type ConductorImport,
   type RepoEntry,
   type RepoScripts,
@@ -23,7 +24,7 @@ const TERMINAL_FIELDS: { key: "shellPath" | "bashPath" | "terminalFont"; label: 
 ];
 
 /** The setup screen: shown on first run, and from the Configure button. */
-export function Configure({ onDone }: { onDone: () => void }) {
+export function Configure({ onDone, onSaved }: { onDone: () => void; onSaved?: () => void }) {
   const [info, setInfo] = useState<ConfigInfo | null>(null);
   const [form, setForm] = useState<ConfigInput>({});
   /** A new token typed in; undefined = keep the stored one. */
@@ -34,6 +35,15 @@ export function Configure({ onDone }: { onDone: () => void }) {
   const [scan, setScan] = useState<{ folder: string; found: RepoEntry[]; picked: Set<string> } | null>(null);
   const [jiraTest, setJiraTest] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
+  const [logins, setLogins] = useState<AgentLogins | null>(null);
+  useEffect(() => {
+    void api.agentLogins().then(setLogins);
+  }, []);
+  // First run: preselect the agent that is logged in (Claude if both or neither).
+  useEffect(() => {
+    if (!logins || !info?.firstRun || form.defaultAgent) return;
+    setForm((f) => ({ ...f, defaultAgent: !logins.claude.ok && logins.copilot.ok ? "copilot" : "claude" }));
+  }, [logins, info?.firstRun]);
   const apps = useApps();
 
   const load = () =>
@@ -70,6 +80,7 @@ export function Configure({ onDone }: { onDone: () => void }) {
     }
     setMessage("Saved.");
     await load();
+    onSaved?.();
     return true;
   }
 
@@ -88,6 +99,30 @@ export function Configure({ onDone }: { onDone: () => void }) {
         </div>
         {!first && <button onClick={onDone}>Close</button>}
       </header>
+
+      <section>
+        <h2>Main agent</h2>
+        <p className="muted">Which agent new chats use. You can still pick the other one per chat (the "+" on the chat tabs).</p>
+        <div className="levels">
+          {(
+            [
+              ["claude", "Claude Code", "With a Claude subscription or API key."],
+              ["copilot", "GitHub Copilot", "With a Copilot plan, through your GitHub login (gh auth login)."],
+            ] as const
+          ).map(([id, label, hint]) => {
+            const l = logins?.[id];
+            return (
+              <label key={id} className={`level${(form.defaultAgent ?? "claude") === id ? " active" : ""}`}>
+                <input type="radio" name="main-agent" checked={(form.defaultAgent ?? "claude") === id} onChange={() => setForm({ ...form, defaultAgent: id })} />
+                <b>{label}</b>
+                <span className="muted">
+                  {!l ? "checking the login…" : l.ok ? <span className="add">✓ {l.detail}</span> : <span className="del">✗ not logged in</span>} · {hint}
+                </span>
+              </label>
+            );
+          })}
+        </div>
+      </section>
 
       <section>
         <h2>Features</h2>
@@ -579,9 +614,9 @@ function Doctor() {
         <ul className="doctor">
           {checks.map((c) => (
             <li key={c.name}>
-              <span className={c.ok ? "add" : "del"}>{c.ok ? "✓" : "✗"}</span> <b>{c.name}</b>{" "}
+              <span className={c.ok ? "add" : c.optional ? "muted" : "del"}>{c.ok ? "✓" : c.optional ? "–" : "✗"}</span> <b>{c.name}</b>{" "}
               <span className="muted">{c.detail}</span>
-              {!c.ok && c.hint && <div className="hint">{c.hint}</div>}
+              {!c.ok && c.hint && <div className={c.optional ? "hint muted" : "hint"}>{c.hint}</div>}
             </li>
           ))}
         </ul>

@@ -443,6 +443,25 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
 110. New chats take their settings (model, effort, mode) from the latest chat
      anywhere when their feature has none yet.
 
+## Claude or Copilot as the main agent (2026-11-06)
+
+111. **A main agent setting** (`defaultAgent` in the config; Configure → Main
+     agent, also on the first-run screen): Claude Code or GitHub Copilot. Each
+     option shows whether that agent is logged in on this machine; on first
+     run the logged-in one is preselected (Claude if both or neither). New
+     features, new chats and repo chats use it unless another agent is picked
+     (the "+" menu on chat tabs, the switch in the New feature dialog).
+112. **Neither agent has to be installed separately**: both runtimes come with
+     Caboose through npm (Claude Code with the Agent SDK, the Copilot CLI
+     runtime with the Copilot SDK). Only a login is needed: Claude Code's own
+     (`/login`, in the copy that comes with Caboose or your own `claude`), or
+     the GitHub CLI's for Copilot.
+113. **The prerequisite checks mark the other agent optional** ("–" with a
+     muted hint) instead of failing.
+114. A new feature always gets its central chat at once, with the chosen
+     agent, so even an empty feature starts with the right one. Saving in
+     Configure now updates the open window straight away.
+
 ## Answered (2026-11-05)
 
 - Private GitHub repo `andreakn/caboose`: yes.

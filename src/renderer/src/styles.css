@@ -619,3 +619,5 @@ textarea.wide:focus { outline: none; border-color: var(--accent); }
 .jira-line { display: grid; grid-template-columns: 150px 1fr; align-items: center; gap: 8px; }
 .proposal .proposal-repo { flex-direction: row; justify-content: space-between; align-items: center; gap: 12px; cursor: pointer; }
 .proposal .proposal-repo .muted { text-align: right; }
+.segmented.small button { padding: 3px 10px; font-size: 12px; }
+.hint.muted { color: var(--muted); }

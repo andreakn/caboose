@@ -115,7 +115,13 @@ const copilot = new CopilotProvider(
   () => new CopilotClient({ logLevel: "error", env: copilotEnv() }),
   (chat, f) => ({ tools: cabooseCopilotTools(toolContext(chat, f)), instructions: cabooseInstructions(f, "copilot", chat, localConfig.repos) }),
 );
-const chats = new Chats(store, dataDir, { claude, copilot }, (chatId, e) => win?.webContents.send("chat:event", chatId, e));
+const chats = new Chats(
+  store,
+  dataDir,
+  { claude, copilot },
+  (chatId, e) => win?.webContents.send("chat:event", chatId, e),
+  () => localConfig.defaultAgent,
+);
 const github = new GitHub();
 const coordinator = new Coordinator({
   store,
@@ -291,10 +297,10 @@ ipcMain.handle("feature:create", async (_e, input: NewFeature) => {
   const text = input.text?.trim();
   const firstLine = text?.split("\n")[0] ?? "";
   const r = await features.create({ ...input, title: input.title ?? (firstLine.length > 60 ? `${firstLine.slice(0, 59)}…` : firstLine || undefined) });
-  // With a description, the central chat starts on it right away (and proposes the repos).
-  if (r.ok && text) {
-    const chat = chats.create(r.value.id);
-    if (chat.ok) chats.send(chat.value.id, text);
+  // The central chat, with the chosen agent; with a description it starts on it right away (and proposes the repos).
+  if (r.ok) {
+    const chat = chats.create(r.value.id, input.agent);
+    if (chat.ok && text) chats.send(chat.value.id, text);
   }
   return r;
 });
@@ -433,6 +439,7 @@ ipcMain.handle("github:rename", (_e, featureId: string, repo: string, name: stri
 ipcMain.handle("app:doctor", () =>
   doctor({
     bashPath: localConfig.bashPath,
+    mainAgent: localConfig.defaultAgent,
     claudeAccount,
     copilotAccount: async () => {
       const a = await copilot.auth();
@@ -441,6 +448,25 @@ ipcMain.handle("app:doctor", () =>
     },
   }),
 );
+/** Whether each agent is logged in here (for picking the main agent). */
+ipcMain.handle("agents:logins", async () => {
+  const settle = async (fn: () => Promise<string>) => {
+    try {
+      return { ok: true, detail: await fn() };
+    } catch (e) {
+      return { ok: false, detail: (e as Error).message.split("\n")[0] };
+    }
+  };
+  const [c, p] = await Promise.all([
+    settle(claudeAccount),
+    settle(async () => {
+      const a = await copilot.auth();
+      if (!a.ok) throw new Error(a.detail);
+      return a.detail;
+    }),
+  ]);
+  return { claude: c, copilot: p };
+});
 ipcMain.handle("app:checkForUpdate", () => attempt(() => checkForUpdate(app.getAppPath())));
 ipcMain.handle("app:update", (e) =>
   attempt(async () => {

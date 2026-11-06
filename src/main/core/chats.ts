@@ -30,12 +30,16 @@ export class Chats {
   private emit: (chatId: string, e: ChatEvent) => void;
   private live = new Map<string, Live>();
 
+  private defaultAgent: () => Agent;
+
   constructor(
     store: Store,
     dataDir: string,
     providers: Partial<Record<Agent, AgentProvider>>,
     emit: (chatId: string, e: ChatEvent) => void,
+    defaultAgent: () => Agent = () => "claude",
   ) {
+    this.defaultAgent = defaultAgent;
     this.store = store;
     this.dir = join(dataDir, "chats");
     this.providers = providers as Record<Agent, AgentProvider>;
@@ -48,7 +52,7 @@ export class Chats {
     if (!feature) return { ok: false, error: "Unknown feature." };
     if (repo && !feature.repos.some((r) => r.name === repo)) return { ok: false, error: `No repo "${repo}" in this feature.` };
     const inWs = this.store.get().chats.filter((c) => c.featureId === featureId);
-    const kind = agent ?? (inWs.length ? agentOf(inWs.at(-1)!) : "claude");
+    const kind = agent ?? (inWs.length ? agentOf(inWs.at(-1)!) : this.defaultAgent());
     if (!this.providers[kind]) return { ok: false, error: `${kind} is not available.` };
     const last = inWs.filter((c) => agentOf(c) === kind).at(-1) ?? this.store.get().chats.filter((c) => agentOf(c) === kind).at(-1);
     const chat: Chat = {
@@ -82,6 +86,10 @@ export class Chats {
 
   settleProposal(chatId: string, id: string, answer: { added: string[]; declined: string[]; failed?: string[] }): void {
     this.record(chatId, { t: "proposal_answer", id, ...answer });
+  }
+
+  mainAgent(): Agent {
+    return this.defaultAgent();
   }
 
   /** The feature's most recent chat for a repo (or its central chat, without one). */
