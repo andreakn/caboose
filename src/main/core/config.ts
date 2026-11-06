@@ -22,6 +22,7 @@ function readJson<T>(file: string): T {
 
 export type ResolvedLocalConfig = {
   featuresRoot: string;
+  archiveRoot: string;
   branchPrefix: string;
   repos: RepoEntry[];
   jira: JiraConfig;
@@ -47,11 +48,16 @@ export function defaultFeaturesRoot(): string {
   return join(homedir(), "caboose", "features");
 }
 
+export function defaultArchiveRoot(): string {
+  return join(homedir(), "caboose", "archive");
+}
+
 /** The config with defaults filled in. */
 export function loadLocalConfig(cabooseDir: string): ResolvedLocalConfig {
   const c = readLocalConfig(cabooseDir);
   return {
     featuresRoot: c.featuresRoot ? expandHome(c.featuresRoot) : defaultFeaturesRoot(),
+    archiveRoot: c.archiveRoot ? expandHome(c.archiveRoot) : defaultArchiveRoot(),
     branchPrefix: c.branchPrefix ?? "caboose",
     repos: (c.repos ?? []).map((r) => ({ ...r, path: expandHome(r.path) })),
     jira: { level: "off", ...c.jira },

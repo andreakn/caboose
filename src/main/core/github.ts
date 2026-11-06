@@ -104,6 +104,11 @@ export class GitHub {
     this.fetchedAt.delete(wsPath); // the base just moved
   }
 
+  /** Closes a PR without merging (its branch is left to the caller). */
+  async closePr(wsPath: string, pr: number): Promise<void> {
+    await this.run("gh", ["pr", "close", String(pr)], wsPath);
+  }
+
   async renameBranch(wsPath: string, from: string, to: string): Promise<void> {
     await git(wsPath, "check-ref-format", "--branch", to);
     await git(wsPath, "branch", "-m", from, to);

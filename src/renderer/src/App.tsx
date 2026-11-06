@@ -25,6 +25,7 @@ import { DialogHost } from "./Dialog.tsx";
 import { NewFeature } from "./NewFeature.tsx";
 import { PlanView, StatusChip, useDocs } from "./Plan.tsx";
 import { notificationsOn } from "./prefs.ts";
+import { RetireDialog } from "./Retire.tsx";
 import { RunView, useRunOverview } from "./Run.tsx";
 import { TerminalPanel, useTerminals } from "./Terminals.tsx";
 
@@ -46,6 +47,8 @@ export function App() {
   };
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [retiring, setRetiring] = useState<Feature | null>(null);
   const activityVersion = useActivityVersion();
 
   const loadConfig = () => api.config().then(setConfig);
@@ -173,6 +176,7 @@ export function App() {
 
       <main className="main">
         {(busy || error) && <div className={busy ? "banner" : "banner error"}>{busy ?? error}</div>}
+        {!busy && !error && notice && <div className="banner">{notice}</div>}
         {screen === "board" ? (
           <Board features={state.features} chats={state.chats} onOpen={select} onNew={() => setCreating(true)} />
         ) : screen === "configure" ? (
@@ -191,17 +195,31 @@ export function App() {
             chats={state.chats.filter((c) => c.featureId === feature.id)}
             comments={state.comments.filter((c) => c.featureId === feature.id)}
             terminals={terminals.filter((t) => t.featureId === feature.id)}
-            onArchive={() => {
-              if (confirm(`Archive ${feature.name}? Its worktrees are removed; the branches and the folder stay.`)) {
-                void act(`Archiving ${feature.name}…`, () => api.archiveFeature(feature.id));
-              }
-            }}
+            onArchive={() => setRetiring(feature)}
             onRestore={() => act(`Restoring ${feature.name}…`, () => api.restoreFeature(feature.id))}
           />
         ) : (
           <Empty hasRepos={(config.config.repos ?? []).length > 0} onNew={() => setCreating(true)} />
         )}
       </main>
+      {retiring && (
+        <RetireDialog
+          f={retiring}
+          onCancel={() => setRetiring(null)}
+          onDone={(mode, r) => {
+            setRetiring(null);
+            if (!r.ok) return;
+            const { archivedTo, closedPrs, warnings } = r.value;
+            const what = mode === "archive" ? `Archived ${retiring.name} to ${archivedTo}` : `Deleted ${retiring.name}`;
+            const prs = closedPrs.length ? ` · closed PR ${closedPrs.map((n) => `#${n}`).join(", ")}` : "";
+            if (warnings.length) setError(`${what}${prs}, but:\n${warnings.join("\n")}`);
+            else {
+              setNotice(`${what}${prs}.`);
+              setTimeout(() => setNotice(null), 10_000);
+            }
+          }}
+        />
+      )}
       {creating && (
         <NewFeature
           config={config.config}
@@ -377,15 +395,20 @@ function FeatureView(props: {
         </div>
         <div className="actions">
           {f.archived ? (
-            <button onClick={props.onRestore}>Restore</button>
+            <>
+              <button onClick={props.onRestore}>Restore</button>
+              <button className="danger" onClick={props.onArchive} title="Move it to the archive folder, or delete it">
+                Archive or delete…
+              </button>
+            </>
           ) : (
             <>
               <button className="primary" onClick={() => setTab("run")} title="The Run tab: start and stop each repo's programs (Cmd/Ctrl+R runs them all)">
                 ▶ Run{running > 0 ? ` (${running})` : ""}
               </button>
               <OpenInMenu path={f.folder} only={["vscode", "terminal", "files"]} />
-              <button className="danger" onClick={props.onArchive}>
-                Archive
+              <button className="danger" onClick={props.onArchive} title="Archive or delete the feature: closes its open PRs and deletes its branches">
+                Archive…
               </button>
             </>
           )}

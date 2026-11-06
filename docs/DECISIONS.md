@@ -523,6 +523,29 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      or merge), so "to pull" / "behind master" are current. The fetch never
      prompts and gives up after 20 s.
 
+## Archive or delete (2026-11-06)
+
+125. **"Archive…" asks: archive or delete.** Both close the feature's open
+     and draft PRs (`gh pr close`, merged/closed ones are left alone) and
+     delete its branches, locally and on origin. Archive then moves the
+     feature folder (brief, plan, log, jira.txt) to
+     `<archiveRoot>/<yyyy-mm-dd_hh-mm>_<station>/` with its chats as
+     readable markdown plus the raw `.jsonl`, the setup logs, and a
+     `feature.json` record; delete deletes them. Either way Caboose forgets
+     the feature (no Restore: its branches are gone). `archiveRoot` defaults
+     to `~/caboose/archive` (Configure → Features).
+126. **The dialog first shows what would happen**: per repo the branch, the
+     PR and its state, and work that would be lost (uncommitted changes,
+     unpushed commits). Delete asks once more.
+127. **Order, so a failure cannot leave a half-dead feature**: PRs are
+     closed first and if one cannot be closed nothing else happens. After
+     that, chats, programs and terminals stop (Ctrl-C first), archive
+     scripts run, worktrees and branches go; failures there are reported as
+     warnings and the rest carries on. Main branches (main, master, develop,
+     trunk, the base) are never deleted. Features archived the old way
+     (worktrees removed, branches kept) still offer Restore, and the same
+     dialog.
+
 ## Answered (2026-11-05)
 
 - Private GitHub repo `andreakn/caboose`: yes.

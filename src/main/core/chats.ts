@@ -211,6 +211,14 @@ export class Chats {
     for (const c of this.store.get().chats) if (c.featureId === featureId) this.stop(c.id);
   }
 
+  /** Ends a feature's sessions and forgets its chats, transcripts included (archived or deleted). */
+  forgetFeature(featureId: string): void {
+    const ids = this.store.get().chats.filter((c) => c.featureId === featureId).map((c) => c.id);
+    for (const id of ids) this.stop(id);
+    this.store.update((s) => ({ ...s, chats: s.chats.filter((c) => c.featureId !== featureId) }));
+    for (const id of ids) rmSync(this.file(id), { force: true });
+  }
+
   stopAll(): void {
     for (const id of [...this.live.keys()]) this.stop(id);
   }
@@ -364,7 +372,8 @@ export class Chats {
     this.emit(chatId, stamped);
   }
 
-  private file(chatId: string): string {
+  /** Where a chat's transcript is saved (one event per line). */
+  file(chatId: string): string {
     return join(this.dir, `${chatId}.jsonl`);
   }
 

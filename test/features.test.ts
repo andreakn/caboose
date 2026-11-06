@@ -42,6 +42,7 @@ before(() => {
 function config(over: Partial<ResolvedLocalConfig> = {}): ResolvedLocalConfig {
   return {
     featuresRoot: join(tmp, "features"),
+    archiveRoot: join(tmp, "archive"),
     branchPrefix: "caboose",
     repos: [{ name: "web", path: web }, { name: "api", path: api }],
     jira: { level: "off" },

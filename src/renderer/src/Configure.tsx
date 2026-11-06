@@ -174,6 +174,25 @@ export function Configure({ onDone, onSaved }: { onDone: () => void; onSaved?: (
             </div>
           </label>
           <label>
+            <span>Archive folder</span>
+            <div className="row">
+              <input
+                value={form.archiveRoot ?? ""}
+                placeholder={info.defaults.archiveRoot}
+                onChange={(e) => setForm({ ...form, archiveRoot: e.target.value })}
+              />
+              <button
+                onClick={async () => {
+                  const folder = await api.pickFolder("Folder for archived features");
+                  if (folder) setForm({ ...form, archiveRoot: folder });
+                }}
+              >
+                Choose…
+              </button>
+            </div>
+            <small className="muted">Archiving a feature moves its folder and chat logs here, as yyyy-mm-dd_hh-mm_&lt;station&gt;.</small>
+          </label>
+          <label>
             <span>Branch prefix</span>
             <input
               value={form.branchPrefix ?? ""}

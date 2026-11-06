@@ -2,7 +2,7 @@
 // (<features root>/<station>/<repo>). Optionally tied to a Jira task, with a
 // subtask per repo. Electron-free, tested with plain `node --test`.
 import { randomUUID } from "node:crypto";
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import type {
   Feature,
@@ -169,6 +169,32 @@ export class Features {
     } catch (e) {
       return fail(e);
     }
+  }
+
+  /** Runs a repo's archive script, if it has one, logging to its setup log. */
+  async runArchiveScript(featureId: string, r: FeatureRepo): Promise<void> {
+    const f = this.get(featureId);
+    const archive = this.scriptsFor(r.name, r.source).archive;
+    if (!f || !archive || !existsSync(r.path)) return;
+    const code = await runScript(archive, r.path, this.logFile(f, r.name), this.scriptEnv(featureId, r.name), this.config.bashPath);
+    if (code !== 0) throw new Error(`exited with code ${code} (see logs/setup-${r.name}.log)`);
+  }
+
+  /** The feature's setup/archive logs: [file name, text]. */
+  logs(featureId: string): [string, string][] {
+    const f = this.get(featureId);
+    if (!f) return [];
+    return f.repos.flatMap((r): [string, string][] =>
+      existsSync(this.logFile(f, r.name)) ? [[`setup-${r.name}.log`, readFileSync(this.logFile(f, r.name), "utf8")]] : [],
+    );
+  }
+
+  /** Forgets an archived or deleted feature: its record, review comments and logs. */
+  forget(featureId: string): void {
+    const f = this.get(featureId);
+    if (!f) return;
+    for (const r of f.repos) rmSync(this.logFile(f, r.name), { force: true });
+    this.store.update((s) => ({ ...s, features: s.features.filter((x) => x.id !== featureId), comments: s.comments.filter((c) => c.featureId !== featureId) }));
   }
 
   /** Checks the kept branches out again in the same places. */

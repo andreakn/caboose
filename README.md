@@ -53,6 +53,11 @@ need focused follow-up; the central chat can do that itself and follow up. The
 briefs and log; agents report their status there, and your notes go to the
 chats they are for.
 
+**Archive…** on a feature closes its open PRs and deletes its branches
+(here and on GitHub), then either moves its folder and chat logs to the
+archive folder (`<archive>/yyyy-mm-dd_hh-mm_<station>/`) or deletes them.
+It shows first what would be lost.
+
 A **feature** gets a railway-station name and a folder with a git worktree for
 each repo you pick (`<features folder>/<station>/<repo>/`). The agents work in
 the feature folder and see all of its repos. With Jira on, a feature can be

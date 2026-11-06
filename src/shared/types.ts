@@ -75,6 +75,28 @@ export type Terminal = {
   exitCode?: number;
 };
 
+/** What archiving or deleting a feature will do to one repo. */
+export type RetireRepo = {
+  repo: string;
+  branch: string;
+  /** Its PR; an open or draft one is closed. */
+  pr?: { number: number; state: string; url: string; title: string };
+  /** Why the PR could not be looked up (it is then not closed). */
+  prError?: string;
+  /** Lost with the worktree. */
+  uncommitted: number;
+  /** Commits that are on no remote branch: lost with the branch. */
+  unpushed: number;
+  /** Set when the branch is kept (it is a main branch). */
+  keepBranch?: string;
+};
+
+export type RetirePlan = { feature: string; title?: string; archiveTo: string; repos: RetireRepo[] };
+
+/** Archive: PRs closed, branches deleted, folder and chat logs moved to the archive. Delete: the same, but the folder and logs are deleted. */
+export type RetireMode = "archive" | "delete";
+export type RetireOutcome = { archivedTo?: string; closedPrs: number[]; deletedBranches: string[]; warnings: string[] };
+
 /** A URL a run script declares (`# url: http://localhost:5173/ app`). */
 export type RunUrl = { url: string; label?: string };
 
@@ -169,6 +191,8 @@ export type JiraConfig = {
 export type LocalConfig = {
   /** Where feature folders go. Default: ~/caboose/features */
   featuresRoot?: string;
+  /** Where archived features go (folder, docs and chat logs). Default: ~/caboose/archive */
+  archiveRoot?: string;
   /** Branch prefix. Default: "caboose". */
   branchPrefix?: string;
   repos?: RepoEntry[];
@@ -218,7 +242,7 @@ export type ConfigInput = Omit<LocalConfig, "jira"> & { jira?: Omit<JiraConfig, 
 export type ConfigInfo = {
   config: ConfigView;
   /** With defaults filled in. */
-  defaults: { featuresRoot: string; branchPrefix: string; localFiles: string[] };
+  defaults: { featuresRoot: string; archiveRoot: string; branchPrefix: string; localFiles: string[] };
   /** No config file yet: show the setup screen. */
   firstRun: boolean;
   file: string;
@@ -360,6 +384,10 @@ export type CabooseApi = {
   createFeature(f: NewFeature): Promise<Result<Feature>>;
   addRepoToFeature(featureId: string, repo: string): Promise<Result<void>>;
   archiveFeature(featureId: string): Promise<Result<void>>;
+  /** What archiving or deleting the feature would do: PRs to close, branches to delete, work that would be lost. */
+  retirePlan(featureId: string): Promise<Result<RetirePlan>>;
+  /** Closes its open PRs, deletes its branches (here and on origin), then moves its folder and chat logs to the archive, or deletes them. */
+  retireFeature(featureId: string, mode: RetireMode): Promise<Result<RetireOutcome>>;
   restoreFeature(featureId: string): Promise<Result<void>>;
   openPath(path: string): Promise<void>;
   setupLog(featureId: string, repo: string): Promise<string>;

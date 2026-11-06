@@ -7,7 +7,7 @@ import type { Agent, Chat, Effort, Mode, Model } from "../shared/chat.ts";
 import { checksSummary } from "../shared/github.ts";
 import { commentsMessage } from "../shared/diff.ts";
 import type { MergeMethod } from "../shared/github.ts";
-import type { AppId, ConfigInput, Feature, FeatureStatus, NewFeature, State, Theme } from "../shared/types.ts";
+import type { AppId, ConfigInput, Feature, FeatureStatus, NewFeature, RetireMode, State, Theme } from "../shared/types.ts";
 import { CopilotClient } from "@github/copilot-sdk";
 import { ClaudeProvider, Inbox } from "./core/agents/claude.ts";
 import { copilotEnv, CopilotProvider } from "./core/agents/copilot.ts";
@@ -20,6 +20,7 @@ import {
   configExists,
   configFile,
   configView,
+  defaultArchiveRoot,
   defaultFeaturesRoot,
   jiraToken,
   loadLocalConfig,
@@ -40,6 +41,7 @@ import { cabooseCopilotTools, cabooseInstructions, cabooseMcp } from "./core/mcp
 import { featureOverview } from "./core/overview.ts";
 import { PrDetailsCache } from "./core/prdetails.ts";
 import { Store } from "./core/store.ts";
+import { retire, retirePlan } from "./core/retire.ts";
 import { Runner } from "./core/runner.ts";
 import { Terminals } from "./core/terminals.ts";
 import { checkForUpdate, update } from "./core/updater.ts";
@@ -252,7 +254,7 @@ ipcMain.handle("state:get", () => store.get());
 // --- config
 ipcMain.handle("config:get", () => ({
   config: configView(readLocalConfig(configDir)),
-  defaults: { featuresRoot: defaultFeaturesRoot(), branchPrefix: "caboose", localFiles: DEFAULT_LOCAL_FILES },
+  defaults: { featuresRoot: defaultFeaturesRoot(), archiveRoot: defaultArchiveRoot(), branchPrefix: "caboose", localFiles: DEFAULT_LOCAL_FILES },
   firstRun: !configExists(configDir),
   file: configFile(configDir),
   dataDir,
@@ -327,6 +329,30 @@ ipcMain.handle("feature:archive", async (_e, id: string) => {
   terminals.closeFeature(id);
   return features.archive(id);
 });
+ipcMain.handle("feature:retirePlan", (_e, id: string) =>
+  attempt(() => retirePlan(featureOrThrow(id), { github, archiveRoot: localConfig.archiveRoot })),
+);
+ipcMain.handle("feature:retire", (_e, id: string, mode: RetireMode) =>
+  attempt(async () => {
+    const f = featureOrThrow(id);
+    const out = await retire(f, mode, {
+      github,
+      archiveRoot: localConfig.archiveRoot,
+      chats: store.get().chats,
+      transcript: (chatId) => chats.events(chatId).filter((e) => e.t !== "status"),
+      logs: features.logs(f.id),
+      archiveScript: (r) => features.runArchiveScript(f.id, r),
+      stop: async () => {
+        chats.stopFeature(f.id);
+        await runner.stopAll(f.id); // Ctrl-C first, so programs shut down cleanly
+        terminals.closeFeature(f.id);
+      },
+    });
+    chats.forgetFeature(f.id);
+    features.forget(f.id);
+    return out;
+  }),
+);
 ipcMain.handle("feature:copyLocalFiles", (_e, featureId: string, repo: string) => features.copyLocalFilesAgain(featureId, repo));
 ipcMain.handle("feature:restore", (_e, id: string) => features.restore(id));
 ipcMain.handle("feature:setupLog", (_e, id: string, repo: string) => features.setupLog(id, repo));
