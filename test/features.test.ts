@@ -1,0 +1,156 @@
+// Features against real git repos (and a fake Jira).
+import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { after, before, test } from "node:test";
+import type { ResolvedLocalConfig } from "../src/main/core/config.ts";
+import { checkRepo, Features, scanRepos } from "../src/main/core/features.ts";
+import type { Jira } from "../src/main/core/jira.ts";
+import { Store } from "../src/main/core/store.ts";
+
+const tmp = mkdtempSync(join(tmpdir(), "caboose-feat-"));
+after(() => rmSync(tmp, { recursive: true, force: true }));
+const sh = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: "pipe" }).trim();
+
+/** A repo with an origin, cloned into tmp/code/<name>. */
+function makeRepo(name: string, files: Record<string, string>) {
+  const origin = join(tmp, "origins", name);
+  sh(tmp, "init", "-q", "-b", "main", origin);
+  for (const [f, c] of Object.entries(files)) writeFileSync(join(origin, f), c);
+  sh(origin, "add", ".");
+  sh(origin, "-c", "user.email=t@e", "-c", "user.name=T", "commit", "-q", "-m", "init");
+  const clone = join(tmp, "code", name);
+  sh(tmp, "clone", "-q", origin, clone);
+  return clone;
+}
+
+let web: string;
+let api: string;
+before(() => {
+  web = makeRepo("web", { "README.md": "web\n", "caboose.json": JSON.stringify({ setup: "echo port=$CABOOSE_PORT > setup.txt", copy: [".env"] }) });
+  writeFileSync(join(web, ".env"), "SECRET=1\n");
+  api = makeRepo("api", { "README.md": "api\n" });
+});
+
+function config(over: Partial<ResolvedLocalConfig> = {}): ResolvedLocalConfig {
+  return {
+    featuresRoot: join(tmp, "features"),
+    branchPrefix: "caboose",
+    repos: [{ name: "web", path: web }, { name: "api", path: api }],
+    jira: { level: "off" },
+    ...over,
+  };
+}
+
+const settled = (store: Store) => () => store.get().features.every((f) => f.repos.every((r) => r.setup !== "running"));
+async function until(fn: () => boolean) {
+  for (let i = 0; i < 400 && !fn(); i++) await new Promise((r) => setTimeout(r, 25));
+  assert.ok(fn(), "timed out");
+}
+
+test("a feature is a station folder with a worktree per repo on fresh, untracked branches", async () => {
+  const store = new Store(join(tmp, "s1", "state.json"));
+  const features = new Features(store, config(), join(tmp, "s1", "logs"));
+  const r = await features.create({ repos: ["web", "api"] });
+  assert.ok(r.ok, !r.ok ? r.error : "");
+  const f = r.value;
+  assert.equal(f.folder, join(tmp, "features", f.name));
+  assert.ok(existsSync(join(f.folder, ".context")));
+  assert.deepEqual(f.repos.map((x) => [x.name, x.path, x.branch]), [
+    ["web", join(f.folder, "web"), `caboose/${f.name}`],
+    ["api", join(f.folder, "api"), `caboose/${f.name}`],
+  ]);
+  for (const x of f.repos) {
+    assert.equal(sh(x.path, "branch", "--show-current"), x.branch);
+    assert.equal(x.baseRef, "origin/main");
+    assert.throws(() => sh(x.path, "rev-parse", "--abbrev-ref", "@{upstream}"), "must not track origin/main");
+  }
+  assert.equal(readFileSync(join(f.folder, "web", ".env"), "utf8"), "SECRET=1\n");
+  await until(settled(store));
+  assert.equal(readFileSync(join(f.folder, "web", "setup.txt"), "utf8").trim(), `port=${f.port}`);
+  assert.equal(features.scriptEnv(f.id, "api").CABOOSE_PORT, String(f.port + 10));
+  assert.equal(features.scriptEnv(f.id).CABOOSE_FEATURE_PATH, f.folder);
+
+  const second = await features.create({ repos: ["api"] });
+  assert.ok(second.ok);
+  assert.notEqual(second.value.name, f.name);
+  assert.equal(second.value.port, f.port + 100);
+});
+
+test("repos can be added later; archive keeps branches and folder, restore brings worktrees back", async () => {
+  const store = new Store(join(tmp, "s2", "state.json"));
+  const features = new Features(store, config(), join(tmp, "s2", "logs"));
+  const r = await features.create({ repos: ["api"] });
+  assert.ok(r.ok);
+  const add = await features.addRepo(r.value.id, "web");
+  assert.ok(add.ok, !add.ok ? add.error : "");
+  assert.equal((await features.addRepo(r.value.id, "web")).ok, false);
+  await until(settled(store));
+  const f = features.get(r.value.id)!;
+  writeFileSync(join(f.folder, "api", "work.txt"), "wip\n");
+  sh(join(f.folder, "api"), "add", "work.txt");
+  sh(join(f.folder, "api"), "-c", "user.email=t@e", "-c", "user.name=T", "commit", "-q", "-m", "wip");
+
+  assert.ok((await features.archive(f.id)).ok);
+  assert.equal(existsSync(join(f.folder, "api")), false);
+  assert.ok(existsSync(f.folder));
+  assert.ok(sh(api, "branch", "--list", f.repos[0].branch));
+  const back = await features.restore(f.id);
+  assert.ok(back.ok, !back.ok ? back.error : "");
+  assert.equal(readFileSync(join(f.folder, "api", "work.txt"), "utf8"), "wip\n");
+  await until(settled(store));
+});
+
+test("required Jira: no task, no feature; with one, each repo gets a subtask and the key in its branch", async () => {
+  const created: string[] = [];
+  let n = 100;
+  const fake = {
+    issue: async (key: string) => ({ key, summary: "Checkout v2", status: "To Do", type: "Story", url: "" }),
+    createTask: async (_p: string, s: string) => (created.push(`task:${s}`), `NWP-${n++}`),
+    createSubtask: async (parent: string, s: string) => (created.push(`${parent}>${s}`), `NWP-${n++}`),
+  } as unknown as Jira;
+  const store = new Store(join(tmp, "s3", "state.json"));
+  const cfg = config({ jira: { level: "required", project: "NWP" } });
+  const features = new Features(store, cfg, join(tmp, "s3", "logs"), () => fake);
+
+  assert.equal((await features.create({ repos: ["web"] })).ok, false);
+  const r = await features.create({ repos: ["web", "api"], jira: { key: "https://x.atlassian.net/browse/NWP-1" } });
+  assert.ok(r.ok, !r.ok ? r.error : "");
+  assert.deepEqual(created, ["NWP-1>web: Checkout v2", "NWP-1>api: Checkout v2"]);
+  assert.equal(readFileSync(join(r.value.folder, "jira.txt"), "utf8"), "NWP-1\nweb: NWP-100\napi: NWP-101\n");
+  assert.deepEqual(r.value.repos.map((x) => x.branch), [`caboose/NWP-100-${r.value.name}`, `caboose/NWP-101-${r.value.name}`]);
+
+  const made = await features.create({ repos: ["api"], jira: { create: "Brand new" } });
+  assert.ok(made.ok, !made.ok ? made.error : "");
+  assert.deepEqual(features.jiraOf(made.value.id), { task: "NWP-102", subtasks: { api: "NWP-103" } });
+  await until(settled(store));
+});
+
+test("optional Jira: links are set by hand, subtasks created on request", async () => {
+  const fake = {
+    issue: async (key: string) => ({ key, summary: "Thing", status: "", type: "", url: "" }),
+    createSubtask: async () => "NWP-7",
+  } as unknown as Jira;
+  const store = new Store(join(tmp, "s4", "state.json"));
+  const features = new Features(store, config({ jira: { level: "optional" } }), join(tmp, "s4", "logs"), () => fake);
+  const r = await features.create({ repos: ["api"] });
+  assert.ok(r.ok);
+  assert.equal(r.value.repos[0].branch, `caboose/${r.value.name}`);
+  assert.equal(features.setTask(r.value.id, "nope").ok, false);
+  assert.ok(features.setTask(r.value.id, "NWP-5").ok);
+  const sub = await features.createSubtask(r.value.id, "api");
+  assert.ok(sub.ok && sub.value === "NWP-7");
+  assert.deepEqual(features.jiraOf(r.value.id), { task: "NWP-5", subtasks: { api: "NWP-7" } });
+  assert.ok(features.setSubtask(r.value.id, "api", null).ok);
+  assert.ok(features.setTask(r.value.id, null).ok);
+  assert.equal(existsSync(join(r.value.folder, "jira.txt")), false);
+});
+
+test("repos are found by folder and by scanning a parent folder", async () => {
+  const c = await checkRepo(join(web));
+  assert.ok(c.ok && c.value.name === "web");
+  assert.equal((await checkRepo(tmp)).ok, false);
+  assert.deepEqual(scanRepos(join(tmp, "code")).map((r) => r.name), ["api", "web"]);
+});

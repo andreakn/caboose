@@ -1,7 +1,15 @@
+// This machine's config (caboose.local.json in the Caboose checkout,
+// gitignored) and each repo's caboose.json.
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { LocalConfig, RepoConfig } from "../../shared/types.ts";
+import type { ConfigInput, ConfigView, JiraConfig, LocalConfig, RepoConfig, RepoEntry, Secret } from "../../shared/types.ts";
+
+/** Encrypts secrets for the config file (Electron's safeStorage in the app). */
+export type SecretCodec = { canEncrypt: boolean; encrypt(s: string): string; decrypt(s: string): string };
+export const plainCodec: SecretCodec = { canEncrypt: false, encrypt: (s) => s, decrypt: (s) => s };
+
+const FILE = "caboose.local.json";
 
 function readJson<T>(file: string): T {
   if (!existsSync(file)) return {} as T;
@@ -12,33 +20,84 @@ function readJson<T>(file: string): T {
   }
 }
 
-export type ResolvedLocalConfig = Required<Omit<LocalConfig, "bashPath" | "shellPath" | "terminalFont">> & {
+export type ResolvedLocalConfig = {
+  featuresRoot: string;
+  branchPrefix: string;
+  repos: RepoEntry[];
+  jira: JiraConfig;
   bashPath?: string;
   shellPath?: string;
   terminalFont?: string;
 };
 
-/** This machine's settings: `caboose.local.json` in the Caboose checkout, with defaults. */
+export const configFile = (cabooseDir: string) => join(cabooseDir, FILE);
+export const configExists = (cabooseDir: string) => existsSync(configFile(cabooseDir));
+
+/** The config as written, without defaults. */
+export function readLocalConfig(cabooseDir: string): LocalConfig {
+  return readJson<LocalConfig>(configFile(cabooseDir));
+}
+
+export function defaultFeaturesRoot(): string {
+  return join(homedir(), "caboose", "features");
+}
+
+/** The config with defaults filled in. */
 export function loadLocalConfig(cabooseDir: string): ResolvedLocalConfig {
-  const c = readJson<LocalConfig>(join(cabooseDir, "caboose.local.json"));
+  const c = readLocalConfig(cabooseDir);
   return {
-    workspacesRoot: c.workspacesRoot ? expandHome(c.workspacesRoot) : join(homedir(), "caboose", "workspaces"),
+    featuresRoot: c.featuresRoot ? expandHome(c.featuresRoot) : defaultFeaturesRoot(),
     branchPrefix: c.branchPrefix ?? "caboose",
+    repos: (c.repos ?? []).map((r) => ({ name: r.name, path: expandHome(r.path) })),
+    jira: { level: "off", ...c.jira },
     bashPath: c.bashPath,
     shellPath: c.shellPath,
     terminalFont: c.terminalFont,
   };
 }
 
-/** This machine's settings as written in the file, without defaults. */
-export function readLocalConfig(cabooseDir: string): LocalConfig {
-  return readJson<LocalConfig>(join(cabooseDir, "caboose.local.json"));
+/** What the window may see: never the token itself. */
+export function configView(c: LocalConfig): ConfigView {
+  const { jira, ...rest } = c;
+  if (!jira) return rest;
+  const { token, ...j } = jira;
+  return { ...rest, jira: { ...j, hasToken: Boolean(token) } };
 }
 
-/** Writes `caboose.local.json`, leaving out empty values (so defaults apply). */
+/** Merges what the window saved into the stored config, encrypting a new token. */
+export function applyConfigInput(stored: LocalConfig, input: ConfigInput, codec: SecretCodec): LocalConfig {
+  const { jira, ...rest } = input;
+  const out: LocalConfig = cleanStrings(rest);
+  if (jira) {
+    const { token, ...j } = jira;
+    const kept = token === undefined ? stored.jira?.token : token === null || token.trim() === "" ? undefined : seal(token.trim(), codec);
+    out.jira = { ...cleanStrings(j), level: j.level, ...(kept ? { token: kept } : {}) };
+  }
+  if (out.repos) out.repos = out.repos.filter((r) => r.name && r.path);
+  return out;
+}
+
 export function saveLocalConfig(cabooseDir: string, c: LocalConfig): void {
-  const clean = Object.fromEntries(Object.entries(c).filter(([, v]) => typeof v === "string" && v.trim() !== "").map(([k, v]) => [k, (v as string).trim()]));
-  writeFileSync(join(cabooseDir, "caboose.local.json"), `${JSON.stringify(clean, null, 2)}\n`);
+  writeFileSync(configFile(cabooseDir), `${JSON.stringify(c, null, 2)}\n`);
+}
+
+export function jiraToken(jira: JiraConfig, codec: SecretCodec): string | undefined {
+  const t = jira.token;
+  if (!t) return undefined;
+  return "enc" in t ? codec.decrypt(t.enc) : t.plain;
+}
+
+function seal(secret: string, codec: SecretCodec): Secret {
+  return codec.canEncrypt ? { enc: codec.encrypt(secret) } : { plain: secret };
+}
+
+/** Drops empty strings so defaults apply; keeps other values as they are. */
+function cleanStrings<T extends object>(o: T): T {
+  return Object.fromEntries(
+    Object.entries(o)
+      .filter(([, v]) => !(typeof v === "string" && v.trim() === "") && v !== undefined)
+      .map(([k, v]) => [k, typeof v === "string" ? v.trim() : v]),
+  ) as T;
 }
 
 /** A repo's `caboose.json`, read from its main checkout. */

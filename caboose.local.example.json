@@ -1,7 +1,23 @@
 {
-  "workspacesRoot": "~/caboose/workspaces",
+  "featuresRoot": "~/caboose/features",
   "branchPrefix": "caboose",
-  "bashPath": "C:\\Program Files\\Git\\bin\\bash.exe",
+  "repos": [
+    {
+      "name": "my-app",
+      "path": "~/code/my-app"
+    },
+    {
+      "name": "my-api",
+      "path": "~/code/my-api"
+    }
+  ],
+  "jira": {
+    "level": "optional",
+    "site": "https://yourcompany.atlassian.net",
+    "email": "you@company.com",
+    "project": "NWP"
+  },
   "shellPath": "/bin/zsh",
+  "bashPath": "C:\\Program Files\\\\Git\\\\bin\\\\bash.exe",
   "terminalFont": "MesloLGS NF"
 }

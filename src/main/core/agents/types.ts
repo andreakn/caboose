@@ -2,7 +2,7 @@
 // GitHub Copilot). The engine owns transcripts, queueing, approvals and
 // questions; an agent adapter only translates its SDK to these calls.
 import type { Chat, Effort, Mode, Model, ModelOption, Question } from "../../../shared/chat.ts";
-import type { Workspace } from "../../../shared/types.ts";
+import type { Feature } from "../../../shared/types.ts";
 
 export type PermissionAnswer = "allow" | "always" | "deny";
 /** answers by question text; or the user typed a reply in the chat instead; or dismissed (null). */
@@ -36,7 +36,7 @@ export interface AgentSession {
 }
 
 export interface AgentProvider {
-  start(chat: Chat, ws: Workspace, host: AgentHost): AgentSession;
+  start(chat: Chat, feature: Feature, host: AgentHost): AgentSession;
   models(): Promise<ModelOption[]>;
 }
 

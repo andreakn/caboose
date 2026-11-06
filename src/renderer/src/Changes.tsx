@@ -1,17 +1,28 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { type DiffComment, type DiffLine, type FileChange, parsePatch, type WorkspaceChanges } from "../../shared/diff.ts";
-import type { Workspace } from "../../shared/types.ts";
+import type { Feature, FeatureRepo } from "../../shared/types.ts";
 
 const api = window.caboose;
 const MAX_LINES = 4000;
 
-/** Polls the workspace's changes while it is open (no file watchers: they behave differently on every OS). */
-export function useChanges(ws: Workspace): { changes?: WorkspaceChanges; error?: string; refresh: () => void } {
-  const [state, setState] = useState<{ changes?: WorkspaceChanges; error?: string }>({});
+/**
+ * Polls every repo's changes while the feature is open (no file watchers:
+ * they behave differently on every OS).
+ */
+export function useFeatureChanges(ws: Feature): {
+  byRepo: Record<string, WorkspaceChanges | undefined>;
+  errors: Record<string, string | undefined>;
+  refresh: () => void;
+} {
+  const [state, setState] = useState<{ byRepo: Record<string, WorkspaceChanges | undefined>; errors: Record<string, string | undefined> }>({
+    byRepo: {},
+    errors: {},
+  });
   const [tick, setTick] = useState(0);
+  const repoNames = ws.repos.map((r) => r.name).join();
 
   useEffect(() => {
-    setState({});
+    setState({ byRepo: {}, errors: {} });
   }, [ws.id]);
 
   useEffect(() => {
@@ -19,12 +30,22 @@ export function useChanges(ws: Workspace): { changes?: WorkspaceChanges; error?:
     let alive = true;
     const load = async () => {
       if (document.hidden) return;
-      const r = await api.changes(ws.id);
+      const results = await Promise.all(ws.repos.map(async (r) => [r.name, await api.changes(ws.id, r.name)] as const));
       if (!alive) return;
       setState((prev) => {
-        if (!r.ok) return { error: r.error };
-        // Keep the old object when nothing changed, so views do not refetch.
-        return JSON.stringify(prev.changes) === JSON.stringify(r.value) ? prev : { changes: r.value };
+        const byRepo = { ...prev.byRepo };
+        const errors: Record<string, string | undefined> = {};
+        let changed = false;
+        for (const [name, r] of results) {
+          if (!r.ok) errors[name] = r.error;
+          // Keep the old object when nothing changed, so views do not refetch.
+          else if (JSON.stringify(prev.byRepo[name]) !== JSON.stringify(r.value)) {
+            byRepo[name] = r.value;
+            changed = true;
+          }
+        }
+        const errorsChanged = JSON.stringify(errors) !== JSON.stringify(prev.errors);
+        return changed || errorsChanged ? { byRepo, errors } : prev;
       });
     };
     void load();
@@ -35,40 +56,42 @@ export function useChanges(ws: Workspace): { changes?: WorkspaceChanges; error?:
       clearInterval(timer);
       window.removeEventListener("focus", load);
     };
-  }, [ws.id, ws.archived, tick]);
+  }, [ws.id, repoNames, ws.archived, tick]);
 
   return { ...state, refresh: () => setTick((t) => t + 1) };
 }
 
 export function ChangesView(props: {
-  ws: Workspace;
+  ws: Feature;
+  repo: FeatureRepo;
+  /** The user's comments in the whole feature not yet sent. */
+  unsent: number;
   changes?: WorkspaceChanges;
   error?: string;
   comments: DiffComment[];
   refresh: () => void;
   onSendComments: () => void;
 }) {
-  const { ws, changes, comments } = props;
+  const { ws, repo, changes, comments } = props;
   const [selected, setSelected] = useState<string | null>(null);
   const files = changes?.files ?? [];
   const file = files.find((f) => f.path === selected) ?? files[0];
-  const unsent = comments.filter((c) => c.author === "user" && !c.sentAt && !c.resolved);
   const totals = files.reduce((t, f) => ({ add: t.add + f.additions, del: t.del + f.deletions }), { add: 0, del: 0 });
 
-  if (ws.archived) return <div className="changes-empty muted">This workspace is archived.</div>;
+  if (ws.archived) return <div className="changes-empty muted">This feature is archived.</div>;
 
   return (
     <div className="changes">
       <div className="changes-bar">
         <span>
           {files.length} file{files.length === 1 ? "" : "s"} changed <span className="add">+{totals.add}</span>{" "}
-          <span className="del">−{totals.del}</span> <span className="muted">against</span> <code>{ws.baseRef}</code>
+          <span className="del">−{totals.del}</span> <span className="muted">against</span> <code>{repo.baseRef}</code>
         </span>
         <span className="spacer" />
         <button onClick={props.refresh}>Refresh</button>
-        {unsent.length > 0 && (
+        {props.unsent > 0 && (
           <button className="primary" onClick={props.onSendComments}>
-            Send {unsent.length} comment{unsent.length === 1 ? "" : "s"} to the chat
+            Send {props.unsent} comment{props.unsent === 1 ? "" : "s"} to the chat
           </button>
         )}
       </div>
@@ -99,6 +122,7 @@ export function ChangesView(props: {
           <FileDiff
             key={file.path}
             ws={ws}
+            repo={repo.name}
             file={file}
             changes={changes}
             comments={comments.filter((c) => c.file === file.path)}
@@ -117,7 +141,8 @@ const STATUS_LETTER: Record<FileChange["status"], string> = {
   untracked: "U",
 };
 
-function FileDiff({ ws, file, changes, comments }: { ws: Workspace; file: FileChange; changes: WorkspaceChanges; comments: DiffComment[] }) {
+function FileDiff(props: { ws: Feature; repo: string; file: FileChange; changes: WorkspaceChanges; comments: DiffComment[] }) {
+  const { ws, repo, file, changes, comments } = props;
   const [patch, setPatch] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [composing, setComposing] = useState<string | null>(null);
@@ -125,7 +150,7 @@ function FileDiff({ ws, file, changes, comments }: { ws: Workspace; file: FileCh
   // Refetch whenever the changes poll found something new.
   useEffect(() => {
     let alive = true;
-    void api.filePatch(ws.id, file.path).then((r) => {
+    void api.filePatch(ws.id, repo, file.path).then((r) => {
       if (!alive) return;
       if (r.ok) setPatch(r.value);
       else setError(r.error);
@@ -133,7 +158,7 @@ function FileDiff({ ws, file, changes, comments }: { ws: Workspace; file: FileCh
     return () => {
       alive = false;
     };
-  }, [ws.id, file.path, changes]);
+  }, [ws.id, repo, file.path, changes]);
 
   const hunks = useMemo(() => (patch ? parsePatch(patch) : []), [patch]);
   const lineCount = hunks.reduce((n, h) => n + h.lines.length, 0);
@@ -201,7 +226,8 @@ function FileDiff({ ws, file, changes, comments }: { ws: Workspace; file: FileCh
                                 onCancel={() => setComposing(null)}
                                 onSave={async (body) => {
                                   await api.addComment({
-                                    workspaceId: ws.id,
+                                    featureId: ws.id,
+                                    repo,
                                     file: file.path,
                                     side: l.type === "del" ? "old" : "new",
                                     line: (l.type === "del" ? l.old : l.new)!,

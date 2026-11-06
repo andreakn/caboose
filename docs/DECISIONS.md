@@ -228,6 +228,57 @@ questions at the bottom are the ones that need an answer.
     tool, a question answered on the card, a shell command approved, the
     answer; and a Claude chat afterwards, to check nothing broke.
 
+## Features replace workspaces (2026-11-06)
+
+Asked for by Andreas: a new session is a *feature* with a station name and its
+own folder; it can span several repos; it can be tied to Jira.
+
+66. **A feature is a folder** `<features folder>/<station>/` with one git
+    worktree per repo in a subfolder named after the repo, a `.context/`
+    scratch folder, and an optional `jira.txt`. Repos can be added later.
+    Archive removes the worktrees and keeps the branches and the folder;
+    restore puts them back.
+67. **Chats belong to the feature and run in the feature folder**, so the
+    agent sees every repo; its system note lists the repos, branches, ports
+    and Jira keys and says to run git inside each repo folder. Chat tabs stay
+    (one is enough, more cost nothing).
+68. **Changes, the GitHub/PR row and Run are per repo** (each repo gets its own
+    branch and PR). Caboose's agent tools take an optional `repo`.
+69. **Ports**: 100 per feature from 41000; repo *i* gets `CABOOSE_PORT` =
+    port + 10·i (also `CABOOSE_FEATURE_PORT`, `CABOOSE_FEATURE`,
+    `CABOOSE_FEATURE_PATH`, `CABOOSE_REPO`).
+70. **Terminals**: as many as wanted per feature, each opened in a chosen repo
+    or in the feature folder ("+" menu).
+71. **Branch names**: `<prefix>/<station>`, or `<prefix>/<KEY>-<station>` with
+    the repo's subtask key (else the feature's task key), so the branch
+    contains the Jira key. PR messages ask for titles starting `<KEY> - `.
+72. **Jira levels** (config): Off / Optional (link by hand, create subtasks on
+    request) / Expected (new features ask, one click to skip; Create PR warns
+    without a key) / Required (no feature without a task; each repo's subtask
+    is created automatically, in the task's project, with the project's
+    sub-task type).
+73. **Jira over its REST API** with email + API token (Andreas had the MCP
+    route in mind; trying this one first). The token is encrypted with the OS
+    keychain (Electron `safeStorage`) and never sent to the window. *(Linux:
+    needs a keyring such as GNOME Keyring or KWallet; without one the token is
+    stored in plain text in the config file, and Configure says so.)* Only
+    https sites are accepted (http only for localhost, for tests).
+74. **`jira.txt` is the record** of a feature's links (task on the first
+    line, `repo: KEY` lines after); Caboose reads it each time, so hand edits
+    count, and agents can read it.
+75. **The config file now holds the repos** (machine-specific paths) and Jira;
+    app data holds features and chats. First launch (no config file) opens
+    the Configure screen; "⚙ Configure" opens it later. Repos are added one at
+    a time or by scanning a folder such as `~/code`; names must be unique.
+76. **No migration** of the old one-repo workspaces (only demo data existed);
+    old chats and comments are ignored.
+77. `CABOOSE_CONFIG_DIR` points the app at another config folder (tests).
+78. **Tested end to end** in the app against a fake Jira server: first run,
+    Jira "Required" + connection test, a feature with two repos from an
+    existing task (two subtasks created, keys in the branch names and
+    jira.txt), a terminal per repo with its own port, and a Claude chat in the
+    feature folder reading both repos and jira.txt. Real Jira is untested.
+
 ## Answered (2026-11-05)
 
 - Private GitHub repo `andreakn/caboose`: yes.

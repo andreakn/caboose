@@ -10,7 +10,7 @@ import type {
   SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk";
 import { CLAUDE_MODELS, type Chat, type Effort, type Question } from "../../../shared/chat.ts";
-import type { Workspace } from "../../../shared/types.ts";
+import type { Feature } from "../../../shared/types.ts";
 import { type AgentHost, type AgentProvider, type AgentSession, clip, errorText } from "./types.ts";
 
 /** The part of the SDK's Query that Caboose uses. */
@@ -23,7 +23,7 @@ export type QueryLike = AsyncIterable<SDKMessage> & {
 };
 export type QueryFn = (args: { prompt: AsyncIterable<SDKUserMessage>; options: Options }) => QueryLike;
 /** Extra query options per chat: Caboose's MCP tools and system prompt. */
-export type ExtraOptions = (chat: Chat, ws: Workspace) => Partial<Options>;
+export type ExtraOptions = (chat: Chat, feature: Feature) => Partial<Options>;
 
 export class ClaudeProvider implements AgentProvider {
   private query: QueryFn;
@@ -38,13 +38,13 @@ export class ClaudeProvider implements AgentProvider {
     return CLAUDE_MODELS;
   }
 
-  start(chat: Chat, ws: Workspace, host: AgentHost): AgentSession {
+  start(chat: Chat, feature: Feature, host: AgentHost): AgentSession {
     const inbox = new Inbox<SDKUserMessage>();
     const q = this.query({
       prompt: inbox,
       options: {
-        ...this.extras(chat, ws),
-        cwd: ws.path,
+        ...this.extras(chat, feature),
+        cwd: feature.folder,
         resume: chat.sessionId,
         model: chat.model === "default" ? undefined : chat.model,
         effort: chat.effort,

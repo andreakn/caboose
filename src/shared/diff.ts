@@ -23,7 +23,10 @@ export type Hunk = { header: string; lines: DiffLine[] };
 
 export type DiffComment = {
   id: string;
-  workspaceId: string;
+  featureId: string;
+  /** The repo (folder name in the feature) the file is in. */
+  repo: string;
+  /** Path relative to the repo. */
   file: string;
   /** Line number on `side`: new-file numbers for added/context lines, old-file numbers for deleted ones. */
   line: number;
@@ -66,7 +69,7 @@ export function parsePatch(patch: string): Hunk[] {
 /** The message that hands the user's review comments to Claude. */
 export function commentsMessage(comments: DiffComment[]): string {
   const parts = comments.map((c) => {
-    const where = `${c.file}:${c.line}${c.side === "old" ? " (removed line)" : ""}`;
+    const where = `${c.repo}/${c.file}:${c.line}${c.side === "old" ? " (removed line)" : ""}`;
     return `**${where}**\n\`\`\`\n${c.lineText}\n\`\`\`\n${c.body}`;
   });
   return `I left ${comments.length === 1 ? "a review comment" : `${comments.length} review comments`} on the changes. Please address ${comments.length === 1 ? "it" : "them"}:\n\n${parts.join("\n\n")}`;

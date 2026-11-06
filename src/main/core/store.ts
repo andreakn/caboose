@@ -17,9 +17,14 @@ export class Store {
   private static load(file: string): State {
     try {
       const s = JSON.parse(readFileSync(file, "utf8")) as Partial<State>;
-      return { repos: s.repos ?? [], workspaces: s.workspaces ?? [], chats: s.chats ?? [], comments: s.comments ?? [] };
+      // Chats and comments from before features (per workspace) are left behind.
+      return {
+        features: s.features ?? [],
+        chats: (s.chats ?? []).filter((c) => c.featureId),
+        comments: (s.comments ?? []).filter((c) => c.featureId),
+      };
     } catch {
-      return { repos: [], workspaces: [], chats: [], comments: [] };
+      return { features: [], chats: [], comments: [] };
     }
   }
 

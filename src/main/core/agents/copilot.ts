@@ -5,11 +5,11 @@
 import type { CopilotClient, CopilotSession, ModelInfo, PermissionRequest, PermissionRequestResult, SessionConfig, Tool } from "@github/copilot-sdk";
 import { isAbsolute, relative } from "node:path";
 import type { Chat, Mode, ModelOption } from "../../../shared/chat.ts";
-import type { Workspace } from "../../../shared/types.ts";
+import type { Feature } from "../../../shared/types.ts";
 import { type AgentHost, type AgentProvider, type AgentSession, clip, errorText } from "./types.ts";
 
 /** Caboose's tools and system-prompt note for one chat. */
-export type CopilotExtras = (chat: Chat, ws: Workspace) => { tools: Tool[]; instructions: string };
+export type CopilotExtras = (chat: Chat, feature: Feature) => { tools: Tool[]; instructions: string };
 
 export type CopilotAuth = { ok: boolean; detail: string };
 
@@ -61,7 +61,7 @@ export class CopilotProvider implements AgentProvider {
     await c?.stop();
   }
 
-  start(chat: Chat, ws: Workspace, host: AgentHost): AgentSession {
+  start(chat: Chat, feature: Feature, host: AgentHost): AgentSession {
     let session: CopilotSession | undefined;
     let closed = false;
     let mode: Mode = chat.mode;
@@ -80,16 +80,16 @@ export class CopilotProvider implements AgentProvider {
     const ready = (async () => {
       const client = await this.getClient();
       if (!this.modelInfo.size) await this.models().catch(() => {});
-      const { tools, instructions } = this.extras(chat, ws);
+      const { tools, instructions } = this.extras(chat, feature);
       const config: SessionConfig = {
         clientName: "Caboose",
-        workingDirectory: ws.path,
+        workingDirectory: feature.folder,
         model: model === "default" ? undefined : model,
         reasoningEffort: model === "default" ? undefined : effortFor(model),
         streaming: true,
         tools,
         systemMessage: { mode: "append", content: instructions },
-        onPermissionRequest: async (req) => decide(req, mode, ws, host),
+        onPermissionRequest: async (req) => decide(req, mode, feature, host),
         onUserInputRequest: async (req) => {
           const answer = await host.askQuestions([
             {
@@ -211,10 +211,10 @@ export class CopilotProvider implements AgentProvider {
 }
 
 /** Applies the chat's permission mode, asking the user where it says to. */
-async function decide(req: PermissionRequest, mode: Mode, ws: Workspace, host: AgentHost): Promise<PermissionRequestResult> {
+async function decide(req: PermissionRequest, mode: Mode, feature: Feature, host: AgentHost): Promise<PermissionRequestResult> {
   const inside = (p?: string) => {
     if (!p) return false;
-    const rel = relative(ws.path, isAbsolute(p) ? p : `${ws.path}/${p}`);
+    const rel = relative(feature.folder, isAbsolute(p) ? p : `${feature.folder}/${p}`);
     return !rel.startsWith("..") && !isAbsolute(rel);
   };
   const auto =

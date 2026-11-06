@@ -104,12 +104,7 @@ function setup() {
   const store = new Store(join(tmp, `${Math.random()}`, "state.json"));
   store.update((s) => ({
     ...s,
-    workspaces: [
-      {
-        id: "w1", repoId: "r1", name: "finse", branch: "caboose/finse", path: tmp, baseRef: "origin/main",
-        createdAt: "", archived: false, setup: "none",
-      },
-    ],
+    features: [{ id: "w1", name: "finse", folder: tmp, createdAt: "", archived: false, port: 41000, repos: [] }],
   }));
   const fake = fakeQuery();
   const events: ChatEvent[] = [];
@@ -226,7 +221,7 @@ test("extra options reach the query", () => {
   const store = new Store(join(tmp, `${Math.random()}`, "state.json"));
   store.update((s) => ({
     ...s,
-    workspaces: [{ id: "w1", repoId: "r1", name: "finse", branch: "b", path: tmp, baseRef: "main", createdAt: "", archived: false, setup: "none" }],
+    features: [{ id: "w1", name: "finse", folder: tmp, createdAt: "", archived: false, port: 41000, repos: [] }],
   }));
   const fake = fakeQuery();
   const chats = new Chats(

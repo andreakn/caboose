@@ -39,28 +39,33 @@ export function baseBranch(baseRef: string): string {
   return baseRef.replace(/^origin\//, "");
 }
 
-export function createPrMessage(branch: string, baseRef: string, draft: boolean): string {
+export function createPrMessage(repo: string, branch: string, baseRef: string, draft: boolean, jiraKey?: string): string {
   return [
-    `Open a ${draft ? "draft " : ""}pull request for this workspace:`,
-    "1. Commit the uncommitted changes that belong in it, in small logical commits with clear messages (leave out scratch files).",
+    `Open a ${draft ? "draft " : ""}pull request for the ${repo} repo of this feature (its worktree is the ${repo}/ folder; run git and gh there):`,
+    "1. Commit the uncommitted changes in it that belong in the PR, in small logical commits with clear messages (leave out scratch files).",
     `2. Push with \`git push -u origin ${branch}\`.`,
-    `3. Create it with \`gh pr create --base ${baseBranch(baseRef)}${draft ? " --draft" : ""}\`, with a clear title and a description of what changed and why. Follow this repo's conventions (CLAUDE.md, PR templates, commit style).`,
+    `3. Create it with \`gh pr create --base ${baseBranch(baseRef)}${draft ? " --draft" : ""}\`, with a clear title and a description of what changed and why. Follow the repo's conventions (CLAUDE.md, PR templates, commit style).`,
+    jiraKey
+      ? `The PR belongs to Jira issue ${jiraKey}: start the title with "${jiraKey} - " and mention ${jiraKey} in the description.`
+      : "",
     "Reply with the PR's URL.",
-  ].join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
-export function fixChecksMessage(pr: PullRequest): string {
+export function fixChecksMessage(repo: string, pr: PullRequest): string {
   const failed = pr.checks.filter((c) => c.state === "failure");
   return [
-    `These checks fail on PR #${pr.number}:`,
+    `These checks fail on PR #${pr.number} of the ${repo} repo (the ${repo}/ folder):`,
     ...failed.map((c) => `- ${c.name}${c.url ? ` (${c.url})` : ""}`),
     "",
     "Find out why (`gh pr checks`, `gh run view <run-id> --log-failed`), fix it, run what you can locally, then commit and push.",
   ].join("\n");
 }
 
-export function resolveConflictsMessage(pr: PullRequest): string {
-  return `PR #${pr.number} has merge conflicts with ${pr.baseRefName}. Fetch, merge origin/${pr.baseRefName} into this branch (rebase only if this repo clearly prefers it), resolve the conflicts carefully, run the tests, then commit and push.`;
+export function resolveConflictsMessage(repo: string, pr: PullRequest): string {
+  return `PR #${pr.number} of the ${repo} repo (the ${repo}/ folder) has merge conflicts with ${pr.baseRefName}. Fetch, merge origin/${pr.baseRefName} into this branch (rebase only if this repo clearly prefers it), resolve the conflicts carefully, run the tests, then commit and push.`;
 }
 
 export function checksSummary(checks: Check[]): { failed: number; pending: number; passed: number } {

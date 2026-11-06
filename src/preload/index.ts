@@ -2,47 +2,72 @@ import { contextBridge, ipcRenderer } from "electron";
 import type { ChatEvent } from "../shared/chat.ts";
 import type { CabooseApi, MenuCommand, State, Terminal } from "../shared/types.ts";
 
+const invoke =
+  (channel: string) =>
+  (...args: unknown[]) =>
+    ipcRenderer.invoke(channel, ...args);
+
 const api: CabooseApi = {
-  getState: () => ipcRenderer.invoke("state:get"),
-  pickAndAddRepo: () => ipcRenderer.invoke("repo:pickAndAdd"),
-  removeRepo: (repoId) => ipcRenderer.invoke("repo:remove", repoId),
-  createWorkspace: (repoId) => ipcRenderer.invoke("workspace:create", repoId),
-  archiveWorkspace: (id) => ipcRenderer.invoke("workspace:archive", id),
-  restoreWorkspace: (id) => ipcRenderer.invoke("workspace:restore", id),
-  openPath: (path) => ipcRenderer.invoke("shell:openPath", path),
-  setupLog: (id) => ipcRenderer.invoke("workspace:setupLog", id),
+  getState: invoke("state:get"),
   onStateChanged: (listener) => {
     const handler = (_e: unknown, s: State) => listener(s);
     ipcRenderer.on("state:changed", handler);
     return () => ipcRenderer.removeListener("state:changed", handler);
   },
 
-  createChat: (workspaceId, agent) => ipcRenderer.invoke("chat:create", workspaceId, agent),
-  models: (agent) => ipcRenderer.invoke("chat:models", agent),
-  removeChat: (chatId) => ipcRenderer.invoke("chat:remove", chatId),
-  chatEvents: (chatId) => ipcRenderer.invoke("chat:events", chatId),
-  send: (chatId, text) => ipcRenderer.invoke("chat:send", chatId, text),
-  interrupt: (chatId) => ipcRenderer.invoke("chat:interrupt", chatId),
-  answerPermission: (chatId, id, answer) => ipcRenderer.invoke("chat:answerPermission", chatId, id, answer),
-  configureChat: (chatId, patch) => ipcRenderer.invoke("chat:configure", chatId, patch),
-  answerQuestion: (chatId, id, answers) => ipcRenderer.invoke("chat:answerQuestion", chatId, id, answers),
-  changes: (workspaceId) => ipcRenderer.invoke("diff:changes", workspaceId),
-  filePatch: (workspaceId, path) => ipcRenderer.invoke("diff:patch", workspaceId, path),
-  addComment: (c) => ipcRenderer.invoke("comments:add", c),
-  removeComment: (id) => ipcRenderer.invoke("comments:remove", id),
-  resolveComment: (id, resolved) => ipcRenderer.invoke("comments:resolve", id, resolved),
-  sendComments: (workspaceId, chatId) => ipcRenderer.invoke("comments:send", workspaceId, chatId),
-  repoConfig: (workspaceId) => ipcRenderer.invoke("repo:config", workspaceId),
-  githubStatus: (workspaceId) => ipcRenderer.invoke("github:status", workspaceId),
-  push: (workspaceId) => ipcRenderer.invoke("github:push", workspaceId),
-  merge: (workspaceId, method) => ipcRenderer.invoke("github:merge", workspaceId, method),
-  renameBranch: (workspaceId, name) => ipcRenderer.invoke("github:rename", workspaceId, name),
-  openUrl: (url) => ipcRenderer.invoke("shell:openUrl", url),
-  settings: () => ipcRenderer.invoke("settings:get"),
-  saveSettings: (local) => ipcRenderer.invoke("settings:save", local),
-  doctor: () => ipcRenderer.invoke("app:doctor"),
-  checkForUpdate: () => ipcRenderer.invoke("app:checkForUpdate"),
-  update: () => ipcRenderer.invoke("app:update"),
+  config: invoke("config:get"),
+  saveConfig: invoke("config:save"),
+  pickFolder: invoke("config:pickFolder"),
+  checkRepo: invoke("config:checkRepo"),
+  scanRepos: invoke("config:scanRepos"),
+
+  jiraTest: invoke("jira:test"),
+  jiraIssue: invoke("jira:issue"),
+  jiraMyIssues: invoke("jira:mine"),
+  featureJira: invoke("jira:feature"),
+  setFeatureTask: invoke("jira:setTask"),
+  setRepoSubtask: invoke("jira:setSubtask"),
+  createSubtask: invoke("jira:createSubtask"),
+
+  createFeature: invoke("feature:create"),
+  addRepoToFeature: invoke("feature:addRepo"),
+  archiveFeature: invoke("feature:archive"),
+  restoreFeature: invoke("feature:restore"),
+  openPath: invoke("shell:openPath"),
+  setupLog: invoke("feature:setupLog"),
+  repoConfig: invoke("feature:repoConfig"),
+
+  createChat: invoke("chat:create"),
+  models: invoke("chat:models"),
+  removeChat: invoke("chat:remove"),
+  chatEvents: invoke("chat:events"),
+  send: invoke("chat:send"),
+  interrupt: invoke("chat:interrupt"),
+  answerPermission: invoke("chat:answerPermission"),
+  configureChat: invoke("chat:configure"),
+  answerQuestion: invoke("chat:answerQuestion"),
+  onChatEvent: (listener) => {
+    const handler = (_e: unknown, chatId: string, event: ChatEvent) => listener(chatId, event);
+    ipcRenderer.on("chat:event", handler);
+    return () => ipcRenderer.removeListener("chat:event", handler);
+  },
+
+  changes: invoke("diff:changes"),
+  filePatch: invoke("diff:patch"),
+  addComment: invoke("comments:add"),
+  removeComment: invoke("comments:remove"),
+  resolveComment: invoke("comments:resolve"),
+  sendComments: invoke("comments:send"),
+
+  githubStatus: invoke("github:status"),
+  push: invoke("github:push"),
+  merge: invoke("github:merge"),
+  renameBranch: invoke("github:rename"),
+  openUrl: invoke("shell:openUrl"),
+
+  doctor: invoke("app:doctor"),
+  checkForUpdate: invoke("app:checkForUpdate"),
+  update: invoke("app:update"),
   onUpdateLog: (listener) => {
     const handler = (_e: unknown, line: string) => listener(line);
     ipcRenderer.on("app:updateLog", handler);
@@ -56,15 +81,16 @@ const api: CabooseApi = {
     ipcRenderer.on("menu:command", handler);
     return () => ipcRenderer.removeListener("menu:command", handler);
   },
-  terminalFont: () => ipcRenderer.invoke("config:terminalFont"),
-  terminals: (workspaceId) => ipcRenderer.invoke("term:list", workspaceId),
-  openShell: (workspaceId) => ipcRenderer.invoke("term:openShell", workspaceId),
-  runScript: (workspaceId) => ipcRenderer.invoke("term:run", workspaceId),
-  stopTerminal: (id) => ipcRenderer.invoke("term:stop", id),
-  closeTerminal: (id) => ipcRenderer.invoke("term:close", id),
+
+  terminalFont: invoke("config:terminalFont"),
+  terminals: invoke("term:list"),
+  openShell: invoke("term:openShell"),
+  runScript: invoke("term:run"),
+  stopTerminal: invoke("term:stop"),
+  closeTerminal: invoke("term:close"),
   termWrite: (id, data) => ipcRenderer.send("term:write", id, data),
   termResize: (id, cols, rows) => ipcRenderer.send("term:resize", id, cols, rows),
-  termBuffer: (id) => ipcRenderer.invoke("term:buffer", id),
+  termBuffer: invoke("term:buffer"),
   onTermData: (listener) => {
     const handler = (_e: unknown, id: string, data: string) => listener(id, data);
     ipcRenderer.on("term:data", handler);
@@ -75,11 +101,6 @@ const api: CabooseApi = {
     ipcRenderer.on("term:list", handler);
     return () => ipcRenderer.removeListener("term:list", handler);
   },
-  onChatEvent: (listener) => {
-    const handler = (_e: unknown, chatId: string, event: ChatEvent) => listener(chatId, event);
-    ipcRenderer.on("chat:event", handler);
-    return () => ipcRenderer.removeListener("chat:event", handler);
-  },
-};
+} as CabooseApi;
 
 contextBridge.exposeInMainWorld("caboose", api);

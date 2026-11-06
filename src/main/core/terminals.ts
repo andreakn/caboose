@@ -1,4 +1,4 @@
-// Terminals per workspace: interactive shells and the repo's run script, in
+// Terminals per feature: shells (in a repo or the feature folder) and the repos' run scripts, in
 // real ptys (prebuilt node-pty, nothing to compile). In memory only: they end
 // when the app quits.
 import { type IPty, spawn } from "@lydell/node-pty";
@@ -37,25 +37,26 @@ export class Terminals {
     this.shellPath = shellPath;
   }
 
-  list(workspaceId?: string): Terminal[] {
+  list(featureId?: string): Terminal[] {
     return [...this.entries.values()]
-      .filter((t) => !workspaceId || t.workspaceId === workspaceId)
+      .filter((t) => !featureId || t.featureId === featureId)
       .map(({ pty: _p, buffer: _b, ...t }) => t);
   }
 
-  /** An interactive shell in the workspace. */
-  openShell(workspaceId: string, where: TerminalEnv): Terminal {
+  /** An interactive shell in one of the feature's repos, or (no repo) in the feature folder. */
+  openShell(featureId: string, where: TerminalEnv, repo?: string): Terminal {
     const [file, args] = defaultShell(this.shellPath);
-    const n = this.list(workspaceId).filter((t) => t.kind === "shell").length + 1;
-    return this.start(workspaceId, "shell", n === 1 ? "Terminal" : `Terminal ${n}`, file, args, where);
+    const base = repo ?? "feature";
+    const n = this.list(featureId).filter((t) => t.kind === "shell" && (t.repo ?? "feature") === base).length + 1;
+    return this.start(featureId, repo, "shell", n === 1 ? base : `${base} ${n}`, file, args, where);
   }
 
-  /** Runs `command` through bash (Git Bash on Windows), replacing a previous run. */
-  async run(workspaceId: string, command: string, where: TerminalEnv): Promise<Terminal> {
-    const old = this.list(workspaceId).find((t) => t.kind === "run");
+  /** Runs a repo's run script through bash (Git Bash on Windows), replacing that repo's previous run. */
+  async run(featureId: string, repo: string, command: string, where: TerminalEnv): Promise<Terminal> {
+    const old = this.list(featureId).find((t) => t.kind === "run" && t.repo === repo);
     if (old) this.close(old.id);
     const bash = await findBash(this.bashPath);
-    return this.start(workspaceId, "run", "Run", bash, ["-lc", command], where);
+    return this.start(featureId, repo, "run", `run ${repo}`, bash, ["-lc", command], where);
   }
 
   write(id: string, data: string): void {
@@ -94,8 +95,8 @@ export class Terminals {
     if (t && t.exitCode === undefined) kill(t.pty);
   }
 
-  closeWorkspace(workspaceId: string): void {
-    for (const t of this.list(workspaceId)) this.close(t.id);
+  closeFeature(featureId: string): void {
+    for (const t of this.list(featureId)) this.close(t.id);
   }
 
   closeAll(): void {
@@ -103,7 +104,8 @@ export class Terminals {
   }
 
   private start(
-    workspaceId: string,
+    featureId: string,
+    repo: string | undefined,
     kind: Terminal["kind"],
     title: string,
     file: string,
@@ -117,7 +119,7 @@ export class Terminals {
       cwd: where.cwd,
       env: { ...process.env, ...where.env, TERM: "xterm-256color", COLORTERM: "truecolor" } as Record<string, string>,
     });
-    const entry: Entry = { id: randomUUID(), workspaceId, kind, title, startedAt: new Date().toISOString(), pty, buffer: "" };
+    const entry: Entry = { id: randomUUID(), featureId, ...(repo ? { repo } : {}), kind, title, startedAt: new Date().toISOString(), pty, buffer: "" };
     this.entries.set(entry.id, entry);
     pty.onData((d) => {
       entry.buffer += d;

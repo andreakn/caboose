@@ -8,6 +8,11 @@ GitHub Copilot) in parallel git worktrees. Personal/team-internal, never commerc
   official Copilot CLI runtime), each under the user's own login. Never read,
   copy, store or forward their credentials, and never call the model APIs
   directly with them.
+- **A feature is the unit of work**: `<features folder>/<station>/` with one
+  worktree per repo (`src/main/core/features.ts`). Chats run in the feature
+  folder; changes, PRs and run scripts are per repo. `jira.txt` in the feature
+  folder is the record of its Jira links; the Jira token never reaches the
+  window (`configView`).
 - **One chat engine, one adapter per agent** (`src/main/core/chats.ts`,
   `src/main/core/agents/`). Agent-specific code stays in its adapter; the
   transcript format (`src/shared/chat.ts`) is Caboose's own.

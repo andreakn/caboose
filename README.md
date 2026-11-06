@@ -23,8 +23,14 @@ npm run typecheck
 npm run spike      # checks the Agent SDK runs under your Claude login
 ```
 
-Optional: copy `caboose.local.example.json` to `caboose.local.json` (gitignored)
-for this machine's settings.
+The first launch opens the **Configure** screen: pick where features go, add
+your repositories, and optionally connect Jira. It writes `caboose.local.json`
+(gitignored; see `caboose.local.example.json`). "⚙ Configure" opens it again.
+
+A **feature** gets a railway-station name and a folder with a git worktree for
+each repo you pick (`<features folder>/<station>/<repo>/`). The agents work in
+the feature folder and see all of its repos. With Jira on, a feature can be
+tied to a task (`jira.txt` in its folder) and each repo to a subtask.
 
 In a repo you add to Caboose, an optional `caboose.json` sets its scripts:
 

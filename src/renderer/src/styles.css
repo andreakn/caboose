@@ -416,3 +416,36 @@ table.diff { border-collapse: collapse; width: 100%; font: 12px/1.55 var(--mono)
 .menu { position: fixed; z-index: 10; display: flex; flex-direction: column; min-width: 200px; padding: 4px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25); }
 .menu button { border: none; background: none; text-align: left; padding: 6px 10px; border-radius: 6px; }
 .menu button:hover { background: var(--accent-soft); }
+
+/* Features */
+.new-feature { width: 100%; margin: 0 0 14px; }
+.repos { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
+.repo-row { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); padding: 5px 10px; font-size: 13px; }
+.repo-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.repo-line button { padding: 2px 9px; font-size: 12.5px; }
+.repo-line select { font: inherit; font-size: 12px; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 2px 6px; }
+.repo-name-cell { min-width: 70px; }
+.branch code { font-size: 12px; }
+.repo-local { font-size: 12px; }
+.jira-chip { display: inline-flex; align-items: center; gap: 2px; font-size: 12px; font-weight: 600; }
+.jira-chip a { color: var(--accent); text-decoration: none; background: var(--accent-soft); border-radius: 4px; padding: 0 6px; }
+.jira-chip.empty { font-weight: 400; }
+h1 .jira-chip { font-size: 13px; vertical-align: middle; }
+.add-repo-row select { font: inherit; font-size: 12.5px; color: var(--muted); background: none; border: 1px dashed var(--border); border-radius: var(--radius); padding: 5px 8px; width: 100%; }
+.repo-tabs { display: flex; gap: 2px; margin-left: 12px; padding-left: 12px; border-left: 1px solid var(--border); }
+.repo-tabs button { border: none; background: none; padding: 4px 10px; color: var(--muted); border-radius: 6px; }
+.repo-tabs button.active { background: var(--card); color: var(--text); }
+
+/* Configure and New feature */
+.settings.configure, .settings.new-feature { padding-bottom: 0; }
+.levels, .repo-picks { display: grid; gap: 6px; margin: 8px 0 12px; }
+.level { display: grid; grid-template-columns: 20px 130px 1fr; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; }
+.level.active { border-color: var(--accent); background: var(--accent-soft); }
+.form label > .row input { flex: 1; }
+.repo-list { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 4px; }
+.repo-list li { display: flex; gap: 10px; align-items: center; font-size: 13px; }
+.scan { margin-top: 10px; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius); display: grid; gap: 6px; }
+.save-bar { position: sticky; bottom: 0; z-index: 2; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 0 16px; margin-top: 28px; background: var(--bg); border-top: 1px solid var(--border); }
+.my-issues { display: grid; gap: 2px; max-height: 260px; overflow-y: auto; }
+.issue { text-align: left; border: none; background: none; padding: 4px 8px; font-size: 13px; border-radius: 6px; }
+.issue:hover, .issue.active { background: var(--accent-soft); }

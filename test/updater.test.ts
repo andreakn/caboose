@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { loadLocalConfig, readLocalConfig, saveLocalConfig } from "../src/main/core/config.ts";
+import { applyConfigInput, configView, jiraToken, loadLocalConfig, plainCodec, readLocalConfig, saveLocalConfig } from "../src/main/core/config.ts";
 import { checkForUpdate, update } from "../src/main/core/updater.ts";
 
 const tmp = mkdtempSync(join(tmpdir(), "caboose-upd-"));
@@ -30,12 +30,23 @@ test("an update check lists the commits waiting upstream and notices local edits
   assert.equal((await checkForUpdate(clone, false)).dirty, true);
 });
 
-test("local config is saved without empty values, and defaults fill the gaps", () => {
-  saveLocalConfig(tmp, { branchPrefix: " mine ", bashPath: "", workspacesRoot: "~/ws" });
-  assert.deepEqual(readLocalConfig(tmp), { branchPrefix: "mine", workspacesRoot: "~/ws" });
+test("config: defaults fill gaps, tokens are sealed and never shown to the window", () => {
+  const sealed = { canEncrypt: true, encrypt: (x: string) => `E(${x})`, decrypt: (x: string) => x.slice(2, -1) };
+  let stored = applyConfigInput({}, { branchPrefix: " mine ", bashPath: "", featuresRoot: "~/f", repos: [{ name: "web", path: "/code/web" }, { name: "", path: "" }], jira: { level: "required", site: "https://x.atlassian.net", token: "secret" } }, sealed);
+  assert.deepEqual(stored.jira?.token, { enc: "E(secret)" });
+  assert.equal(stored.repos?.length, 1);
+  saveLocalConfig(tmp, stored);
+  assert.deepEqual(readLocalConfig(tmp), stored);
   const resolved = loadLocalConfig(tmp);
   assert.equal(resolved.branchPrefix, "mine");
-  assert.ok(!resolved.workspacesRoot.startsWith("~"));
+  assert.ok(!resolved.featuresRoot.startsWith("~"));
+  assert.equal(jiraToken(resolved.jira, sealed), "secret");
+  assert.deepEqual(configView(stored).jira, { level: "required", site: "https://x.atlassian.net", hasToken: true });
+  // Saving without a token keeps it; null removes it; no keychain stores it plain.
+  stored = applyConfigInput(stored, { ...configView(stored), jira: { level: "optional" } }, sealed);
+  assert.deepEqual(stored.jira?.token, { enc: "E(secret)" });
+  assert.equal(applyConfigInput(stored, { jira: { level: "off", token: null } }, sealed).jira?.token, undefined);
+  assert.deepEqual(applyConfigInput({}, { jira: { level: "off", token: "t" } }, plainCodec).jira?.token, { plain: "t" });
 });
 
 test("update pulls, reinstalls when package.json changed, and builds", async () => {

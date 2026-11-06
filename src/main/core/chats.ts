@@ -42,17 +42,17 @@ export class Chats {
     this.emit = emit;
   }
 
-  /** A new chat; settings come from the workspace's most recent chat with the same agent. */
-  create(workspaceId: string, agent?: Agent): Result<Chat> {
-    const ws = this.store.get().workspaces.find((w) => w.id === workspaceId);
-    if (!ws) return { ok: false, error: "Unknown workspace." };
-    const inWs = this.store.get().chats.filter((c) => c.workspaceId === workspaceId);
+  /** A new chat; settings come from the feature's most recent chat with the same agent. */
+  create(featureId: string, agent?: Agent): Result<Chat> {
+    const feature = this.store.get().features.find((f) => f.id === featureId);
+    if (!feature) return { ok: false, error: "Unknown feature." };
+    const inWs = this.store.get().chats.filter((c) => c.featureId === featureId);
     const kind = agent ?? (inWs.length ? agentOf(inWs.at(-1)!) : "claude");
     if (!this.providers[kind]) return { ok: false, error: `${kind} is not available.` };
     const last = inWs.filter((c) => agentOf(c) === kind).at(-1);
     const chat: Chat = {
       id: randomUUID(),
-      workspaceId,
+      featureId,
       agent: kind,
       title: "New chat",
       model: last?.model ?? DEFAULTS.model,
@@ -153,9 +153,9 @@ export class Chats {
     rmSync(this.file(chatId), { force: true });
   }
 
-  /** Ends every session in a workspace (it is being archived). Transcripts stay. */
-  stopWorkspace(workspaceId: string): void {
-    for (const c of this.store.get().chats) if (c.workspaceId === workspaceId) this.stop(c.id);
+  /** Ends every session in a feature (it is being archived). Transcripts stay. */
+  stopFeature(featureId: string): void {
+    for (const c of this.store.get().chats) if (c.featureId === featureId) this.stop(c.id);
   }
 
   stopAll(): void {
@@ -175,8 +175,8 @@ export class Chats {
   }
 
   private start(chat: Chat): Result<Live> {
-    const ws = this.store.get().workspaces.find((w) => w.id === chat.workspaceId);
-    if (!ws || ws.archived) return { ok: false, error: "This workspace is archived." };
+    const feature = this.store.get().features.find((f) => f.id === chat.featureId);
+    if (!feature || feature.archived) return { ok: false, error: "This feature is archived." };
     const provider = this.providers[agentOf(chat)];
     if (!provider) return { ok: false, error: `${agentOf(chat)} is not available.` };
     const live: Live = {
@@ -188,7 +188,7 @@ export class Chats {
     };
     this.live.set(chat.id, live);
     try {
-      live.session = provider.start(chat, ws, this.host(chat.id, live));
+      live.session = provider.start(chat, feature, this.host(chat.id, live));
     } catch (e) {
       this.live.delete(chat.id);
       return { ok: false, error: e instanceof Error ? e.message : String(e) };

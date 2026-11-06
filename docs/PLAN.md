@@ -16,9 +16,12 @@ coding agents (Claude Code, GitHub Copilot) in parallel git worktrees. Not for s
 | Diffs | `@git-diff-view/react` or diff2html |
 | Packaging | none: run from a clone (`npm install && npm start`) |
 
-The main process owns git, agent sessions, ptys and the database; the renderer
-is UI only, over typed IPC. Workspaces live in `~/caboose/workspaces/<repo>/<name>`.
-Per-repo config in `caboose.json`: setup/run/archive scripts and files to copy.
+The main process owns git, agent sessions, ptys and state; the renderer is UI
+only, over typed IPC. A **feature** is `<features folder>/<station>/` with a
+worktree per repo (`<station>/<repo>/`), optionally tied to a Jira task with a
+subtask per repo (`jira.txt`). Per-repo config in `caboose.json`:
+setup/run/archive scripts and files to copy. This machine's config
+(`caboose.local.json`, gitignored): features folder, repos, Jira, terminals.
 
 ## Phases
 
@@ -42,6 +45,8 @@ Status: ✅ done · 🟡 started · blank = not started. Decisions: `docs/DECISI
    updates by `git pull`.
 9. 🟡 **Later** — ✅ GitHub Copilot as a second agent (official SDK); other agents
    via ACP, checkpoints, remote access.
+10. ✅ **Features** — multi-repo features with station names, optional Jira
+   (REST, four strictness levels), first-run Configure screen.
 
 ## Windows from day one
 

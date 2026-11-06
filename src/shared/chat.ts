@@ -32,7 +32,7 @@ export const MODES: { value: Mode; label: string }[] = [
 
 export type Chat = {
   id: string;
-  workspaceId: string;
+  featureId: string;
   /** Missing on chats from before Copilot support: those are Claude. */
   agent?: Agent;
   title: string;

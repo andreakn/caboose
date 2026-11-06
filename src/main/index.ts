@@ -1,27 +1,40 @@
 // Electron glue: window, IPC and state wiring. The real work is in ./core.
 import { query, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, screen, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, safeStorage, screen, shell } from "electron";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { Agent, Effort, Mode, Model } from "../shared/chat.ts";
-import type { LocalConfig, State, Theme } from "../shared/types.ts";
+import { commentsMessage } from "../shared/diff.ts";
+import type { MergeMethod } from "../shared/github.ts";
+import type { ConfigInput, Feature, NewFeature, State, Theme } from "../shared/types.ts";
 import { CopilotClient } from "@github/copilot-sdk";
 import { ClaudeProvider, Inbox } from "./core/agents/claude.ts";
 import { copilotEnv, CopilotProvider } from "./core/agents/copilot.ts";
 import { Chats } from "./core/chats.ts";
+import { Comments } from "./core/comments.ts";
+import {
+  applyConfigInput,
+  configExists,
+  configFile,
+  configView,
+  defaultFeaturesRoot,
+  jiraToken,
+  loadLocalConfig,
+  loadRepoConfig,
+  readLocalConfig,
+  saveLocalConfig,
+  type SecretCodec,
+} from "./core/config.ts";
+import { changes, filePatch } from "./core/diff.ts";
 import { doctor } from "./core/doctor.ts";
+import { checkRepo, Features, scanRepos } from "./core/features.ts";
+import { GitHub } from "./core/github.ts";
+import { Jira } from "./core/jira.ts";
+import { cabooseCopilotTools, cabooseInstructions, cabooseMcp } from "./core/mcp.ts";
+import { Store } from "./core/store.ts";
+import { Terminals } from "./core/terminals.ts";
 import { checkForUpdate, update } from "./core/updater.ts";
 import { installMenu } from "./menu.ts";
-import { Comments } from "./core/comments.ts";
-import { changes, filePatch } from "./core/diff.ts";
-import { cabooseCopilotTools, cabooseInstructions, cabooseMcp } from "./core/mcp.ts";
-import { commentsMessage } from "../shared/diff.ts";
-import { loadLocalConfig, loadRepoConfig, readLocalConfig, saveLocalConfig } from "./core/config.ts";
-import { GitHub } from "./core/github.ts";
-import { Terminals } from "./core/terminals.ts";
-import type { MergeMethod } from "../shared/github.ts";
-import { Store } from "./core/store.ts";
-import { Workspaces } from "./core/workspaces.ts";
 
 app.setName("Caboose");
 // CABOOSE_DATA points the app at another state folder (screenshots, experiments).
@@ -30,8 +43,33 @@ if (process.env.CABOOSE_DATA) app.setPath("userData", process.env.CABOOSE_DATA);
 const dataDir = app.getPath("userData");
 const store = new Store(join(dataDir, "state.json"));
 // The Caboose checkout itself holds this machine's gitignored caboose.local.json.
-let localConfig = loadLocalConfig(app.getAppPath());
-const workspaces = new Workspaces(store, localConfig, join(dataDir, "logs"));
+// CABOOSE_CONFIG_DIR points elsewhere (tests, screenshots).
+const configDir = process.env.CABOOSE_CONFIG_DIR ?? app.getAppPath();
+let localConfig = loadLocalConfig(configDir);
+
+/** Secrets in the config are encrypted with the OS keychain (safeStorage); ready after app start. */
+const codec: SecretCodec = {
+  get canEncrypt() {
+    return app.isReady() && safeStorage.isEncryptionAvailable();
+  },
+  encrypt: (s) => safeStorage.encryptString(s).toString("base64"),
+  decrypt: (s) => safeStorage.decryptString(Buffer.from(s, "base64")),
+};
+/** A Jira client when Jira is on and has site, email and token. */
+function jira(): Jira | null {
+  const j = localConfig.jira;
+  if (j.level === "off" || !j.site || !j.email) return null;
+  const token = jiraToken(j, codec);
+  return token ? new Jira({ site: j.site, email: j.email, token }) : null;
+}
+const needJira = () => {
+  const j = jira();
+  if (!j) throw new Error("Jira is not set up: add the site, email and API token in Configure.");
+  return j;
+};
+
+const features = new Features(store, localConfig, join(dataDir, "logs"), jira);
+const featureById = (id: string) => store.get().features.find((f) => f.id === id);
 
 let win: BrowserWindow | null = null;
 const comments = new Comments(store);
@@ -52,17 +90,14 @@ const terminals = new Terminals({
   },
   onChange: () => win?.webContents.send("term:list", terminals.list()),
 });
-const workspaceById = (id: string) => store.get().workspaces.find((w) => w.id === id);
-const claude = new ClaudeProvider(query, (_chat, ws) => ({
-  mcpServers: { caboose: cabooseMcp(() => workspaceById(ws.id) ?? ws, comments, terminals) },
-  systemPrompt: { type: "preset", preset: "claude_code", append: cabooseInstructions(ws, "claude") },
+const current = (f: Feature) => () => featureById(f.id) ?? f;
+const claude = new ClaudeProvider(query, (_chat, f) => ({
+  mcpServers: { caboose: cabooseMcp(current(f), comments, terminals) },
+  systemPrompt: { type: "preset", preset: "claude_code", append: cabooseInstructions(f, "claude") },
 }));
 const copilot = new CopilotProvider(
   () => new CopilotClient({ logLevel: "error", env: copilotEnv() }),
-  (_chat, ws) => ({
-    tools: cabooseCopilotTools(() => workspaceById(ws.id) ?? ws, comments, terminals),
-    instructions: cabooseInstructions(ws, "copilot"),
-  }),
+  (_chat, f) => ({ tools: cabooseCopilotTools(current(f), comments, terminals), instructions: cabooseInstructions(f, "copilot") }),
 );
 const chats = new Chats(store, dataDir, { claude, copilot }, (chatId, e) => win?.webContents.send("chat:event", chatId, e));
 
@@ -133,28 +168,88 @@ function createWindow() {
   }
 }
 
+const attempt = async <T>(fn: () => T | Promise<T>) => {
+  try {
+    return { ok: true, value: await fn() };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+};
+/** A live (not archived) feature and one of its repos, or an error. */
+function liveRepo(featureId: string, repo: string) {
+  const f = featureById(featureId);
+  if (!f || f.archived) throw new Error("This feature is archived.");
+  const r = f.repos.find((x) => x.name === repo);
+  if (!r) throw new Error(`No repo "${repo}" in this feature.`);
+  return { f, r };
+}
+
 ipcMain.handle("state:get", () => store.get());
-ipcMain.handle("repo:pickAndAdd", async () => {
-  const r = await dialog.showOpenDialog(win!, { title: "Add repository", properties: ["openDirectory"] });
-  if (r.canceled || !r.filePaths[0]) return null;
-  return workspaces.addRepo(r.filePaths[0]);
+
+// --- config
+ipcMain.handle("config:get", () => ({
+  config: configView(readLocalConfig(configDir)),
+  defaults: { featuresRoot: defaultFeaturesRoot(), branchPrefix: "caboose" },
+  firstRun: !configExists(configDir),
+  file: configFile(configDir),
+  dataDir,
+  canEncrypt: codec.canEncrypt,
+}));
+ipcMain.handle("config:save", (_e, input: ConfigInput) =>
+  attempt(() => {
+    saveLocalConfig(configDir, applyConfigInput(readLocalConfig(configDir), input, codec));
+    localConfig = loadLocalConfig(configDir);
+    features.setConfig(localConfig);
+    terminals.setPaths(localConfig.bashPath, localConfig.shellPath);
+  }),
+);
+ipcMain.handle("config:pickFolder", async (_e, title: string) => {
+  const r = await dialog.showOpenDialog(win!, { title, properties: ["openDirectory", "createDirectory"] });
+  return r.canceled ? null : (r.filePaths[0] ?? null);
 });
-ipcMain.handle("repo:remove", (_e, repoId: string) => workspaces.removeRepo(repoId));
-ipcMain.handle("workspace:create", (_e, repoId: string) => workspaces.createWorkspace(repoId));
-ipcMain.handle("workspace:archive", (_e, id: string) => {
-  chats.stopWorkspace(id);
-  terminals.closeWorkspace(id);
-  return workspaces.archiveWorkspace(id);
+ipcMain.handle("config:checkRepo", (_e, path: string) => checkRepo(path));
+ipcMain.handle("config:scanRepos", (_e, folder: string) => scanRepos(folder));
+ipcMain.handle("config:terminalFont", () => localConfig.terminalFont);
+
+// --- jira
+ipcMain.handle("jira:test", () => attempt(() => needJira().myself()));
+ipcMain.handle("jira:issue", (_e, key: string) => attempt(() => needJira().issue(key)));
+ipcMain.handle("jira:mine", () => attempt(() => needJira().myIssues()));
+ipcMain.handle("jira:feature", (_e, featureId: string) => features.jiraOf(featureId));
+ipcMain.handle("jira:setTask", (_e, featureId: string, key: string | null) => features.setTask(featureId, key));
+ipcMain.handle("jira:setSubtask", (_e, featureId: string, repo: string, key: string | null) =>
+  features.setSubtask(featureId, repo, key),
+);
+ipcMain.handle("jira:createSubtask", (_e, featureId: string, repo: string) => features.createSubtask(featureId, repo));
+
+// --- features
+ipcMain.handle("feature:create", (_e, input: NewFeature) => features.create(input));
+ipcMain.handle("feature:addRepo", (_e, featureId: string, repo: string) => features.addRepo(featureId, repo));
+ipcMain.handle("feature:archive", (_e, id: string) => {
+  chats.stopFeature(id);
+  terminals.closeFeature(id);
+  return features.archive(id);
 });
-ipcMain.handle("workspace:restore", (_e, id: string) => workspaces.restoreWorkspace(id));
-ipcMain.handle("workspace:setupLog", (_e, id: string) => workspaces.setupLog(id));
+ipcMain.handle("feature:restore", (_e, id: string) => features.restore(id));
+ipcMain.handle("feature:setupLog", (_e, id: string, repo: string) => features.setupLog(id, repo));
+ipcMain.handle("feature:repoConfig", (_e, featureId: string, repo: string) => {
+  try {
+    return loadRepoConfig(liveRepo(featureId, repo).r.source);
+  } catch {
+    return {};
+  }
+});
 ipcMain.handle("shell:openPath", (_e, path: string) => {
   // Only folders Caboose knows about.
-  const s = store.get();
-  if (s.repos.some((r) => r.path === path) || s.workspaces.some((w) => w.path === path)) return shell.openPath(path);
+  const known = store.get().features.some((f) => f.folder === path || f.repos.some((r) => r.path === path));
+  if (known) return shell.openPath(path);
+});
+ipcMain.handle("shell:openUrl", (_e, url: string) => {
+  if (/^https:\/\//.test(url)) return shell.openExternal(url);
 });
 
-ipcMain.handle("chat:create", (_e, workspaceId: string, agent?: Agent) => chats.create(workspaceId, agent));
+// --- chats
+ipcMain.handle("chat:create", (_e, featureId: string, agent?: Agent) => chats.create(featureId, agent));
 ipcMain.handle("chat:models", (_e, agent: Agent) => attempt(() => chats.models(agent)));
 ipcMain.handle("chat:remove", (_e, chatId: string) => chats.remove(chatId));
 // Synchronous on purpose: chat events sent after this reply are newer than the file it read.
@@ -167,109 +262,73 @@ ipcMain.handle("chat:answerPermission", (_e, chatId: string, id: string, answer:
 ipcMain.handle("chat:answerQuestion", (_e, chatId: string, id: string, answers: Record<string, string> | null) =>
   chats.answerQuestion(chatId, id, answers),
 );
+ipcMain.handle("chat:configure", (_e, chatId: string, patch: { model?: Model; effort?: Effort; mode?: Mode }) =>
+  chats.configure(chatId, patch),
+);
 
-ipcMain.handle("diff:changes", async (_e, workspaceId: string) => {
-  const ws = workspaceById(workspaceId);
-  if (!ws || ws.archived) return { ok: false, error: "No such workspace." };
-  try {
-    return { ok: true, value: await changes(ws.path, ws.baseRef) };
-  } catch (e) {
-    return { ok: false, error: (e as Error).message };
-  }
-});
-ipcMain.handle("diff:patch", async (_e, workspaceId: string, path: string) => {
-  const ws = workspaceById(workspaceId);
-  if (!ws || ws.archived) return { ok: false, error: "No such workspace." };
-  try {
-    const c = await changes(ws.path, ws.baseRef);
+// --- changes and comments
+ipcMain.handle("diff:changes", (_e, featureId: string, repo: string) =>
+  attempt(() => {
+    const { r } = liveRepo(featureId, repo);
+    return changes(r.path, r.baseRef);
+  }),
+);
+ipcMain.handle("diff:patch", (_e, featureId: string, repo: string, path: string) =>
+  attempt(async () => {
+    const { r } = liveRepo(featureId, repo);
+    const c = await changes(r.path, r.baseRef);
     const file = c.files.find((f) => f.path === path);
-    return file ? { ok: true, value: await filePatch(ws.path, c.base, file) } : { ok: true, value: "" };
-  } catch (e) {
-    return { ok: false, error: (e as Error).message };
-  }
-});
+    return file ? filePatch(r.path, c.base, file) : "";
+  }),
+);
 ipcMain.handle(
   "comments:add",
-  (_e, c: { workspaceId: string; file: string; line: number; side: "new" | "old"; lineText: string; body: string }) =>
+  (_e, c: { featureId: string; repo: string; file: string; line: number; side: "new" | "old"; lineText: string; body: string }) =>
     void comments.add({ ...c, author: "user" }),
 );
 ipcMain.handle("comments:remove", (_e, id: string) => comments.remove(id));
 ipcMain.handle("comments:resolve", (_e, id: string, resolved: boolean) => comments.setResolved(id, resolved));
-ipcMain.handle("comments:send", (_e, workspaceId: string, chatId: string) => {
-  const unsent = comments.unsent(workspaceId);
+ipcMain.handle("comments:send", (_e, featureId: string, chatId: string) => {
+  const unsent = comments.unsent(featureId);
   if (!unsent.length) return { ok: false, error: "No unsent comments." };
   const r = chats.send(chatId, commentsMessage(unsent));
   if (r.ok) comments.markSent(unsent.map((c) => c.id));
   return r;
 });
 
-const liveWorkspace = (id: string) => {
-  const ws = workspaceById(id);
-  return ws && !ws.archived ? ws : undefined;
-};
-ipcMain.handle("repo:config", (_e, workspaceId: string) => {
-  const ws = workspaceById(workspaceId);
-  const repo = ws && store.get().repos.find((r) => r.id === ws.repoId);
-  try {
-    return repo ? loadRepoConfig(repo.path) : {};
-  } catch {
-    return {};
-  }
-});
+// --- github
 const github = new GitHub();
-const attempt = async <T>(fn: () => Promise<T>) => {
-  try {
-    return { ok: true, value: await fn() };
-  } catch (e) {
-    return { ok: false, error: (e as Error).message };
-  }
-};
-const archivedError = { ok: false, error: "This workspace is archived." };
-ipcMain.handle("github:status", (_e, workspaceId: string) => {
-  const ws = liveWorkspace(workspaceId);
-  return ws ? attempt(() => github.status(ws.path, ws.branch, ws.baseRef)) : archivedError;
-});
-ipcMain.handle("github:push", (_e, workspaceId: string) => {
-  const ws = liveWorkspace(workspaceId);
-  return ws ? attempt(() => github.push(ws.path, ws.branch)) : archivedError;
-});
-ipcMain.handle("github:merge", async (_e, workspaceId: string, method: MergeMethod) => {
-  const ws = liveWorkspace(workspaceId);
-  if (!ws) return archivedError;
-  return attempt(async () => {
-    const pr = await github.pr(ws.path, ws.branch);
-    if (!pr || pr.state !== "OPEN") throw new Error("There is no open PR for this branch.");
-    await github.merge(ws.path, pr.number, method);
-  });
-});
-ipcMain.handle("github:rename", (_e, workspaceId: string, name: string) => {
-  const ws = liveWorkspace(workspaceId);
-  if (!ws) return archivedError;
-  return attempt(async () => {
-    const status = await github.branchStatus(ws.path, ws.baseRef);
-    if (status.upstream) throw new Error("The branch is already pushed; renaming it would cut it off from GitHub.");
-    await github.renameBranch(ws.path, ws.branch, name.trim());
-    workspaces.setBranch(ws.id, name.trim());
-  });
-});
-ipcMain.handle("shell:openUrl", (_e, url: string) => {
-  if (/^https:\/\//.test(url)) return shell.openExternal(url);
-});
-ipcMain.handle("settings:get", () => ({
-  local: readLocalConfig(app.getAppPath()),
-  resolved: localConfig,
-  file: join(app.getAppPath(), "caboose.local.json"),
-  dataDir,
-  cabooseDir: app.getAppPath(),
-}));
-ipcMain.handle("settings:save", (_e, local: LocalConfig) =>
-  attempt(async () => {
-    saveLocalConfig(app.getAppPath(), local);
-    localConfig = loadLocalConfig(app.getAppPath());
-    workspaces.setConfig(localConfig);
-    terminals.setPaths(localConfig.bashPath, localConfig.shellPath);
+ipcMain.handle("github:status", (_e, featureId: string, repo: string) =>
+  attempt(() => {
+    const { r } = liveRepo(featureId, repo);
+    return github.status(r.path, r.branch, r.baseRef);
   }),
 );
+ipcMain.handle("github:push", (_e, featureId: string, repo: string) =>
+  attempt(() => {
+    const { r } = liveRepo(featureId, repo);
+    return github.push(r.path, r.branch);
+  }),
+);
+ipcMain.handle("github:merge", (_e, featureId: string, repo: string, method: MergeMethod) =>
+  attempt(async () => {
+    const { r } = liveRepo(featureId, repo);
+    const pr = await github.pr(r.path, r.branch);
+    if (!pr || pr.state !== "OPEN") throw new Error("There is no open PR for this branch.");
+    await github.merge(r.path, pr.number, method);
+  }),
+);
+ipcMain.handle("github:rename", (_e, featureId: string, repo: string, name: string) =>
+  attempt(async () => {
+    const { f, r } = liveRepo(featureId, repo);
+    const status = await github.branchStatus(r.path, r.baseRef);
+    if (status.upstream) throw new Error("The branch is already pushed; renaming it would cut it off from GitHub.");
+    await github.renameBranch(r.path, r.branch, name.trim());
+    features.setBranch(f.id, r.name, name.trim());
+  }),
+);
+
+// --- app
 ipcMain.handle("app:doctor", () =>
   doctor({
     bashPath: localConfig.bashPath,
@@ -319,38 +378,29 @@ async function claudeAccount(): Promise<string> {
   }
 }
 
-ipcMain.handle("config:terminalFont", () => localConfig.terminalFont);
-ipcMain.handle("term:list", (_e, workspaceId: string) => terminals.list(workspaceId));
-ipcMain.handle("term:openShell", (_e, workspaceId: string) => {
-  const ws = liveWorkspace(workspaceId);
-  if (!ws) return { ok: false, error: "This workspace is archived." };
-  try {
-    return { ok: true, value: terminals.openShell(ws.id, { cwd: ws.path, env: workspaces.scriptEnv(ws.id) }) };
-  } catch (e) {
-    return { ok: false, error: (e as Error).message };
-  }
-});
-ipcMain.handle("term:run", async (_e, workspaceId: string) => {
-  const ws = liveWorkspace(workspaceId);
-  const repo = ws && store.get().repos.find((r) => r.id === ws.repoId);
-  if (!ws || !repo) return { ok: false, error: "This workspace is archived." };
-  try {
-    const run = loadRepoConfig(repo.path).run;
-    if (!run) return { ok: false, error: `No run script. Add "run" to caboose.json in ${repo.name}.` };
-    return { ok: true, value: await terminals.run(ws.id, run, { cwd: ws.path, env: workspaces.scriptEnv(ws.id) }) };
-  } catch (e) {
-    return { ok: false, error: (e as Error).message };
-  }
-});
+// --- terminals
+ipcMain.handle("term:list", () => terminals.list());
+ipcMain.handle("term:openShell", (_e, featureId: string, repo?: string) =>
+  attempt(() => {
+    const f = featureById(featureId);
+    if (!f || f.archived) throw new Error("This feature is archived.");
+    const cwd = repo ? liveRepo(featureId, repo).r.path : f.folder;
+    return terminals.openShell(f.id, { cwd, env: features.scriptEnv(f.id, repo) }, repo);
+  }),
+);
+ipcMain.handle("term:run", (_e, featureId: string, repo: string) =>
+  attempt(() => {
+    const { f, r } = liveRepo(featureId, repo);
+    const run = loadRepoConfig(r.source).run;
+    if (!run) throw new Error(`No run script. Add "run" to caboose.json in ${r.name}.`);
+    return terminals.run(f.id, r.name, run, { cwd: r.path, env: features.scriptEnv(f.id, r.name) });
+  }),
+);
 ipcMain.handle("term:stop", (_e, id: string) => terminals.stop(id));
 ipcMain.handle("term:close", (_e, id: string) => terminals.close(id));
 ipcMain.handle("term:buffer", (_e, id: string) => terminals.buffer(id));
 ipcMain.on("term:write", (_e, id: string, data: string) => terminals.write(id, data));
 ipcMain.on("term:resize", (_e, id: string, cols: number, rows: number) => terminals.resize(id, cols, rows));
-
-ipcMain.handle("chat:configure", (_e, chatId: string, patch: { model?: Model; effort?: Effort; mode?: Mode }) =>
-  chats.configure(chatId, patch),
-);
 
 store.subscribe((s: State) => win?.webContents.send("state:changed", s));
 

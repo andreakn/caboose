@@ -2,7 +2,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Terminal as Xterm } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { useEffect, useRef, useState } from "react";
-import type { Terminal, Workspace } from "../../shared/types.ts";
+import type { Feature, Terminal } from "../../shared/types.ts";
 
 const api = window.caboose;
 /** Fonts with the symbols fancy prompts use, before plain monospace. */
@@ -13,7 +13,7 @@ const fontSetting = api.terminalFont();
 export function useTerminals(): Terminal[] {
   const [list, setList] = useState<Terminal[]>([]);
   useEffect(() => {
-    void api.terminals("").then(setList);
+    void api.terminals().then(setList);
     return api.onTerminalsChanged(setList);
   }, []);
   return list;
@@ -21,7 +21,7 @@ export function useTerminals(): Terminal[] {
 
 /** The workspace's terminal drawer: tabs for the run script and shells. */
 export function TerminalPanel(props: {
-  ws: Workspace;
+  ws: Feature;
   terminals: Terminal[];
   open: boolean;
   setOpen: (open: boolean) => void;
@@ -32,13 +32,33 @@ export function TerminalPanel(props: {
   const active = terminals.find((t) => t.id === activeId) ?? terminals.at(-1);
   const [height, setHeight] = useState(() => Number(localStorage.getItem("caboose-term-height")) || 260);
 
-  async function newShell() {
-    const r = await api.openShell(ws.id);
+  // Where the "+" menu opens (fixed, so the scrolling tab strip does not clip it).
+  const [picking, setPicking] = useState<{ x: number; y: number } | null>(null);
+
+  /** A shell in one of the feature's repos, or (no repo) in the feature folder. */
+  async function newShell(repo?: string) {
+    setPicking(null);
+    const r = await api.openShell(ws.id, repo);
     if (r.ok) {
       props.setActiveId(r.value.id);
       props.setOpen(true);
     } else alert(r.error);
   }
+
+  const menu = picking && (
+    <div className="menu" style={{ left: picking.x, bottom: window.innerHeight - picking.y }} onMouseLeave={() => setPicking(null)}>
+      {ws.repos.map((r) => (
+        <button key={r.name} onClick={() => newShell(r.name)}>
+          Terminal in {r.name}/
+        </button>
+      ))}
+      <button onClick={() => newShell()}>Terminal in the feature folder</button>
+    </div>
+  );
+  const openMenu = (e: React.MouseEvent<HTMLElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    setPicking(picking ? null : { x: r.left, y: r.top });
+  };
 
   function startResize(e: React.MouseEvent) {
     const startY = e.clientY;
@@ -85,15 +105,24 @@ export function TerminalPanel(props: {
             </button>
           </div>
         ))}
-        <button className="tab-new" title="New terminal" onClick={newShell}>
+        <button className="tab-new" title="New terminal" onClick={openMenu}>
           +
         </button>
+        {menu}
       </div>
       {open && (
         <div className="term-body">
           {terminals.length === 0 && (
             <div className="term-empty muted">
-              No terminals. <button className="link" onClick={newShell}>Open one</button>
+              No terminals.{" "}
+              {ws.repos.map((r) => (
+                <button key={r.name} className="link" onClick={() => newShell(r.name)}>
+                  Open one in {r.name}/
+                </button>
+              ))}
+              <button className="link" onClick={() => newShell()}>
+                in the feature folder
+              </button>
             </div>
           )}
           {terminals.map((t) => (

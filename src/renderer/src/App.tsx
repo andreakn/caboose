@@ -1,33 +1,40 @@
 import { useEffect, useRef, useState } from "react";
 import type { Chat } from "../../shared/chat.ts";
-import type { RepoConfig, Repo, Result, State, Terminal, Workspace } from "../../shared/types.ts";
 import type { DiffComment } from "../../shared/diff.ts";
-import { ChangesView, useChanges } from "./Changes.tsx";
-import { activeChat, ChatArea } from "./Chat.tsx";
-import { BranchName, GitHubBar, useGitHub } from "./GitHub.tsx";
-import { TerminalPanel, useTerminals } from "./Terminals.tsx";
+import type { ConfigInfo, Feature, FeatureJira, RepoConfig, Result, State, Terminal } from "../../shared/types.ts";
 import { type Activity, activityOf, onActivityNotice, useActivityVersion } from "./activity.ts";
+import { ChangesView, useFeatureChanges } from "./Changes.tsx";
+import { activeChat, ChatArea } from "./Chat.tsx";
 import { dispatch, useCommand } from "./commands.ts";
+import { Configure } from "./Configure.tsx";
+import { JiraChip, RepoRow } from "./GitHub.tsx";
+import { NewFeature } from "./NewFeature.tsx";
 import { notificationsOn } from "./prefs.ts";
-import { Settings } from "./Settings.tsx";
+import { TerminalPanel, useTerminals } from "./Terminals.tsx";
 
 const api = window.caboose;
 
+type Screen = "feature" | "configure" | "new";
+
 export function App() {
   const terminals = useTerminals();
-  const [state, setState] = useState<State>({ repos: [], workspaces: [], chats: [], comments: [] });
+  const [state, setState] = useState<State>({ features: [], chats: [], comments: [] });
+  const [config, setConfig] = useState<ConfigInfo | null>(null);
+  const [screen, setScreen] = useState<Screen>("feature");
   const [selected, setSelectedRaw] = useState<string | null>(() => localStorage.getItem("caboose-selected"));
-  const setSelected = (id: string | null) => {
+  const select = (id: string) => {
     setSelectedRaw(id);
-    if (id) localStorage.setItem("caboose-selected", id);
+    localStorage.setItem("caboose-selected", id);
+    setScreen("feature");
   };
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [showSettings, setShowSettings] = useState(false);
   const activityVersion = useActivityVersion();
 
+  const loadConfig = () => api.config().then(setConfig);
   useEffect(() => {
     void api.getState().then(setState);
+    void loadConfig();
     return api.onStateChanged(setState);
   }, []);
 
@@ -40,17 +47,16 @@ export function App() {
         if (!notificationsOn() || document.hasFocus()) return;
         const s = stateRef.current;
         const chat = s.chats.find((c) => c.id === chatId);
-        const w = chat && s.workspaces.find((x) => x.id === chat.workspaceId);
-        if (!chat || !w) return;
+        const f = chat && s.features.find((x) => x.id === chat.featureId);
+        if (!chat || !f) return;
         const who = chat.agent === "copilot" ? "Copilot" : "Claude";
-        const n = new Notification(kind === "done" ? `${w.name}: ${who} is done` : `${w.name}: ${who} needs you`, {
+        const n = new Notification(kind === "done" ? `${f.name}: ${who} is done` : `${f.name}: ${who} needs you`, {
           body: chat.title,
           silent: kind === "done",
         });
         n.onclick = () => {
           api.focusWindow();
-          setShowSettings(false);
-          setSelected(w.id);
+          select(f.id);
           setTimeout(() => {
             dispatch("showChat");
             dispatch(`selectChat:${chat.id}`);
@@ -82,139 +88,105 @@ export function App() {
     }
   }
 
-  // Fall back to the first live workspace when the remembered one is gone.
-  const ws =
-    state.workspaces.find((w) => w.id === selected) ?? state.workspaces.find((w) => !w.archived);
-  const repoOf = (w: Workspace) => state.repos.find((r) => r.id === w.repoId);
-  const activity = (w: Workspace) => activityOf(state.chats.filter((c) => c.workspaceId === w.id).map((c) => c.id));
-  // Sidebar order, for next/previous.
-  const live = state.repos.flatMap((r) => state.workspaces.filter((w) => w.repoId === r.id && !w.archived));
-
-  async function newWorkspace(repoId: string) {
-    const repo = state.repos.find((r) => r.id === repoId);
-    const w = await act(`Creating a workspace in ${repo?.name}…`, () => api.createWorkspace(repoId));
-    if (w) {
-      setShowSettings(false);
-      setSelected(w.id);
-    }
-  }
+  const live = state.features.filter((f) => !f.archived);
+  const archived = state.features.filter((f) => f.archived);
+  // Fall back to the newest live feature when the remembered one is gone.
+  const feature = state.features.find((f) => f.id === selected) ?? live.at(-1);
+  const activity = (f: Feature) => activityOf(state.chats.filter((c) => c.featureId === f.id).map((c) => c.id));
 
   useCommand((c) => {
-    if (c === "settings") setShowSettings((s) => !s);
-    if (c === "addRepo") void act("Adding repository…", () => api.pickAndAddRepo());
-    if (c === "newWorkspace") {
-      const repoId = ws?.repoId ?? state.repos[0]?.id;
-      if (repoId) void newWorkspace(repoId);
-    }
-    if ((c === "nextWorkspace" || c === "prevWorkspace") && live.length) {
-      const i = live.findIndex((w) => w.id === ws?.id);
-      const next = live[(i + (c === "nextWorkspace" ? 1 : -1) + live.length) % live.length];
-      setShowSettings(false);
-      setSelected(next.id);
+    if (c === "settings" || c === "addRepo") setScreen((s) => (s === "configure" ? "feature" : "configure"));
+    if (c === "newFeature") setScreen("new");
+    if ((c === "nextFeature" || c === "prevFeature") && live.length) {
+      const i = live.findIndex((f) => f.id === feature?.id);
+      select(live[(i + (c === "nextFeature" ? 1 : -1) + live.length) % live.length].id);
     }
   });
+
+  if (!config) return null;
+  if (config.firstRun) {
+    return (
+      <div className="app">
+        <main className="main">
+          <Configure onDone={() => void loadConfig()} />
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="app">
       <aside className="sidebar">
         <div className="brand">🚃 Caboose</div>
-        {state.repos.map((repo) => (
-          <RepoGroup
-            key={repo.id}
-            repo={repo}
-            workspaces={state.workspaces.filter((w) => w.repoId === repo.id)}
-            selected={showSettings ? null : (ws?.id ?? null)}
-            activity={activity}
-            onSelect={(id) => {
-              setShowSettings(false);
-              setSelected(id);
-            }}
-            onNew={() => newWorkspace(repo.id)}
-            onRemove={() => act(`Removing ${repo.name}…`, () => api.removeRepo(repo.id))}
-          />
-        ))}
-        <button className="add-repo" onClick={() => act("Adding repository…", () => api.pickAndAddRepo())}>
-          + Add repository
+        <button className="new-feature" onClick={() => setScreen("new")}>
+          + New feature
         </button>
+        <section className="repo">
+          {live.map((f) => (
+            <FeatureRow
+              key={f.id}
+              f={f}
+              activity={activity(f)}
+              active={screen === "feature" && f.id === feature?.id}
+              onClick={() => select(f.id)}
+            />
+          ))}
+          {archived.length > 0 && (
+            <details className="archived">
+              <summary>Archived ({archived.length})</summary>
+              {archived.map((f) => (
+                <FeatureRow key={f.id} f={f} active={screen === "feature" && f.id === feature?.id} onClick={() => select(f.id)} />
+              ))}
+            </details>
+          )}
+        </section>
         <div className="sidebar-foot">
-          <button className={`link${showSettings ? " active" : ""}`} onClick={() => setShowSettings(!showSettings)}>
-            ⚙ Settings
+          <button
+            className={`link${screen === "configure" ? " active" : ""}`}
+            onClick={() => setScreen(screen === "configure" ? "feature" : "configure")}
+          >
+            ⚙ Configure
           </button>
         </div>
       </aside>
 
       <main className="main">
         {(busy || error) && <div className={busy ? "banner" : "banner error"}>{busy ?? error}</div>}
-        {showSettings ? (
-          <Settings onClose={() => setShowSettings(false)} />
-        ) : ws ? (
-          <WorkspaceView
-            ws={ws}
-            repo={repoOf(ws)}
-            chats={state.chats.filter((c) => c.workspaceId === ws.id)}
-            comments={state.comments.filter((c) => c.workspaceId === ws.id)}
-            terminals={terminals.filter((t) => t.workspaceId === ws.id)}
-            onArchive={() => act(`Archiving ${ws.name}…`, () => api.archiveWorkspace(ws.id))}
-            onRestore={() => act(`Restoring ${ws.name}…`, () => api.restoreWorkspace(ws.id))}
+        {screen === "configure" ? (
+          <Configure
+            onDone={() => {
+              void loadConfig();
+              setScreen("feature");
+            }}
+          />
+        ) : screen === "new" ? (
+          <NewFeature config={config.config} onCreated={(f) => select(f.id)} onCancel={() => setScreen("feature")} />
+        ) : feature ? (
+          <FeatureView
+            key={feature.id}
+            feature={feature}
+            config={config}
+            chats={state.chats.filter((c) => c.featureId === feature.id)}
+            comments={state.comments.filter((c) => c.featureId === feature.id)}
+            terminals={terminals.filter((t) => t.featureId === feature.id)}
+            onArchive={() => {
+              if (confirm(`Archive ${feature.name}? Its worktrees are removed; the branches and the folder stay.`)) {
+                void act(`Archiving ${feature.name}…`, () => api.archiveFeature(feature.id));
+              }
+            }}
+            onRestore={() => act(`Restoring ${feature.name}…`, () => api.restoreFeature(feature.id))}
           />
         ) : (
-          <Empty hasRepos={state.repos.length > 0} />
+          <Empty hasRepos={(config.config.repos ?? []).length > 0} onNew={() => setScreen("new")} />
         )}
       </main>
     </div>
   );
 }
 
-function RepoGroup(props: {
-  repo: Repo;
-  workspaces: Workspace[];
-  selected: string | null;
-  activity: (w: Workspace) => Activity;
-  onSelect: (id: string) => void;
-  onNew: () => void;
-  onRemove: () => void;
-}) {
-  const { repo, workspaces } = props;
-  const live = workspaces.filter((w) => !w.archived);
-  const archived = workspaces.filter((w) => w.archived);
-  return (
-    <section className="repo">
-      <div className="repo-head">
-        <span className="repo-name" title={repo.path}>
-          {repo.name}
-        </span>
-        <button className="icon" title="New workspace" onClick={props.onNew}>
-          +
-        </button>
-        {live.length === 0 && (
-          <button className="icon" title="Remove repository from Caboose" onClick={props.onRemove}>
-            ×
-          </button>
-        )}
-      </div>
-      {live.map((w) => (
-        <WorkspaceRow
-          key={w.id}
-          w={w}
-          activity={props.activity(w)}
-          active={w.id === props.selected}
-          onClick={() => props.onSelect(w.id)}
-        />
-      ))}
-      {archived.length > 0 && (
-        <details className="archived">
-          <summary>Archived ({archived.length})</summary>
-          {archived.map((w) => (
-            <WorkspaceRow key={w.id} w={w} active={w.id === props.selected} onClick={() => props.onSelect(w.id)} />
-          ))}
-        </details>
-      )}
-    </section>
-  );
-}
-
-function WorkspaceRow(props: { w: Workspace; activity?: Activity; active: boolean; onClick: () => void }) {
-  const { w, active, onClick, activity: a } = props;
+function FeatureRow(props: { f: Feature; activity?: Activity; active: boolean; onClick: () => void }) {
+  const { f, active, onClick, activity: a } = props;
+  const setup = f.repos.some((r) => r.setup === "failed") ? "failed" : f.repos.some((r) => r.setup === "running") ? "running" : "ok";
   // Most urgent first: an agent waiting for you, working, finished unseen; else the setup state.
   const [cls, title] = a?.waiting
     ? ["act-waiting", "Needs you"]
@@ -222,104 +194,134 @@ function WorkspaceRow(props: { w: Workspace; activity?: Activity; active: boolea
       ? ["act-running", "Working"]
       : a?.unread
         ? ["act-unread", "Done"]
-        : [`setup-${w.setup}`, `Setup: ${w.setup}`];
+        : [`setup-${setup}`, `Setup: ${setup}`];
   return (
-    <button className={`ws-row${active ? " active" : ""}${w.archived ? " is-archived" : ""}`} onClick={onClick}>
+    <button className={`ws-row${active ? " active" : ""}${f.archived ? " is-archived" : ""}`} onClick={onClick}>
       <span className={`dot ${cls}`} title={title} />
-      <span className="ws-name">{w.name}</span>
-      <span className="ws-branch">{w.branch}</span>
+      <span className="ws-name">{f.name}</span>
+      <span className="ws-branch">{f.repos.map((r) => r.name).join(" · ") || "no repos"}</span>
     </button>
   );
 }
 
-function WorkspaceView(props: {
-  ws: Workspace;
-  repo?: Repo;
+function FeatureView(props: {
+  feature: Feature;
+  config: ConfigInfo;
   chats: Chat[];
   comments: DiffComment[];
   terminals: Terminal[];
   onArchive: () => void;
   onRestore: () => void;
 }) {
-  const { ws } = props;
-  const [log, setLog] = useState("");
+  const { feature: f, config } = props;
   const [tab, setTab] = useState<"chat" | "changes">(location.hash === "#changes" ? "changes" : "chat");
-  const diff = useChanges(ws);
-  const gh = useGitHub(ws, props.chats);
-  const fileCount = diff.changes?.files.length ?? 0;
+  const [repoTab, setRepoTab] = useState<string | null>(null);
+  const diff = useFeatureChanges(f);
+  const fileCount = Object.values(diff.byRepo).reduce((n, c) => n + (c?.files.length ?? 0), 0);
   const openComments = props.comments.filter((c) => !c.resolved).length;
+  const unsent = props.comments.filter((c) => c.author === "user" && !c.sentAt && !c.resolved).length;
+  const level = config.config.jira?.level ?? "off";
+  const site = config.config.jira?.site;
 
-  const [config, setConfig] = useState<RepoConfig>({});
+  const [jira, setJira] = useState<FeatureJira>({ subtasks: {} });
+  const loadJira = () => api.featureJira(f.id).then(setJira);
+  useEffect(() => void loadJira(), [f.id]);
+
+  // Which repos have a run script.
+  const [configs, setConfigs] = useState<Record<string, RepoConfig>>({});
+  const repoKey = f.repos.map((r) => r.name).join();
   useEffect(() => {
-    void api.repoConfig(ws.id).then(setConfig);
-  }, [ws.id]);
-  const [termOpen, setTermOpenRaw] = useState(() => localStorage.getItem(`caboose-term-open-${ws.id}`) === "1");
+    void Promise.all(f.repos.map(async (r) => [r.name, await api.repoConfig(f.id, r.name)] as const)).then((e) =>
+      setConfigs(Object.fromEntries(e)),
+    );
+  }, [f.id, repoKey]);
+  const runnable = f.repos.filter((r) => configs[r.name]?.run);
+
+  const [termOpen, setTermOpenRaw] = useState(() => localStorage.getItem(`caboose-term-open-${f.id}`) === "1");
   const [termActive, setTermActive] = useState<string | null>(null);
-  useEffect(() => {
-    setTermOpenRaw(localStorage.getItem(`caboose-term-open-${ws.id}`) === "1");
-    setTermActive(null);
-  }, [ws.id]);
   const setTermOpen = (open: boolean) => {
     setTermOpenRaw(open);
-    localStorage.setItem(`caboose-term-open-${ws.id}`, open ? "1" : "0");
+    localStorage.setItem(`caboose-term-open-${f.id}`, open ? "1" : "0");
   };
-  const run = props.terminals.find((t) => t.kind === "run");
-  const running = run && run.exitCode === undefined;
+  const [runMenu, setRunMenu] = useState<{ x: number; y: number } | null>(null);
 
-  async function startRun() {
-    const r = await api.runScript(ws.id);
+  async function run(repo: string) {
+    setRunMenu(null);
+    const r = await api.runScript(f.id, repo);
     if (!r.ok) return alert(r.error);
     setTermActive(r.value.id);
     setTermOpen(true);
   }
+  const runAll = () => runnable.forEach((r) => void run(r.name));
 
   useCommand(async (c) => {
     if (c === "showChat" || c === "focusComposer") setTab("chat");
     if (c === "showChanges") setTab("changes");
-    if (c === "toggleTerminal" && !ws.archived) setTermOpen(!termOpen);
-    if (c === "run" && config.run && !ws.archived) void startRun();
-    if (c === "newTerminal" && !ws.archived) {
-      const r = await api.openShell(ws.id);
+    if (c === "toggleTerminal" && !f.archived) setTermOpen(!termOpen);
+    if (c === "run" && !f.archived) runAll();
+    if (c === "newTerminal" && !f.archived) {
+      const r = await api.openShell(f.id, f.repos[0]?.name);
       if (!r.ok) return alert(r.error);
       setTermActive(r.value.id);
       setTermOpen(true);
     }
   });
-  useEffect(() => {
-    void api.setupLog(ws.id).then(setLog);
-  }, [ws.id, ws.setup]);
+
+  const missing = (config.config.repos ?? []).filter((r) => !f.repos.some((x) => x.name === r.name));
+  const shownRepo = f.repos.find((r) => r.name === repoTab) ?? f.repos[0];
 
   return (
     <div className="ws-view">
       <header className="ws-header">
         <div>
-          <h1>{ws.name}</h1>
+          <h1>
+            {f.name}{" "}
+            {level !== "off" && (
+              <JiraChip
+                label="Jira task"
+                jiraKey={jira.task}
+                site={site}
+                onSet={async (key) => {
+                  const r = await api.setFeatureTask(f.id, key);
+                  if (!r.ok) alert(r.error);
+                  void loadJira();
+                }}
+              />
+            )}
+          </h1>
           <div className="muted">
-            {props.repo?.name} · <BranchName ws={ws} status={gh.status} onRenamed={gh.refresh} /> from{" "}
-            <code>{ws.baseRef}</code>
+            <code>{f.folder}</code>
           </div>
         </div>
         <div className="actions">
-          {ws.archived ? (
+          {f.archived ? (
             <button onClick={props.onRestore}>Restore</button>
           ) : (
             <>
-              {config.run &&
-                (running ? (
-                  <>
-                    <button onClick={startRun} title={config.run}>
-                      ↻ Restart
+              {runnable.length > 0 && (
+                <button
+                  className="primary"
+                  title="Run a repo's run script (Cmd/Ctrl+R runs all)"
+                  onClick={(e) => {
+                    if (runnable.length === 1) return void run(runnable[0].name);
+                    const r = e.currentTarget.getBoundingClientRect();
+                    setRunMenu(runMenu ? null : { x: r.left, y: r.bottom });
+                  }}
+                >
+                  ▶ Run{runnable.length > 1 ? " ▾" : ""}
+                </button>
+              )}
+              {runMenu && (
+                <div className="menu" style={{ left: runMenu.x, top: runMenu.y }} onMouseLeave={() => setRunMenu(null)}>
+                  {runnable.map((r) => (
+                    <button key={r.name} onClick={() => run(r.name)}>
+                      Run {r.name}
                     </button>
-                    <button className="danger" onClick={() => api.stopTerminal(run.id)}>
-                      ■ Stop
-                    </button>
-                  </>
-                ) : (
-                  <button className="primary" onClick={startRun} title={config.run}>
-                    ▶ Run
-                  </button>
-                ))}
-              <button onClick={() => api.openPath(ws.path)}>Open folder</button>
+                  ))}
+                  <button onClick={runAll}>Run all</button>
+                </div>
+              )}
+              <button onClick={() => api.openPath(f.folder)}>Open folder</button>
               <button className="danger" onClick={props.onArchive}>
                 Archive
               </button>
@@ -328,37 +330,56 @@ function WorkspaceView(props: {
         </div>
       </header>
 
-      <GitHubBar
-        ws={ws}
-        chats={props.chats}
-        status={gh.status}
-        error={gh.error}
-        refresh={gh.refresh}
-        onAskedClaude={() => setTab("chat")}
-        onArchive={props.onArchive}
-      />
+      <div className="repos">
+        {f.repos.map((r) => (
+          <RepoRow
+            key={r.name}
+            feature={f}
+            repo={r}
+            chats={props.chats}
+            jiraLevel={level}
+            jiraKey={jira.subtasks[r.name] ?? jira.task}
+            subtask={jira.subtasks[r.name]}
+            hasTask={Boolean(jira.task)}
+            jiraSite={site}
+            onJiraChanged={() => void loadJira()}
+            onAskedAgent={() => setTab("chat")}
+          />
+        ))}
+        {!f.archived && missing.length > 0 && (
+          <div className="add-repo-row">
+            <select
+              value=""
+              onChange={async (e) => {
+                const name = e.target.value;
+                if (!name) return;
+                const r = await api.addRepoToFeature(f.id, name);
+                if (!r.ok) alert(r.error);
+                void loadJira();
+              }}
+            >
+              <option value="">+ Add a repo to this feature…</option>
+              {missing.map((r) => (
+                <option key={r.name} value={r.name}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
 
-      <details className="ws-info" open={ws.setup === "failed" || undefined}>
+      <details className="ws-info">
         <summary>
-          Workspace · setup {{ none: "not configured", running: "running…", ok: "done", failed: "failed" }[ws.setup]}
+          Feature details · ports {f.port}–{f.port + 99}
         </summary>
         <dl className="facts">
-          <dt>Path</dt>
-          <dd>
-            <code>{ws.path}</code>
-          </dd>
-          {ws.port && (
-            <>
-              <dt>Ports</dt>
-              <dd>
-                <code>{ws.port}</code>–<code>{ws.port + 9}</code> (<code>CABOOSE_PORT</code>)
-              </dd>
-            </>
-          )}
+          {f.repos.map((r, i) => (
+            <SetupFacts key={r.name} f={f} repo={r.name} setup={r.setup} port={f.port + 10 * i} path={r.path} />
+          ))}
           <dt>Created</dt>
-          <dd>{new Date(ws.createdAt).toLocaleString()}</dd>
+          <dd>{new Date(f.createdAt).toLocaleString()}</dd>
         </dl>
-        {log && <pre className="log">{log}</pre>}
       </details>
 
       <div className="view-tabs">
@@ -369,27 +390,40 @@ function WorkspaceView(props: {
           Changes{fileCount > 0 && <span className="badge">{fileCount}</span>}
           {openComments > 0 && <span className="badge comments">💬{openComments}</span>}
         </button>
+        {tab === "changes" && f.repos.length > 1 && (
+          <div className="repo-tabs">
+            {f.repos.map((r) => (
+              <button key={r.name} className={r.name === shownRepo?.name ? "active" : ""} onClick={() => setRepoTab(r.name)}>
+                {r.name}
+                {(diff.byRepo[r.name]?.files.length ?? 0) > 0 && <span className="badge">{diff.byRepo[r.name]!.files.length}</span>}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      <ChatArea ws={ws} chats={props.chats} hidden={tab !== "chat"} />
-      {tab === "changes" && (
+      <ChatArea ws={f} chats={props.chats} hidden={tab !== "chat"} />
+      {tab === "changes" && shownRepo && (
         <ChangesView
-          ws={ws}
-          changes={diff.changes}
-          error={diff.error}
-          comments={props.comments}
+          key={shownRepo.name}
+          ws={f}
+          repo={shownRepo}
+          unsent={unsent}
+          changes={diff.byRepo[shownRepo.name]}
+          error={diff.errors[shownRepo.name]}
+          comments={props.comments.filter((c) => c.repo === shownRepo.name)}
           refresh={diff.refresh}
           onSendComments={async () => {
-            const chat = activeChat(ws, props.chats);
+            const chat = activeChat(f, props.chats);
             if (!chat) return;
-            const r = await api.sendComments(ws.id, chat.id);
+            const r = await api.sendComments(f.id, chat.id);
             if (r.ok) setTab("chat");
             else alert(r.error);
           }}
         />
       )}
       <TerminalPanel
-        ws={ws}
+        ws={f}
         terminals={props.terminals}
         open={termOpen}
         setOpen={setTermOpen}
@@ -400,16 +434,38 @@ function WorkspaceView(props: {
   );
 }
 
-function Empty({ hasRepos }: { hasRepos: boolean }) {
+function SetupFacts(props: { f: Feature; repo: string; setup: string; port: number; path: string }) {
+  const [log, setLog] = useState("");
+  useEffect(() => {
+    void api.setupLog(props.f.id, props.repo).then(setLog);
+  }, [props.f.id, props.repo, props.setup]);
+  return (
+    <>
+      <dt>{props.repo}</dt>
+      <dd>
+        <code>{props.path}</code> · CABOOSE_PORT <code>{props.port}</code> · setup{" "}
+        {{ none: "not configured", running: "running…", ok: "done", failed: "failed" }[props.setup]}
+        {log && <pre className="log">{log}</pre>}
+      </dd>
+    </>
+  );
+}
+
+function Empty({ hasRepos, onNew }: { hasRepos: boolean; onNew: () => void }) {
   return (
     <div className="empty">
       <div className="empty-icon">🚃</div>
-      <h1>{hasRepos ? "Pick a workspace" : "All aboard"}</h1>
+      <h1>All aboard</h1>
       <p className="muted">
         {hasRepos
-          ? "Or press + next to a repository to start a new one."
-          : "Add a git repository to start. Each workspace is its own worktree and branch."}
+          ? "Start a feature: it gets a station name, a folder, and a worktree for each repo you pick."
+          : "Add your repositories in Configure first."}
       </p>
+      {hasRepos && (
+        <button className="primary" onClick={onNew}>
+          + New feature
+        </button>
+      )}
     </div>
   );
 }

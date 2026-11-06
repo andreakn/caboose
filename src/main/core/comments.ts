@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { DiffComment } from "../../shared/diff.ts";
 import type { Store } from "./store.ts";
 
-export type NewComment = Pick<DiffComment, "workspaceId" | "file" | "line" | "side" | "lineText" | "body" | "author">;
+export type NewComment = Pick<DiffComment, "featureId" | "repo" | "file" | "line" | "side" | "lineText" | "body" | "author">;
 
 export class Comments {
   private store: Store;
@@ -12,8 +12,8 @@ export class Comments {
     this.store = store;
   }
 
-  list(workspaceId: string): DiffComment[] {
-    return this.store.get().comments.filter((c) => c.workspaceId === workspaceId);
+  list(featureId: string): DiffComment[] {
+    return this.store.get().comments.filter((c) => c.featureId === featureId);
   }
 
   add(c: NewComment): DiffComment {
@@ -31,8 +31,8 @@ export class Comments {
   }
 
   /** The user's comments not yet sent to Claude. */
-  unsent(workspaceId: string): DiffComment[] {
-    return this.list(workspaceId).filter((c) => c.author === "user" && !c.sentAt && !c.resolved);
+  unsent(featureId: string): DiffComment[] {
+    return this.list(featureId).filter((c) => c.author === "user" && !c.sentAt && !c.resolved);
   }
 
   markSent(ids: string[]): void {
@@ -40,8 +40,8 @@ export class Comments {
     this.patch((c) => set.has(c.id), { sentAt: new Date().toISOString() });
   }
 
-  removeWorkspace(workspaceId: string): void {
-    this.store.update((s) => ({ ...s, comments: s.comments.filter((c) => c.workspaceId !== workspaceId) }));
+  removeFeature(featureId: string): void {
+    this.store.update((s) => ({ ...s, comments: s.comments.filter((c) => c.featureId !== featureId) }));
   }
 
   private patch(match: (c: DiffComment) => boolean, p: Partial<DiffComment>): void {

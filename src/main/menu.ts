@@ -34,11 +34,11 @@ export function installMenu(win: () => BrowserWindow | null): void {
     {
       label: "File",
       submenu: [
-        item("New Workspace", "CmdOrCtrl+N", "newWorkspace"),
+        item("New Feature", "CmdOrCtrl+N", "newFeature"),
         item("New Chat Tab", "CmdOrCtrl+T", "newChat"),
         item("New Terminal", "CmdOrCtrl+Shift+T", "newTerminal"),
         { type: "separator" },
-        item("Add Repository…", "CmdOrCtrl+Shift+O", "addRepo"),
+        item("Configure…", "CmdOrCtrl+Shift+O", "addRepo"),
         ...(mac ? [] : ([{ type: "separator" }, item("Settings…", "Ctrl+,", "settings"), { role: "quit" }] as MenuItemConstructorOptions[])),
       ],
     },
@@ -64,13 +64,13 @@ export function installMenu(win: () => BrowserWindow | null): void {
       ],
     },
     {
-      label: "Workspace",
+      label: "Feature",
       submenu: [
-        item("Run / Restart", "CmdOrCtrl+R", "run"),
+        item("Run All / Restart", "CmdOrCtrl+R", "run"),
         item("Stop Claude", "CmdOrCtrl+.", "stopClaude"),
         { type: "separator" },
-        item("Next Workspace", "CmdOrCtrl+Alt+Down", "nextWorkspace"),
-        item("Previous Workspace", "CmdOrCtrl+Alt+Up", "prevWorkspace"),
+        item("Next Feature", "CmdOrCtrl+Alt+Down", "nextFeature"),
+        item("Previous Feature", "CmdOrCtrl+Alt+Up", "prevFeature"),
       ],
     },
     { role: "windowMenu" },

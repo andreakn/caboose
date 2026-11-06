@@ -89,7 +89,7 @@ function setup(mode: "default" | "acceptEdits" = "default") {
   const store = new Store(join(tmp, `${Math.random()}`, "state.json"));
   store.update((s) => ({
     ...s,
-    workspaces: [{ id: "w1", repoId: "r", name: "finse", branch: "b", path: tmp, baseRef: "main", createdAt: "", archived: false, setup: "none" }],
+    features: [{ id: "w1", name: "finse", folder: tmp, createdAt: "", archived: false, port: 41000, repos: [] }],
   }));
   const rt = fakeRuntime();
   const provider = new CopilotProvider(() => rt.client as never, () => ({ tools: [{ name: "caboose_x" } as never], instructions: "NOTE" }));

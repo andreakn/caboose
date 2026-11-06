@@ -14,7 +14,7 @@ import {
   MODES,
   type Question,
 } from "../../shared/chat.ts";
-import type { Workspace } from "../../shared/types.ts";
+import type { Feature } from "../../shared/types.ts";
 import { activityOf, setVisibleChat, useActivityVersion } from "./activity.ts";
 import { useCommand } from "./commands.ts";
 
@@ -39,15 +39,15 @@ function useModels(agent: Agent): ModelOption[] {
   return models;
 }
 
-const activeKey = (ws: Workspace) => `caboose-chat-${ws.id}`;
+const activeKey = (ws: Feature) => `caboose-chat-${ws.id}`;
 
-/** The chat tab the user last had open in a workspace. */
-export function activeChat(ws: Workspace, chats: Chat[]): Chat | undefined {
+/** The chat tab the user last had open in a feature. */
+export function activeChat(ws: Feature, chats: Chat[]): Chat | undefined {
   return chats.find((c) => c.id === localStorage.getItem(activeKey(ws))) ?? chats.at(-1);
 }
 
-/** Tabs for a workspace's chats, and the active chat below them. */
-export function ChatArea({ ws, chats, hidden }: { ws: Workspace; chats: Chat[]; hidden?: boolean }) {
+/** Tabs for a feature's chats, and the active chat below them. */
+export function ChatArea({ ws, chats, hidden }: { ws: Feature; chats: Chat[]; hidden?: boolean }) {
   const key = activeKey(ws);
   const [activeId, setActiveId] = useState<string | null>(() => localStorage.getItem(key));
   const active = chats.find((c) => c.id === activeId) ?? chats.at(-1);
@@ -70,7 +70,7 @@ export function ChatArea({ ws, chats, hidden }: { ws: Workspace; chats: Chat[]; 
     if (r.ok) select(r.value.id);
   }
 
-  // Every live workspace has at least one chat.
+  // Every live feature has at least one chat.
   useEffect(() => {
     if (!ws.archived && chats.length === 0) void newChat();
   }, [ws.id, ws.archived, chats.length]);
@@ -152,7 +152,7 @@ function TabState({ chatId }: { chatId: string }) {
   return null;
 }
 
-function ChatPanel({ chat, ws }: { chat: Chat; ws: Workspace }) {
+function ChatPanel({ chat, ws }: { chat: Chat; ws: Feature }) {
   const [view, setView] = useState<ChatView>(emptyView);
   const scroller = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
@@ -176,7 +176,7 @@ function ChatPanel({ chat, ws }: { chat: Chat; ws: Workspace }) {
     if (el && pinned.current) el.scrollTop = el.scrollHeight;
   }, [view]);
 
-  const rel = (p: string) => (p.startsWith(ws.path) ? p.slice(ws.path.length + 1) || "." : p);
+  const rel = (p: string) => (p.startsWith(ws.folder) ? p.slice(ws.folder.length + 1) || "." : p);
 
   return (
     <div className="chat">
@@ -190,7 +190,7 @@ function ChatPanel({ chat, ws }: { chat: Chat; ws: Workspace }) {
       >
         {view.items.length === 0 && !view.draft && (
           <div className="chat-hello muted">
-            {agentName(chat)} works in <code>{ws.path}</code> on <code>{ws.branch}</code>.
+            {agentName(chat)} works in <code>{ws.folder}</code>, with {ws.repos.map((r) => r.name).join(", ") || "no repos yet"}.
           </div>
         )}
         {view.items.map((item) => (
