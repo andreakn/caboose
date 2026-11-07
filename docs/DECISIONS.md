@@ -582,6 +582,14 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      offer until the set of PRs changes. A merged repo no longer makes
      "Merge master" its main button (it stays in the ⋯ menu).
 
+133. **Tabs look like tabs, and each level is a panel of its own shade.**
+     The Feature/repo bar is a row of folder tabs opening onto a tinted
+     panel; that panel's tabs (Chat, Files…) open onto a card-coloured panel
+     inside it; chat tabs are a third, quieter row. The Feature level is
+     tinted with the accent (warm), a repo level with blue (`--info`), so the
+     colour says where you are. Shades are mixed from the theme tokens, so
+     light and dark both work.
+
 ## Answered (2026-11-05)
 
 - Private GitHub repo `andreakn/caboose`: yes.
