@@ -907,3 +907,10 @@ a.tab-pr.link { text-decoration: underline dotted; cursor: pointer; } a.tab-pr.l
 .tree-folder.drop-inside > .folder-row { background: var(--accent-soft); color: var(--text); }
 .feature-tree.drop-end { box-shadow: inset 0 -2px 0 var(--accent); }
 .new-folder { align-self: flex-start; margin: 4px 0 0 6px; font-size: 12px; }
+
+/* Map and Board as icons beside the name */
+.brand { display: flex; align-items: center; gap: 2px; }
+.brand-icon { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: none; border-radius: 7px; background: none; color: var(--muted); }
+.brand-icon:hover { background: var(--card); color: var(--text); }
+.brand-icon.active { background: var(--accent-soft); color: var(--accent); }
+.brand-icon svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }

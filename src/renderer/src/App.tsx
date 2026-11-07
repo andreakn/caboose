@@ -155,13 +155,20 @@ export function App() {
   return (
     <div className="app">
       <aside className="sidebar">
-        <div className="brand">🚃 Caboose</div>
-        <button className={`board-link${screen === "map" ? " active" : ""}`} onClick={() => setScreen("map")} title="Every station a feature has been named after">
-          ⛰ Map
-        </button>
-        <button className={`board-link${screen === "board" ? " active" : ""}`} onClick={() => setScreen("board")}>
-          ▦ Board
-        </button>
+        <div className="brand">
+          <span>🚃 Caboose</span>
+          <span className="spacer" />
+          <button className={`brand-icon${screen === "map" ? " active" : ""}`} onClick={() => setScreen("map")} title="Map: every station a feature has been named after">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M9 4 3 6.5v13.5L9 17.5l6 2.5 6-2.5V4l-6 2.5L9 4Z M9 4v13.5 M15 6.5V20" />
+            </svg>
+          </button>
+          <button className={`brand-icon${screen === "board" ? " active" : ""}`} onClick={() => setScreen("board")} title="Board: every feature at a glance">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 4h7v7H4Z M13 4h7v7h-7Z M4 13h7v7H4Z M13 13h7v7h-7Z" />
+            </svg>
+          </button>
+        </div>
         <button className="new-feature" onClick={() => setCreating(true)}>
           + New feature
         </button>
