@@ -42,8 +42,19 @@ const TERMINAL_FIELDS: { key: "shellPath" | "bashPath" | "terminalFont" | "monik
   },
 ];
 
+type ConfigTab = "agents" | "repos" | "features" | "tools" | "look" | "system";
+const CONFIG_TABS: { key: ConfigTab; label: string }[] = [
+  { key: "agents", label: "Agents" },
+  { key: "repos", label: "Repositories" },
+  { key: "features", label: "Features & Jira" },
+  { key: "tools", label: "Apps" },
+  { key: "look", label: "Look & sound" },
+  { key: "system", label: "System" },
+];
+
 /** The setup screen: shown on first run, and from the Configure button. */
 export function Configure({ onDone, onSaved }: { onDone: () => void; onSaved?: () => void }) {
+  const [tab, setTabRaw] = useState<ConfigTab>(() => (localStorage.getItem("caboose-config-tab") as ConfigTab | null) ?? "agents");
   const [info, setInfo] = useState<ConfigInfo | null>(null);
   const [form, setForm] = useState<ConfigInput>({});
   /** A new token typed in; undefined = keep the stored one. */
@@ -104,6 +115,10 @@ export function Configure({ onDone, onSaved }: { onDone: () => void; onSaved?: (
   }
 
   const first = info.firstRun;
+  const setTab = (t: ConfigTab) => {
+    setTabRaw(t);
+    localStorage.setItem("caboose-config-tab", t);
+  };
   return (
     <div className="settings configure">
       <header className="ws-header">
@@ -119,327 +134,360 @@ export function Configure({ onDone, onSaved }: { onDone: () => void; onSaved?: (
         {!first && <button onClick={onDone}>Close</button>}
       </header>
 
-      <section>
-        <h2>Main agent</h2>
-        <p className="muted">Which agent new chats use. You can still pick the other one per chat (the "+" on the chat tabs).</p>
-        <div className="levels">
-          {(
-            [
-              ["claude", "Claude Code", "With a Claude subscription or API key."],
-              ["copilot", "GitHub Copilot", "With a Copilot plan, through your GitHub login (gh auth login)."],
-            ] as const
-          ).map(([id, label, hint]) => {
-            const l = logins?.[id];
-            return (
-              <label key={id} className={`level${(form.defaultAgent ?? "claude") === id ? " active" : ""}`}>
-                <input type="radio" name="main-agent" checked={(form.defaultAgent ?? "claude") === id} onChange={() => setForm({ ...form, defaultAgent: id })} />
-                <b>{label}</b>
-                <span className="muted">
-                  {!l ? "checking the login…" : l.ok ? <span className="add">✓ {l.detail}</span> : <span className="del">✗ not logged in</span>} · {hint}
-                </span>
-              </label>
-            );
-          })}
-        </div>
-      </section>
-
-      <section>
-        <h2>Permissions for new chats</h2>
-        <p className="muted">What the agent may do without asking. Each chat can change it in the picker under its message box.</p>
-        <div className="levels">
-          {MODES.map((m) => (
-            <label key={m.value} className={`level${(form.defaultMode ?? "bypassPermissions") === m.value ? " active" : ""}`}>
-              <input
-                type="radio"
-                name="default-mode"
-                checked={(form.defaultMode ?? "bypassPermissions") === m.value}
-                onChange={() => setForm({ ...form, defaultMode: m.value })}
-              />
-              <b>{m.label}</b>
-              <span className="muted">{m.hint}</span>
-            </label>
-          ))}
-        </div>
-      </section>
-
-      <section>
-        <h2>Features</h2>
-        <p className="muted">
-          A feature is a folder named after a railway station, with a git worktree for each repo you work on in it.
-        </p>
-        <div className="form">
-          <label>
-            <span>Features folder</span>
-            <div className="row">
-              <input
-                value={form.featuresRoot ?? ""}
-                placeholder={info.defaults.featuresRoot}
-                onChange={(e) => setForm({ ...form, featuresRoot: e.target.value })}
-              />
-              <button
-                onClick={async () => {
-                  const folder = await api.pickFolder("Folder for features");
-                  if (folder) setForm({ ...form, featuresRoot: folder });
-                }}
-              >
-                Choose…
-              </button>
-            </div>
-          </label>
-          <label>
-            <span>Archive folder</span>
-            <div className="row">
-              <input
-                value={form.archiveRoot ?? ""}
-                placeholder={info.defaults.archiveRoot}
-                onChange={(e) => setForm({ ...form, archiveRoot: e.target.value })}
-              />
-              <button
-                onClick={async () => {
-                  const folder = await api.pickFolder("Folder for archived features");
-                  if (folder) setForm({ ...form, archiveRoot: folder });
-                }}
-              >
-                Choose…
-              </button>
-            </div>
-            <small className="muted">Archiving a feature moves its folder and chat logs here, as yyyy-mm-dd_hh-mm_&lt;station&gt;.</small>
-          </label>
-          <label>
-            <span>Branch prefix</span>
-            <input
-              value={form.branchPrefix ?? ""}
-              placeholder={info.defaults.branchPrefix}
-              onChange={(e) => setForm({ ...form, branchPrefix: e.target.value })}
-            />
-            <small className="muted">Branches are &lt;prefix&gt;/&lt;station&gt;, or &lt;prefix&gt;/&lt;JIRA-KEY&gt;-&lt;station&gt; with Jira.</small>
-          </label>
-        </div>
-      </section>
-
-      <section>
-        <h2>Repositories</h2>
-        <p className="muted">
-          The repos you work on. Their name is the folder name inside a feature. For each, choose the gitignored files a new
-          feature brings from the repo's main checkout (.env, *.local.* …), so the repo can run there.
-        </p>
-        {repos.length === 0 && <p className="del">No repositories yet.</p>}
-        <ul className="repo-list">
-          {repos.map((r) => (
-            <RepoItem
-              key={r.path}
-              repo={r}
-              defaults={info.defaults.localFiles}
-              onChange={(next) => setForm({ ...form, repos: repos.map((x) => (x.path === r.path ? next : x)) })}
-              onRemove={() => setForm({ ...form, repos: repos.filter((x) => x.path !== r.path) })}
-            />
-          ))}
-        </ul>
-        <div className="row">
-          <button
-            onClick={async () => {
-              const folder = await api.pickFolder("Add a repository");
-              if (!folder) return;
-              const r = await api.checkRepo(folder);
-              if (!r.ok) return alert(r.error);
-              // Rules the repo already declares for Conductor (.worktreeinclude, .conductor/*.toml)
-              const rules = await api.repoRules(r.value.path);
-              addRepos([{ ...r.value, ...(rules ? { localFiles: rules.patterns } : {}) }]);
-            }}
-          >
-            Add a repository…
+      <div className="config-tabs">
+        {CONFIG_TABS.filter((t) => !(first && t.key === "system")).map((t) => (
+          <button key={t.key} className={tab === t.key ? "active" : ""} onClick={() => setTab(t.key)}>
+            {t.label}
           </button>
-          <button
-            onClick={async () => {
-              const folder = await api.pickFolder("Find repositories in a folder (e.g. ~/code)");
-              if (!folder) return;
-              const found = (await api.scanRepos(folder)).filter((r) => !repos.some((x) => x.path === r.path));
-              setScan({ folder, found, picked: new Set() });
-            }}
-          >
-            Find repositories in a folder…
-          </button>
-          <button onClick={() => setImporting(!importing)}>Import from Conductor…</button>
-        </div>
-        {importing && (
-          <ImportFromConductor
-            onCancel={() => setImporting(false)}
-            onImport={(picked, prInstructions) => {
-              addRepos(picked);
-              if (prInstructions) setForm((f) => ({ ...f, prInstructions }));
-              setImporting(false);
-            }}
-          />
-        )}
-        {scan && (
-          <div className="scan">
-            <div className="muted">
-              {scan.found.length ? `Git repositories in ${scan.folder}:` : `No new git repositories directly inside ${scan.folder}.`}
+        ))}
+      </div>
+
+      {tab === "agents" && (
+        <>
+          <section>
+            <h2>Main agent</h2>
+            <p className="muted">Which agent new chats use. You can still pick the other one per chat (the "+" on the chat tabs).</p>
+            <div className="levels">
+              {(
+                [
+                  ["claude", "Claude Code", "With a Claude subscription or API key."],
+                  ["copilot", "GitHub Copilot", "With a Copilot plan, through your GitHub login (gh auth login)."],
+                ] as const
+              ).map(([id, label, hint]) => {
+                const l = logins?.[id];
+                return (
+                  <label key={id} className={`level${(form.defaultAgent ?? "claude") === id ? " active" : ""}`}>
+                    <input type="radio" name="main-agent" checked={(form.defaultAgent ?? "claude") === id} onChange={() => setForm({ ...form, defaultAgent: id })} />
+                    <b>{label}</b>
+                    <span className="muted">
+                      {!l ? "checking the login…" : l.ok ? <span className="add">✓ {l.detail}</span> : <span className="del">✗ not logged in</span>} · {hint}
+                    </span>
+                  </label>
+                );
+              })}
             </div>
-            {scan.found.map((r) => (
-              <label key={r.path} className="check">
-                <input
-                  type="checkbox"
-                  checked={scan.picked.has(r.path)}
-                  onChange={(e) => {
-                    const picked = new Set(scan.picked);
-                    if (e.target.checked) picked.add(r.path);
-                    else picked.delete(r.path);
-                    setScan({ ...scan, picked });
-                  }}
+          </section>
+
+          <section>
+            <h2>Permissions for new chats</h2>
+            <p className="muted">What the agent may do without asking. Each chat can change it in the picker under its message box.</p>
+            <div className="levels">
+              {MODES.map((m) => (
+                <label key={m.value} className={`level${(form.defaultMode ?? "bypassPermissions") === m.value ? " active" : ""}`}>
+                  <input
+                    type="radio"
+                    name="default-mode"
+                    checked={(form.defaultMode ?? "bypassPermissions") === m.value}
+                    onChange={() => setForm({ ...form, defaultMode: m.value })}
+                  />
+                  <b>{m.label}</b>
+                  <span className="muted">{m.hint}</span>
+                </label>
+              ))}
+            </div>
+          </section>
+
+          <section>
+            <h2>Pull requests</h2>
+            <p className="muted">How you want PRs written. Added to every "Create PR" request to the agent.</p>
+            <textarea
+              className="wide"
+              rows={Math.min(14, Math.max(4, (form.prInstructions ?? "").split("\n").length + 1))}
+              value={form.prInstructions ?? ""}
+              placeholder="e.g. Imperative title. Open with what changed and why. State build and test status."
+              onChange={(e) => setForm({ ...form, prInstructions: e.target.value })}
+            />
+          </section>
+        </>
+      )}
+
+      {tab === "repos" && (
+        <>
+          <section>
+            <h2>Repositories</h2>
+            <p className="muted">
+              The repos you work on. Their name is the folder name inside a feature. For each, choose the gitignored files a new
+              feature brings from the repo's main checkout (.env, *.local.* …), so the repo can run there.
+            </p>
+            {repos.length === 0 && <p className="del">No repositories yet.</p>}
+            <ul className="repo-list">
+              {repos.map((r) => (
+                <RepoItem
+                  key={r.path}
+                  repo={r}
+                  defaults={info.defaults.localFiles}
+                  onChange={(next) => setForm({ ...form, repos: repos.map((x) => (x.path === r.path ? next : x)) })}
+                  onRemove={() => setForm({ ...form, repos: repos.filter((x) => x.path !== r.path) })}
                 />
-                {r.name}
-              </label>
-            ))}
+              ))}
+            </ul>
             <div className="row">
-              {scan.found.length > 0 && (
+              <button
+                onClick={async () => {
+                  const folder = await api.pickFolder("Add a repository");
+                  if (!folder) return;
+                  const r = await api.checkRepo(folder);
+                  if (!r.ok) return alert(r.error);
+                  // Rules the repo already declares for Conductor (.worktreeinclude, .conductor/*.toml)
+                  const rules = await api.repoRules(r.value.path);
+                  addRepos([{ ...r.value, ...(rules ? { localFiles: rules.patterns } : {}) }]);
+                }}
+              >
+                Add a repository…
+              </button>
+              <button
+                onClick={async () => {
+                  const folder = await api.pickFolder("Find repositories in a folder (e.g. ~/code)");
+                  if (!folder) return;
+                  const found = (await api.scanRepos(folder)).filter((r) => !repos.some((x) => x.path === r.path));
+                  setScan({ folder, found, picked: new Set() });
+                }}
+              >
+                Find repositories in a folder…
+              </button>
+              <button onClick={() => setImporting(!importing)}>Import from Conductor…</button>
+            </div>
+            {importing && (
+              <ImportFromConductor
+                onCancel={() => setImporting(false)}
+                onImport={(picked, prInstructions) => {
+                  addRepos(picked);
+                  if (prInstructions) setForm((f) => ({ ...f, prInstructions }));
+                  setImporting(false);
+                }}
+              />
+            )}
+            {scan && (
+              <div className="scan">
+                <div className="muted">
+                  {scan.found.length ? `Git repositories in ${scan.folder}:` : `No new git repositories directly inside ${scan.folder}.`}
+                </div>
+                {scan.found.map((r) => (
+                  <label key={r.path} className="check">
+                    <input
+                      type="checkbox"
+                      checked={scan.picked.has(r.path)}
+                      onChange={(e) => {
+                        const picked = new Set(scan.picked);
+                        if (e.target.checked) picked.add(r.path);
+                        else picked.delete(r.path);
+                        setScan({ ...scan, picked });
+                      }}
+                    />
+                    {r.name}
+                  </label>
+                ))}
+                <div className="row">
+                  {scan.found.length > 0 && (
+                    <button
+                      className="primary"
+                      disabled={!scan.picked.size}
+                      onClick={async () => {
+                        const picked = scan.found.filter((r) => scan.picked.has(r.path));
+                        const withRules = await Promise.all(
+                          picked.map(async (r) => {
+                            const rules = await api.repoRules(r.path);
+                            return rules ? { ...r, localFiles: rules.patterns } : r;
+                          }),
+                        );
+                        addRepos(withRules);
+                        setScan(null);
+                      }}
+                    >
+                      Add {scan.picked.size || ""}
+                    </button>
+                  )}
+                  <button onClick={() => setScan(null)}>Cancel</button>
+                </div>
+              </div>
+            )}
+          </section>
+        </>
+      )}
+
+      {tab === "features" && (
+        <>
+          <section>
+            <h2>Features</h2>
+            <p className="muted">
+              A feature is a folder named after a railway station, with a git worktree for each repo you work on in it.
+            </p>
+            <div className="form">
+              <label>
+                <span>Features folder</span>
+                <div className="row">
+                  <input
+                    value={form.featuresRoot ?? ""}
+                    placeholder={info.defaults.featuresRoot}
+                    onChange={(e) => setForm({ ...form, featuresRoot: e.target.value })}
+                  />
+                  <button
+                    onClick={async () => {
+                      const folder = await api.pickFolder("Folder for features");
+                      if (folder) setForm({ ...form, featuresRoot: folder });
+                    }}
+                  >
+                    Choose…
+                  </button>
+                </div>
+              </label>
+              <label>
+                <span>Archive folder</span>
+                <div className="row">
+                  <input
+                    value={form.archiveRoot ?? ""}
+                    placeholder={info.defaults.archiveRoot}
+                    onChange={(e) => setForm({ ...form, archiveRoot: e.target.value })}
+                  />
+                  <button
+                    onClick={async () => {
+                      const folder = await api.pickFolder("Folder for archived features");
+                      if (folder) setForm({ ...form, archiveRoot: folder });
+                    }}
+                  >
+                    Choose…
+                  </button>
+                </div>
+                <small className="muted">Archiving a feature moves its folder and chat logs here, as yyyy-mm-dd_hh-mm_&lt;station&gt;.</small>
+              </label>
+              <label>
+                <span>Branch prefix</span>
+                <input
+                  value={form.branchPrefix ?? ""}
+                  placeholder={info.defaults.branchPrefix}
+                  onChange={(e) => setForm({ ...form, branchPrefix: e.target.value })}
+                />
+                <small className="muted">Branches are &lt;prefix&gt;/&lt;station&gt;, or &lt;prefix&gt;/&lt;JIRA-KEY&gt;-&lt;station&gt; with Jira.</small>
+              </label>
+            </div>
+          </section>
+
+          <section>
+            <h2>Jira</h2>
+            <div className="levels">
+              {JIRA_LEVELS.map((l) => (
+                <label key={l.value} className={`level${jira.level === l.value ? " active" : ""}`}>
+                  <input type="radio" name="jira-level" checked={jira.level === l.value} onChange={() => setJira({ level: l.value })} />
+                  <b>{l.label}</b>
+                  <span className="muted">{l.hint}</span>
+                </label>
+              ))}
+            </div>
+            {jira.level !== "off" && (
+              <div className="form">
+                <label>
+                  <span>Site</span>
+                  <input value={jira.site ?? ""} placeholder="https://yourcompany.atlassian.net" onChange={(e) => setJira({ site: e.target.value })} />
+                </label>
+                <label>
+                  <span>Email</span>
+                  <input value={jira.email ?? ""} placeholder="you@company.com" onChange={(e) => setJira({ email: e.target.value })} />
+                </label>
+                <label>
+                  <span>API token</span>
+                  <input
+                    type="password"
+                    value={token ?? ""}
+                    placeholder={info.config.jira?.hasToken ? "•••••••• (saved; type to replace)" : "paste an API token"}
+                    onChange={(e) => setToken(e.target.value)}
+                  />
+                  <small className="muted">
+                    Make one at id.atlassian.com → Security → API tokens.{" "}
+                    {info.canEncrypt
+                      ? "Stored encrypted with this machine's keychain."
+                      : "This machine has no keychain Caboose can use, so the token is stored in plain text in the config file."}
+                  </small>
+                </label>
+                <label>
+                  <span>Project for new tasks</span>
+                  <input value={jira.project ?? ""} placeholder="e.g. NWP" onChange={(e) => setJira({ project: e.target.value.toUpperCase() })} />
+                </label>
+                <div className="row">
+                  <button
+                    onClick={async () => {
+                      if (!(await save())) return;
+                      setJiraTest("Testing…");
+                      const r = await api.jiraTest();
+                      setJiraTest(r.ok ? `✓ Connected as ${r.value}` : `✗ ${r.error}`);
+                    }}
+                  >
+                    Save and test the connection
+                  </button>
+                  {jiraTest && <span className={jiraTest.startsWith("✓") ? "add" : jiraTest.startsWith("✗") ? "del" : "muted"}>{jiraTest}</span>}
+                </div>
+              </div>
+            )}
+          </section>
+        </>
+      )}
+
+      {tab === "tools" && (
+        <>
+          <section>
+            <h2>Open in</h2>
+            <p className="muted">
+              Found on this machine: {apps.map((a) => a.label).join(", ") || "nothing yet"}. To use another app or path, add{" "}
+              <code>"openWith": {"{"} "rider": "/path/to/rider {"{path}"}" {"}"}</code> to the config file.
+            </p>
+          </section>
+
+          <section>
+            <h2>Terminals</h2>
+            <div className="form">
+              {TERMINAL_FIELDS.map((f) => (
+                <label key={f.key}>
+                  <span>{f.label}</span>
+                  <input value={form[f.key] ?? ""} placeholder="default" onChange={(e) => setForm({ ...form, [f.key]: e.target.value })} />
+                  <small className="muted">{f.hint}</small>
+                </label>
+              ))}
+            </div>
+          </section>
+        </>
+      )}
+
+      {tab === "look" && (
+        <>
+          <section>
+            <h2>Appearance</h2>
+            <div className="segmented">
+              {(["system", "light", "dark"] as Theme[]).map((t) => (
                 <button
-                  className="primary"
-                  disabled={!scan.picked.size}
-                  onClick={async () => {
-                    const picked = scan.found.filter((r) => scan.picked.has(r.path));
-                    const withRules = await Promise.all(
-                      picked.map(async (r) => {
-                        const rules = await api.repoRules(r.path);
-                        return rules ? { ...r, localFiles: rules.patterns } : r;
-                      }),
-                    );
-                    addRepos(withRules);
-                    setScan(null);
+                  key={t}
+                  className={theme === t ? "active" : ""}
+                  onClick={() => {
+                    setTheme(t);
+                    applyTheme(t);
                   }}
                 >
-                  Add {scan.picked.size || ""}
+                  {{ system: "Follow the system", light: "Light", dark: "Dark" }[t]}
                 </button>
-              )}
-              <button onClick={() => setScan(null)}>Cancel</button>
+              ))}
             </div>
-          </div>
-        )}
-      </section>
-
-      <section>
-        <h2>Jira</h2>
-        <div className="levels">
-          {JIRA_LEVELS.map((l) => (
-            <label key={l.value} className={`level${jira.level === l.value ? " active" : ""}`}>
-              <input type="radio" name="jira-level" checked={jira.level === l.value} onChange={() => setJira({ level: l.value })} />
-              <b>{l.label}</b>
-              <span className="muted">{l.hint}</span>
-            </label>
-          ))}
-        </div>
-        {jira.level !== "off" && (
-          <div className="form">
-            <label>
-              <span>Site</span>
-              <input value={jira.site ?? ""} placeholder="https://yourcompany.atlassian.net" onChange={(e) => setJira({ site: e.target.value })} />
-            </label>
-            <label>
-              <span>Email</span>
-              <input value={jira.email ?? ""} placeholder="you@company.com" onChange={(e) => setJira({ email: e.target.value })} />
-            </label>
-            <label>
-              <span>API token</span>
+            <label className="check">
               <input
-                type="password"
-                value={token ?? ""}
-                placeholder={info.config.jira?.hasToken ? "•••••••• (saved; type to replace)" : "paste an API token"}
-                onChange={(e) => setToken(e.target.value)}
-              />
-              <small className="muted">
-                Make one at id.atlassian.com → Security → API tokens.{" "}
-                {info.canEncrypt
-                  ? "Stored encrypted with this machine's keychain."
-                  : "This machine has no keychain Caboose can use, so the token is stored in plain text in the config file."}
-              </small>
-            </label>
-            <label>
-              <span>Project for new tasks</span>
-              <input value={jira.project ?? ""} placeholder="e.g. NWP" onChange={(e) => setJira({ project: e.target.value.toUpperCase() })} />
-            </label>
-            <div className="row">
-              <button
-                onClick={async () => {
-                  if (!(await save())) return;
-                  setJiraTest("Testing…");
-                  const r = await api.jiraTest();
-                  setJiraTest(r.ok ? `✓ Connected as ${r.value}` : `✗ ${r.error}`);
+                type="checkbox"
+                checked={notify}
+                onChange={(e) => {
+                  setNotify(e.target.checked);
+                  setNotifications(e.target.checked);
                 }}
-              >
-                Save and test the connection
-              </button>
-              {jiraTest && <span className={jiraTest.startsWith("✓") ? "add" : jiraTest.startsWith("✗") ? "del" : "muted"}>{jiraTest}</span>}
-            </div>
-          </div>
-        )}
-      </section>
-
-      <section>
-        <h2>Pull requests</h2>
-        <p className="muted">How you want PRs written. Added to every "Create PR" request to the agent.</p>
-        <textarea
-          className="wide"
-          rows={Math.min(14, Math.max(4, (form.prInstructions ?? "").split("\n").length + 1))}
-          value={form.prInstructions ?? ""}
-          placeholder="e.g. Imperative title. Open with what changed and why. State build and test status."
-          onChange={(e) => setForm({ ...form, prInstructions: e.target.value })}
-        />
-      </section>
-
-      <section>
-        <h2>Open in</h2>
-        <p className="muted">
-          Found on this machine: {apps.map((a) => a.label).join(", ") || "nothing yet"}. To use another app or path, add{" "}
-          <code>"openWith": {"{"} "rider": "/path/to/rider {"{path}"}" {"}"}</code> to the config file.
-        </p>
-      </section>
-
-      <section>
-        <h2>Terminals</h2>
-        <div className="form">
-          {TERMINAL_FIELDS.map((f) => (
-            <label key={f.key}>
-              <span>{f.label}</span>
-              <input value={form[f.key] ?? ""} placeholder="default" onChange={(e) => setForm({ ...form, [f.key]: e.target.value })} />
-              <small className="muted">{f.hint}</small>
+              />
+              Notify me when an agent finishes or needs me while Caboose is in the background
             </label>
-          ))}
-        </div>
-      </section>
+          </section>
 
-      <section>
-        <h2>Appearance</h2>
-        <div className="segmented">
-          {(["system", "light", "dark"] as Theme[]).map((t) => (
-            <button
-              key={t}
-              className={theme === t ? "active" : ""}
-              onClick={() => {
-                setTheme(t);
-                applyTheme(t);
-              }}
-            >
-              {{ system: "Follow the system", light: "Light", dark: "Dark" }[t]}
-            </button>
-          ))}
-        </div>
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={notify}
-            onChange={(e) => {
-              setNotify(e.target.checked);
-              setNotifications(e.target.checked);
-            }}
-          />
-          Notify me when an agent finishes or needs me while Caboose is in the background
-        </label>
-      </section>
+          <Sounds />
+        </>
+      )}
 
-      <Sounds />
+      {tab === "system" && (
+        <>
+          <Doctor />
 
-      <Doctor />
-      {!first && <Updates />}
+          {!first && <Updates />}
+        </>
+      )}
 
       <div className="save-bar">
         <button

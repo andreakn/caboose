@@ -622,6 +622,12 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      sound files and the same on every OS; several chats at once ring once.
      Kept per machine in the window's storage, like the theme.
 
+138. **Configure is split into tabs**: Agents (main agent, permissions, PR
+     instructions), Repositories, Features & Jira, Apps (open in, terminals,
+     moniker file), Look & sound (theme, notifications, sounds), System
+     (prerequisite checks, updates). The last tab is remembered; Save stays
+     at the bottom and saves every tab at once.
+
 ## Answered (2026-11-05)
 
 - Private GitHub repo `andreakn/caboose`: yes.
