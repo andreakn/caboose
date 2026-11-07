@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { COUNTRIES, HUBS, LINES, STATION_INFO, type Station, STATIONS, stationLabel, stationOf } from "../../shared/stations.ts";
+import { COUNTRIES, EDGES, LANDMARKS, STATION_INFO, STATIONS, stationLabel, stationOf } from "../../shared/stations.ts";
 import type { Feature, FeatureOverview, StationVisit } from "../../shared/types.ts";
 import { allMerged, useOverview } from "./Overview.tsx";
 
@@ -40,8 +40,12 @@ const Y = (lat: number) => (LAT0 - lat) * SCALE;
 const WIDTH = X(32);
 const HEIGHT = Y(54.4);
 /** Labels moved down a little where two places sit close (Tornio and Kemi). */
-const LABEL_DROP: Record<string, number> = { kemi: 10, tornio: -4 };
-const at = (id: string): Station | undefined => STATION_INFO[id] ?? HUBS[id];
+const LABEL_DROP: Record<string, number> = { kemi: 10, "tornio-itainen": -4 };
+/** All the track as one path: one element instead of 1,400 keeps the map light. */
+const TRACK = EDGES.map(([a, b]) => {
+  const [p, q] = [STATION_INFO[a], STATION_INFO[b]];
+  return `M${X(p.lon).toFixed(1)},${Y(p.lat).toFixed(1)}L${X(q.lon).toFixed(1)},${Y(q.lat).toFixed(1)}`;
+}).join("");
 
 /** The Nordics as a metro map: lines always, a station's dot once a feature has been named after it. */
 export function MapView(props: { features: Feature[]; visits: StationVisit[]; onOpen: (featureId: string) => void }) {
@@ -101,27 +105,18 @@ export function MapView(props: { features: Feature[]; visits: StationVisit[]; on
               <polygon key={`${c}${i}`} className={`map-land land-${c}`} points={pts.map(([lon, lat]) => `${X(lon)},${Y(lat)}`).join(" ")} />
             )),
           )}
-          {LINES.map((l) => (
-            <polyline
-              key={l.name}
-              className="map-line"
-              points={l.stops
-                .map(at)
-                .filter((s): s is Station => Boolean(s))
-                .map((s) => `${X(s.lon)},${Y(s.lat)}`)
-                .join(" ")}
-            >
-              <title>{l.name}</title>
-            </polyline>
-          ))}
-          {Object.entries(HUBS).map(([id, h]) => (
-            <g key={id} className="map-hub">
-              <circle cx={X(h.lon)} cy={Y(h.lat)} r={4.5} />
-              <text x={X(h.lon) + 7} y={Y(h.lat) + 3.5 + (LABEL_DROP[id] ?? 0)}>
-                {h.name}
-              </text>
-            </g>
-          ))}
+          <path className="map-line" d={TRACK} />
+          {LANDMARKS.map(({ id, label }) => {
+            const h = STATION_INFO[id];
+            return (
+              <g key={id} className="map-hub">
+                <circle cx={X(h.lon)} cy={Y(h.lat)} r={4.5} />
+                <text x={X(h.lon) + 7} y={Y(h.lat) + 3.5 + (LABEL_DROP[id] ?? 0)}>
+                  {label}
+                </text>
+              </g>
+            );
+          })}
           {[...byStation.entries()].map(([id, s]) => {
             const p = STATION_INFO[id];
             const state = s.state ?? "active";
@@ -143,6 +138,7 @@ export function MapView(props: { features: Feature[]; visits: StationVisit[]; on
           })}
         </svg>
       </div>
+      <p className="muted small map-credit">Stations and track: © OpenStreetMap contributors (ODbL). Lines drawn straight between neighbouring stops.</p>
     </div>
   );
 }

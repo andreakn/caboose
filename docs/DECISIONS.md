@@ -659,6 +659,20 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      for the map and for later gamification. The sidebar dot shows brown
      while checks run too.
 
+143. **About 1,750 stations from OpenStreetMap instead of 122 hand-picked**
+     (`scripts/stations-from-osm.ts` → `src/shared/stations-data.ts`, run by
+     hand when the data should be refreshed; the queries are at the bottom of
+     the script). Kept: named railway stations and halts in the four
+     countries; dropped: metro, tram, light rail, heritage and tourist lines.
+     Countries: Sweden from its own query, the rest by position (south of
+     57.9°N is Danish, east of 20°E Finnish). Names lose "station"/"stasjon"
+     and the second language ("Mo i Rana / Måefie"). Track: consecutive stops
+     of every train route relation, express hops dropped, gaps filled from
+     the hand-drawn main lines where OSM has no route mapped (about 72% of
+     stations end up on a drawn line; the rest show as a dot alone). The
+     first 122 keep their ids, so existing features keep their names. The
+     map credits OpenStreetMap (ODbL).
+
 ## Answered (2026-11-05)
 
 - Private GitHub repo `andreakn/caboose`: yes.
