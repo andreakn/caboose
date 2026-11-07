@@ -512,12 +512,35 @@ function FeatureView(props: {
             <button key={r.name} className={scopeRepo?.name === r.name ? "active" : ""} onClick={() => setScope(r.name)} title={r.path}>
               {rov && <HealthDot r={rov} />}
               {repoLabel(r.name)}
-              {rov?.pr && (
-                <span className={`tab-pr pr-${rov.pr.state.toLowerCase()}`} title={`PR #${rov.pr.number}: ${rov.pr.title}`}>
-                  #{rov.pr.number}
-                  {{ passing: "✓", failing: "✗", pending: "●", none: "" }[rov.pr.checks.state]}
-                </span>
-              )}
+              {rov?.pr &&
+                (() => {
+                  const pr = rov.pr;
+                  const label = (
+                    <>
+                      #{pr.number}
+                      {{ passing: "✓", failing: "✗", pending: "●", none: "" }[pr.checks.state]}
+                    </>
+                  );
+                  // On the open tab the PR is a link to GitHub; on the others a click just opens the tab.
+                  return scopeRepo?.name === r.name ? (
+                    <a
+                      href={pr.url}
+                      className={`tab-pr link pr-${pr.state.toLowerCase()}`}
+                      title={`Open PR #${pr.number} on GitHub: ${pr.title}`}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        void api.openUrl(pr.url);
+                      }}
+                    >
+                      {label}
+                    </a>
+                  ) : (
+                    <span className={`tab-pr pr-${pr.state.toLowerCase()}`} title={`PR #${pr.number}: ${pr.title}`}>
+                      {label}
+                    </span>
+                  );
+                })()}
               {n > 0 && <span className="badge" title={`${n} changed file(s)`}>{n}</span>}
             </button>
           );
