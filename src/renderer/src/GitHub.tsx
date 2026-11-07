@@ -15,6 +15,7 @@ import { askText } from "./Dialog.tsx";
 import { MenuButton, type MenuItem, useApps } from "./Menu.tsx";
 import { HealthDot, JiraStatusChip, PrChip, PrDetailsPanel } from "./Overview.tsx";
 import { StatusChip } from "./Plan.tsx";
+import { repoLabel } from "./labels.ts";
 
 const api = window.caboose;
 
@@ -220,10 +221,10 @@ export function RepoRow(props: {
               props.onOpen!();
             }}
           >
-            {repo.name}
+            {repoLabel(repo.name)}
           </button>
         ) : (
-          <b className="repo-name-cell">{repo.name}</b>
+          <b className="repo-name-cell" title={repo.name}>{repoLabel(repo.name)}</b>
         )}
         {ov?.reported?.status && (
           <span title={`${ov.reported.at}: ${ov.reported.text}`}>

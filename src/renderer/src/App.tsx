@@ -27,6 +27,7 @@ import { NewFeature } from "./NewFeature.tsx";
 import { PlanView, StatusChip, useDocs } from "./Plan.tsx";
 import { notificationsOn } from "./prefs.ts";
 import { FilesView } from "./Files.tsx";
+import { repoLabel, setRepoLabels } from "./labels.ts";
 import { RetireDialog } from "./Retire.tsx";
 import { RunView, useRunOverview } from "./Run.tsx";
 import { TerminalPanel, useTerminals } from "./Terminals.tsx";
@@ -53,7 +54,11 @@ export function App() {
   const [retiring, setRetiring] = useState<Feature | null>(null);
   const activityVersion = useActivityVersion();
 
-  const loadConfig = () => api.config().then(setConfig);
+  const loadConfig = () =>
+    api.config().then((c) => {
+      setRepoLabels(c.config.repos);
+      setConfig(c);
+    });
   useEffect(() => {
     void api.getState().then(setState);
     void loadConfig();
@@ -255,8 +260,8 @@ function FeatureRow(props: { f: Feature; activity?: Activity; active: boolean; o
         {f.name}
         {f.status && f.status !== "active" && <span className={`status-mini st-${f.status}`}>{f.status}</span>}
       </span>
-      <span className="ws-branch" title={f.repos.map((r) => r.name).join(" · ")}>
-        {f.title || f.repos.map((r) => r.name).join(" · ") || "no repos"}
+      <span className="ws-branch" title={f.repos.map((r) => repoLabel(r.name)).join(" · ")}>
+        {f.title || f.repos.map((r) => repoLabel(r.name)).join(" · ") || "no repos"}
       </span>
     </button>
   );
@@ -495,7 +500,7 @@ function FeatureView(props: {
           return (
             <button key={r.name} className={scopeRepo?.name === r.name ? "active" : ""} onClick={() => setScope(r.name)} title={r.path}>
               {rov && <HealthDot r={rov} />}
-              {r.name}
+              {repoLabel(r.name)}
               {n > 0 && <span className="badge">{n}</span>}
             </button>
           );
@@ -588,7 +593,7 @@ function FeatureView(props: {
                   <option value="">+ Add a repo to this feature…</option>
                   {missing.map((r) => (
                     <option key={r.name} value={r.name}>
-                      {r.name}
+                      {repoLabel(r.name)}
                     </option>
                   ))}
                 </select>
@@ -669,7 +674,7 @@ function NeedsYou(props: { f: Feature; chats: Chat[]; reported: Record<string, L
       <b>Needs you:</b>
       {waiting.map((c) => (
         <button key={c.id} className="link" onClick={() => props.onOpenChat(c.id)}>
-          {c.repo ? `${c.repo}'s chat` : c.title} is asking
+          {c.repo ? `${repoLabel(c.repo)}'s chat` : c.title} is asking
         </button>
       ))}
       {stuck.map(([repo, e]) => {

@@ -474,7 +474,15 @@ function RepoItem(props: { repo: RepoEntry; defaults: string[]; onChange: (r: Re
   return (
     <li className="repo-item">
       <div className="row">
-        <b>{repo.name}</b> <code>{repo.path}</code>
+        <b>{repo.name}</b>
+        <input
+          className="repo-label"
+          value={repo.label ?? ""}
+          placeholder="friendly name"
+          title="Shown instead of the repo's name in tabs and lists"
+          onChange={(e) => props.onChange({ ...repo, label: e.target.value || undefined })}
+        />
+        <code>{repo.path}</code>
         <button className="link" onClick={() => setOpen(!open)}>
           {open ? "▾" : "▸"} local files: {patterns.join(", ") || "none"}
           {preview?.files && ` (${preview.files.length} file${preview.files.length === 1 ? "" : "s"} now)`}

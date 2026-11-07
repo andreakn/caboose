@@ -15,6 +15,8 @@ export type RepoScripts = {
 /** A repo the user works in, from the config: its name is also its folder name inside a feature. */
 export type RepoEntry = {
   name: string;
+  /** A friendly name shown instead of `name` (tabs, rows); `name` stays the id and folder name. */
+  label?: string;
   path: string;
   scripts?: RepoScripts;
   /**

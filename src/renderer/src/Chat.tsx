@@ -19,6 +19,7 @@ import { activityOf, setVisibleChat, useActivityVersion } from "./activity.ts";
 import { useCommand } from "./commands.ts";
 import { askText } from "./Dialog.tsx";
 import { MenuButton } from "./Menu.tsx";
+import { repoLabel } from "./labels.ts";
 
 const api = window.caboose;
 
@@ -164,9 +165,9 @@ export function ChatArea({ ws, chats, hidden, repo }: { ws: Feature; chats: Chat
         <ChatPanel key={active.id} chat={active} ws={ws} />
       ) : repo && !ws.archived ? (
         <div className="chat-empty muted">
-          <p>No chat works in {repo} yet. The feature's central chat (Feature → Chat) sees every repo.</p>
+          <p>No chat works in {repoLabel(repo)} yet. The feature's central chat (Feature → Chat) sees every repo.</p>
           <button className="primary" onClick={() => void breakOut(repo)}>
-            Break out a chat for {repo}…
+            Break out a chat for {repoLabel(repo)}…
           </button>
         </div>
       ) : (
@@ -222,7 +223,7 @@ function ChatPanel({ chat, ws }: { chat: Chat; ws: Feature }) {
       >
         {view.items.length === 0 && !view.draft && (
           <div className="chat-hello muted">
-            {agentName(chat)} works in <code>{ws.folder}</code>, with {ws.repos.map((r) => r.name).join(", ") || "no repos yet"}.
+            {agentName(chat)} works in <code>{ws.folder}</code>, with {ws.repos.map((r) => repoLabel(r.name)).join(", ") || "no repos yet"}.
           </div>
         )}
         {view.items.map((item) => (
@@ -330,7 +331,7 @@ function ProposalCard({ item, chatId, agent }: { item: Extract<ChatItem, { kind:
     return (
       <div className="question done">
         <div className="muted">
-          {agent} suggested {item.repos.map((r) => r.name).join(", ")}.{" "}
+          {agent} suggested {item.repos.map((r) => repoLabel(r.name)).join(", ")}.{" "}
           {added.length ? `Added ${added.join(", ")}.` : "None added."}
           {declined.length ? ` Not ${declined.join(", ")}.` : ""}
           {failed?.length ? ` Failed: ${failed.join("; ")}.` : ""}
@@ -365,7 +366,7 @@ function ProposalCard({ item, chatId, agent }: { item: Extract<ChatItem, { kind:
                   setPicked(n);
                 }}
               />{" "}
-              <b>{r.name}</b>
+              <b>{repoLabel(r.name)}</b>
             </span>
             <span className="muted">{r.reason}</span>
           </label>

@@ -566,6 +566,12 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      2 MB are only named. No syntax colouring yet. Reading refuses any path
      that leaves the worktree, symlinks included.
 
+130. **A repo can have a friendly name** (`label` in its config entry;
+     Configure → Repositories, next to its name). It is what the screen
+     shows: repo tabs, repo rows, the sidebar, Run, Pull requests, the
+     Board, Plan, dialogs. The repo's `name` stays the id: folder name in a
+     feature, branch and Jira mapping, agent tools and instructions.
+
 ## Answered (2026-11-05)
 
 - Private GitHub repo `andreakn/caboose`: yes.

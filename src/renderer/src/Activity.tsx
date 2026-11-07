@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { type Chat, type ChatEvent, eventTime } from "../../shared/chat.ts";
 import type { Feature } from "../../shared/types.ts";
 import { toolName, toolSummary } from "./Chat.tsx";
+import { repoLabel } from "./labels.ts";
 
 const api = window.caboose;
 
@@ -73,7 +74,7 @@ export function ActivityView({ f, chats, onOpenChat }: { f: Feature; chats: Chat
           <option value="all">every chat</option>
           {chats.map((c) => (
             <option key={c.id} value={c.id}>
-              {c.repo ? `⑂ ${c.repo}` : c.title}
+              {c.repo ? `⑂ ${repoLabel(c.repo)}` : c.title}
             </option>
           ))}
         </select>

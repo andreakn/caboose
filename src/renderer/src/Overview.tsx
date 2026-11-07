@@ -4,6 +4,7 @@ import type { PrDetails } from "../../shared/github.ts";
 import type { Feature, FeatureOverview, JiraStatus, RepoOverview } from "../../shared/types.ts";
 import { activityOf, useActivityVersion } from "./activity.ts";
 import { StatusChip } from "./Plan.tsx";
+import { repoLabel } from "./labels.ts";
 
 const api = window.caboose;
 
@@ -64,7 +65,7 @@ export function repoHealth(r: RepoOverview): { health: Health; why: string } {
 
 export function HealthDot({ r }: { r: RepoOverview }) {
   const { health, why } = repoHealth(r);
-  return <span className={`hdot h-${health}`} title={`${r.name}: ${why}`} />;
+  return <span className={`hdot h-${health}`} title={`${repoLabel(r.name)}: ${why}`} />;
 }
 
 /** "#12 ✓ 💬2" — the PR's number with its checks and open threads; click opens it on GitHub. */
@@ -163,7 +164,7 @@ export function PrsView({ f, ov, loading, refresh }: { f: Feature; ov: FeatureOv
               <div className="pr-line" onClick={() => pr && toggle(r.name)}>
                 <span className="twisty">{pr ? (isOpen ? "▾" : "▸") : ""}</span>
                 <HealthDot r={r} />
-                <b className="repo-name-cell">{r.name}</b>
+                <b className="repo-name-cell">{repoLabel(r.name)}</b>
                 {pr ? (
                   <>
                     <PrChip pr={pr} />
@@ -298,7 +299,7 @@ function BoardRow({ f, chats, onOpen }: { f: Feature; chats: Chat[]; onOpen: () 
         {running && <span className="dot act-running" title="An agent is working" />}
         {waiting > 0 && <span className="badge-attn">{waiting} asking</span>}
         {attention.length > 0 && (
-          <span className="badge-attn" title={attention.map((r) => `${r.name}: ${repoHealth(r).why}`).join("\n")}>
+          <span className="badge-attn" title={attention.map((r) => `${repoLabel(r.name)}: ${repoHealth(r).why}`).join("\n")}>
             {attention.length} need{attention.length === 1 ? "s" : ""} you
           </span>
         )}
@@ -309,7 +310,7 @@ function BoardRow({ f, chats, onOpen }: { f: Feature; chats: Chat[]; onOpen: () 
           {ov.repos.map((r) => (
             <div key={r.name} className="board-repo">
               <HealthDot r={r} />
-              <b>{r.name}</b>
+              <b>{repoLabel(r.name)}</b>
               {r.reported?.status && <StatusChip status={r.reported.status} />}
               {r.pr && <PrChip pr={r.pr} />}
               {r.jira && <JiraStatusChip j={r.jira} />}

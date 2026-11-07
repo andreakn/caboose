@@ -70,3 +70,12 @@ test("update pulls, reinstalls when package.json changed, and builds", async () 
   assert.ok(log.includes("$ npm run build"));
   assert.ok(existsSync(join(clone, "built.txt")));
 });
+
+test("a repo's friendly name is kept trimmed, and dropped when empty", () => {
+  const stored = applyConfigInput(
+    {},
+    { repos: [{ name: "cust-customer-data-api", path: "/c/cda", label: "  CDA " }, { name: "via", path: "/c/via", label: "  " }] },
+    { canEncrypt: false, encrypt: (s) => s, decrypt: (s) => s },
+  );
+  assert.deepEqual(stored.repos, [{ name: "cust-customer-data-api", path: "/c/cda", label: "CDA" }, { name: "via", path: "/c/via" }]);
+});

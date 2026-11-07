@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Feature, PortHolder, RunOverview, RunRepo, RunScript, Terminal } from "../../shared/types.ts";
+import { repoLabel } from "./labels.ts";
 
 const api = window.caboose;
 
@@ -130,7 +131,7 @@ function RepoRun({ f, r, disabled, act, onShow }: { f: Feature; r: RunRepo; disa
           </span>
         )}
         <b className="repo-name-cell" title={r.path}>
-          {r.repo}
+          {repoLabel(r.repo)}
         </b>
         {r.scripts.length > 1 && idle.length > 0 && (
           <button className="small-btn" disabled={disabled} onClick={() => act("Starting", () => api.runStartAll(f.id, r.repo))} title={`Start every program of ${r.repo}`}>

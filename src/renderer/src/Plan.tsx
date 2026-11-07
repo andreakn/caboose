@@ -3,6 +3,7 @@ import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Feature, FeatureDocs, LogEntry, RepoStatus } from "../../shared/types.ts";
 import { dispatch } from "./commands.ts";
+import { repoLabel } from "./labels.ts";
 
 const api = window.caboose;
 
@@ -98,7 +99,7 @@ export function PlanView({ f, docs, reload }: { f: Feature; docs: FeatureDocs | 
             <Collapsible
               key={r.name}
               small
-              title={r.name}
+              title={repoLabel(r.name)}
               summary={brief ? firstLine(brief).replace(/[*`_]/g, "") : "no brief"}
               right={
                 <>
@@ -221,7 +222,7 @@ function LogView({ f, log, reload }: { f: Feature; log: LogEntry[]; reload: () =
             <option value="all">to: every chat</option>
             {f.repos.map((r) => (
               <option key={r.name} value={r.name}>
-                to: {r.name}
+                to: {repoLabel(r.name)}
               </option>
             ))}
           </select>

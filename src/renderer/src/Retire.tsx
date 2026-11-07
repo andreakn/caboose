@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Feature, Result, RetireMode, RetireOutcome, RetirePlan } from "../../shared/types.ts";
+import { repoLabel } from "./labels.ts";
 
 const api = window.caboose;
 
@@ -50,7 +51,7 @@ export function RetireDialog(props: {
               {plan.repos.map((r) => (
                 <div key={r.repo} className="retire-repo">
                   <div>
-                    <b>{r.repo}</b> <code>{r.branch}</code>{" "}
+                    <b>{repoLabel(r.repo)}</b> <code>{r.branch}</code>{" "}
                     {r.keepBranch ? <span className="muted small">kept ({r.keepBranch})</span> : <span className="muted small">deleted</span>}
                   </div>
                   {r.pr && (
