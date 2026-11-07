@@ -104,7 +104,14 @@ export type RetirePlan = { feature: string; title?: string; archiveTo: string; r
 
 /** Archive: PRs closed, branches deleted, folder and chat logs moved to the archive. Delete: the same, but the folder and logs are deleted. */
 export type RetireMode = "archive" | "delete";
-export type RetireOutcome = { archivedTo?: string; closedPrs: number[]; deletedBranches: string[]; warnings: string[] };
+export type RetireOutcome = {
+  archivedTo?: string;
+  closedPrs: number[];
+  deletedBranches: string[];
+  warnings: string[];
+  /** Every repo's PR had been merged (the feature was finished, not abandoned). */
+  merged: boolean;
+};
 
 /** A URL a run script declares (`# url: http://localhost:5173/ app`). */
 export type RunUrl = { url: string; label?: string };
@@ -156,10 +163,26 @@ export type RunOverview = {
   strayError?: string;
 };
 
+/** A feature that ended (archived or deleted), kept for the map. */
+export type StationVisit = {
+  /** The feature's name: a station id, maybe with "-2". */
+  station: string;
+  featureId: string;
+  title?: string;
+  repos: string[];
+  createdAt: string;
+  endedAt: string;
+  ended: "archived" | "deleted";
+  /** Every repo's PR was merged when it ended. */
+  merged: boolean;
+};
+
 export type State = {
   features: Feature[];
   chats: Chat[];
   comments: DiffComment[];
+  /** Features that have ended, newest last. */
+  visits: StationVisit[];
 };
 
 /** Per-repo settings, read from `caboose.json` in the repo's main checkout. */

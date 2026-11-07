@@ -372,6 +372,23 @@ ipcMain.handle("feature:retire", (_e, id: string, mode: RetireMode) =>
     });
     chats.forgetFeature(f.id);
     features.forget(f.id);
+    // The map remembers it: where it was, and how it ended.
+    store.update((s) => ({
+      ...s,
+      visits: [
+        ...s.visits,
+        {
+          station: f.name,
+          featureId: f.id,
+          ...(f.title ? { title: f.title } : {}),
+          repos: f.repos.map((r) => r.name),
+          createdAt: f.createdAt,
+          endedAt: new Date().toISOString(),
+          ended: mode === "archive" ? "archived" : "deleted",
+          merged: out.merged,
+        },
+      ],
+    }));
     return out;
   }),
 );

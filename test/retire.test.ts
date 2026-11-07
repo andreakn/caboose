@@ -119,6 +119,7 @@ test("archive: closes the open PR, deletes the branch here and on origin, moves 
   const { f, source, origin, folder, path } = setup();
   const { d, closed, stopped } = deps({ prState: "OPEN" });
   const out = await retire(f, "archive", d);
+  assert.equal(out.merged, false, "its PR was open: abandoned, not finished");
   assert.deepEqual(closed, [12]);
   assert.equal(stopped(), 1);
   assert.deepEqual(out.closedPrs, [12]);
@@ -148,6 +149,7 @@ test("delete: the same, but nothing is kept; merged PRs are left alone", async (
   const { f, source, origin, folder } = setup();
   const { d, closed } = deps({ prState: "MERGED" });
   const out = await retire(f, "delete", d);
+  assert.equal(out.merged, true);
   assert.deepEqual(closed, []);
   assert.equal(out.archivedTo, undefined);
   assert.ok(!existsSync(folder));

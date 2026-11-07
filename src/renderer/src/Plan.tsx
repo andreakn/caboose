@@ -4,6 +4,7 @@ import remarkGfm from "remark-gfm";
 import type { Feature, FeatureDocs, LogEntry, RepoStatus } from "../../shared/types.ts";
 import { dispatch } from "./commands.ts";
 import { repoLabel } from "./labels.ts";
+import { stationLabel } from "../../shared/stations.ts";
 
 const api = window.caboose;
 
@@ -86,7 +87,7 @@ export function PlanView({ f, docs, reload }: { f: Feature; docs: FeatureDocs | 
       <Collapsible
         title="Brief"
         summary={docs.brief ? firstLine(docs.brief).replace(/[*`_]/g, "") : "no brief yet"}
-        right={<DocEditor f={f} label="brief.md" text={docs.brief} template={`# ${f.title || f.name}\n\n## Goal\n\n## Scope\n\n## Out of scope\n\n## Contracts between repos\n\n## Order\n`} onSave={(t) => api.writeDoc(f.id, "brief", t)} onSaved={reload} />}
+        right={<DocEditor f={f} label="brief.md" text={docs.brief} template={`# ${f.title || stationLabel(f.name)}\n\n## Goal\n\n## Scope\n\n## Out of scope\n\n## Contracts between repos\n\n## Order\n`} onSave={(t) => api.writeDoc(f.id, "brief", t)} onSaved={reload} />}
       >
         {docs.brief ? <Markdown remarkPlugins={[remarkGfm]}>{docs.brief}</Markdown> : <p className="muted">Empty.</p>}
       </Collapsible>

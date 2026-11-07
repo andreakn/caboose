@@ -22,9 +22,10 @@ export class Store {
         features: s.features ?? [],
         chats: (s.chats ?? []).filter((c) => c.featureId),
         comments: (s.comments ?? []).filter((c) => c.featureId),
+        visits: s.visits ?? [],
       };
     } catch {
-      return { features: [], chats: [], comments: [] };
+      return { features: [], chats: [], comments: [], visits: [] };
     }
   }
 

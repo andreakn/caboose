@@ -95,7 +95,8 @@ export async function retirePlan(f: Feature, d: Pick<RetireDeps, "github" | "arc
 export async function retire(f: Feature, mode: RetireMode, d: RetireDeps): Promise<RetireOutcome> {
   const now = d.now ?? new Date();
   const plan = await retirePlan(f, { ...d, now });
-  const out: RetireOutcome = { closedPrs: [], deletedBranches: [], warnings: [] };
+  const merged = plan.repos.length > 0 && plan.repos.every((r) => r.pr?.state === "MERGED");
+  const out: RetireOutcome = { closedPrs: [], deletedBranches: [], warnings: [], merged };
 
   for (const p of plan.repos) {
     if (!p.pr || (p.pr.state !== "OPEN" && p.pr.state !== "DRAFT")) continue;

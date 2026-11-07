@@ -28,19 +28,21 @@ import { NewFeature } from "./NewFeature.tsx";
 import { PlanView, StatusChip, useDocs } from "./Plan.tsx";
 import { notificationsOn } from "./prefs.ts";
 import { FilesView } from "./Files.tsx";
+import { liveState, MapView } from "./Map.tsx";
 import { repoLabel, setRepoLabels } from "./labels.ts";
 import { notifySound } from "./sounds.ts";
 import { RetireDialog } from "./Retire.tsx";
 import { RunView, useRunOverview } from "./Run.tsx";
 import { TerminalPanel, useTerminals } from "./Terminals.tsx";
+import { stationLabel } from "../../shared/stations.ts";
 
 const api = window.caboose;
 
-type Screen = "feature" | "configure" | "board";
+type Screen = "feature" | "configure" | "board" | "map";
 
 export function App() {
   const terminals = useTerminals();
-  const [state, setState] = useState<State>({ features: [], chats: [], comments: [] });
+  const [state, setState] = useState<State>({ features: [], chats: [], comments: [], visits: [] });
   const [config, setConfig] = useState<ConfigInfo | null>(null);
   const [screen, setScreen] = useState<Screen>("feature");
   const [creating, setCreating] = useState(false);
@@ -80,7 +82,7 @@ export function App() {
         const f = chat && s.features.find((x) => x.id === chat.featureId);
         if (!chat || !f) return;
         const who = chat.agent === "copilot" ? "Copilot" : "Claude";
-        const n = new Notification(kind === "done" ? `${f.name}: ${who} is done` : `${f.name}: ${who} needs you`, {
+        const n = new Notification(kind === "done" ? `${stationLabel(f.name)}: ${who} is done` : `${stationLabel(f.name)}: ${who} needs you`, {
           body: chat.title,
           silent: kind === "done",
         });
@@ -149,6 +151,9 @@ export function App() {
     <div className="app">
       <aside className="sidebar">
         <div className="brand">🚃 Caboose</div>
+        <button className={`board-link${screen === "map" ? " active" : ""}`} onClick={() => setScreen("map")} title="Every station a feature has been named after">
+          ⛰ Map
+        </button>
         <button className={`board-link${screen === "board" ? " active" : ""}`} onClick={() => setScreen("board")}>
           ▦ Board
         </button>
@@ -188,7 +193,9 @@ export function App() {
       <main className="main">
         {(busy || error) && <div className={busy ? "banner" : "banner error"}>{busy ?? error}</div>}
         {!busy && !error && notice && <div className="banner">{notice}</div>}
-        {screen === "board" ? (
+        {screen === "map" ? (
+          <MapView features={state.features} visits={state.visits} onOpen={select} />
+        ) : screen === "board" ? (
           <Board features={state.features} chats={state.chats} onOpen={select} onNew={() => setCreating(true)} />
         ) : screen === "configure" ? (
           <Configure
@@ -207,7 +214,7 @@ export function App() {
             comments={state.comments.filter((c) => c.featureId === feature.id)}
             terminals={terminals.filter((t) => t.featureId === feature.id)}
             onArchive={() => setRetiring(feature)}
-            onRestore={() => act(`Restoring ${feature.name}…`, () => api.restoreFeature(feature.id))}
+            onRestore={() => act(`Restoring ${stationLabel(feature.name)}…`, () => api.restoreFeature(feature.id))}
           />
         ) : (
           <Empty hasRepos={(config.config.repos ?? []).length > 0} onNew={() => setCreating(true)} />
@@ -221,7 +228,7 @@ export function App() {
             setRetiring(null);
             if (!r.ok) return;
             const { archivedTo, closedPrs, warnings } = r.value;
-            const what = mode === "archive" ? `Archived ${retiring.name} to ${archivedTo}` : `Deleted ${retiring.name}`;
+            const what = mode === "archive" ? `Archived ${stationLabel(retiring.name)} to ${archivedTo}` : `Deleted ${stationLabel(retiring.name)}`;
             const prs = closedPrs.length ? ` · closed PR ${closedPrs.map((n) => `#${n}`).join(", ")}` : "";
             if (warnings.length) setError(`${what}${prs}, but:\n${warnings.join("\n")}`);
             else {
@@ -257,6 +264,8 @@ function FeatureRow(props: { f: Feature; activity?: Activity; active: boolean; o
       ? ["act-running", "Working"]
       : allMerged(ov)
         ? ["merged", "Every branch is merged: ready to archive"]
+        : ov && liveState(f, ov) === "busy"
+          ? ["busy", "GitHub checks are running"]
         : a?.unread
           ? ["act-unread", "Done"]
           : [`setup-${setup}`, `Setup: ${setup}`];
@@ -264,7 +273,7 @@ function FeatureRow(props: { f: Feature; activity?: Activity; active: boolean; o
     <button className={`ws-row${active ? " active" : ""}${f.archived ? " is-archived" : ""}`} onClick={onClick}>
       <span className={`dot ${cls}`} title={title} />
       <span className="ws-name">
-        {f.name}
+        {stationLabel(f.name)}
         {f.status && f.status !== "active" && <span className={`status-mini st-${f.status}`}>{f.status}</span>}
       </span>
       <span className="ws-branch" title={f.repos.map((r) => repoLabel(r.name)).join(" · ")}>
@@ -423,7 +432,7 @@ function FeatureView(props: {
       <header className="ws-header">
         <div>
           <h1>
-            {f.name}{" "}
+            <span title={f.name === stationLabel(f.name) ? undefined : `${f.name} (folder and branch name)`}>{stationLabel(f.name)}</span>{" "}
             <select
               className={`status-chip st-${f.status ?? "active"}`}
               value={f.status ?? "active"}

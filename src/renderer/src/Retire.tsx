@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Feature, Result, RetireMode, RetireOutcome, RetirePlan } from "../../shared/types.ts";
 import { repoLabel } from "./labels.ts";
+import { stationLabel } from "../../shared/stations.ts";
 
 const api = window.caboose;
 
@@ -24,7 +25,7 @@ export function RetireDialog(props: {
   }, [f.id]);
 
   async function go(mode: RetireMode) {
-    if (mode === "delete" && !confirm(`Delete ${f.name} for good? Its folder and chat logs are not kept anywhere.`)) return;
+    if (mode === "delete" && !confirm(`Delete ${stationLabel(f.name)} for good? Its folder and chat logs are not kept anywhere.`)) return;
     setBusy(mode);
     const r = await api.retireFeature(f.id, mode);
     setBusy(null);
@@ -39,7 +40,7 @@ export function RetireDialog(props: {
     <div className="dialog-backdrop" onMouseDown={(e) => e.target === e.currentTarget && !busy && props.onCancel()}>
       <div className="dialog retire-dialog" role="dialog" onKeyDown={(e) => e.key === "Escape" && !busy && props.onCancel()}>
         <h2>
-          Archive or delete {f.name}
+          Archive or delete {stationLabel(f.name)}
           {f.title ? <span className="muted"> · {f.title}</span> : null}
         </h2>
         {!plan && !error && <div className="muted">Looking at its repos, branches and PRs…</div>}

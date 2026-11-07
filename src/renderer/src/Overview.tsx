@@ -5,6 +5,7 @@ import type { Feature, FeatureOverview, JiraStatus, RepoOverview } from "../../s
 import { activityOf, useActivityVersion } from "./activity.ts";
 import { StatusChip } from "./Plan.tsx";
 import { repoLabel } from "./labels.ts";
+import { stationLabel } from "../../shared/stations.ts";
 
 const api = window.caboose;
 
@@ -252,7 +253,7 @@ function BoardRow({ f, chats, onOpen }: { f: Feature; chats: Chat[]; onOpen: () 
           {open ? "▾" : "▸"}
         </button>
         <span className="board-name">
-          <b>{f.name}</b>
+          <b>{stationLabel(f.name)}</b>
           {f.title && <span className="muted"> {f.title}</span>}
         </span>
         <span className={`status-mini st-${f.status ?? "active"}`}>{f.status ?? "active"}</span>

@@ -641,6 +641,24 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      Caboose start with no window, waiting on a dialog that could be
      off-screen.
 
+141. **Stations have proper names on screen** (Bodø, Åndalsnes, Östersund,
+     Helsingør, Seinäjoki): `shared/stations.ts` keeps the ASCII id (folder,
+     branch, `CABOOSE_FEATURE`, archive folder) and the name, country and
+     position of every station. Non-ASCII ids were rejected: folders handle
+     æøå, but some Windows shells and build tools do not, macOS stores ø/å
+     in decomposed form (so text matching of paths, as the stray-program
+     check does, can miss), and branch names end up percent-encoded in URLs.
+142. **The map** (sidebar → Map): the Nordics as a metro map, the real lines
+     drawn as straight connections between stops, hubs (Oslo, Stockholm,
+     København, Helsinki…) always shown, and a station's dot only once a
+     feature has been named after it. Its colour is the feature's state:
+     green active, brown while GitHub checks run, purple merged; once ended,
+     light purple (merged, archived), grey (merged, deleted) or red
+     (abandoned: ended without every PR merged). Ended features are kept in
+     `visits` in the state file (station, title, repos, dates, how it ended)
+     for the map and for later gamification. The sidebar dot shows brown
+     while checks run too.
+
 ## Answered (2026-11-05)
 
 - Private GitHub repo `andreakn/caboose`: yes.
