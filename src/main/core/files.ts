@@ -1,6 +1,7 @@
 // A repo's files for the Files tab: what git sees (tracked, plus untracked
 // files that are not ignored, so no node_modules or bin/), and one file's
 // contents. Paths are always relative to the worktree and never leave it.
+import { execFile } from "node:child_process";
 import { readFileSync, realpathSync, statSync } from "node:fs";
 import { extname, isAbsolute, relative, resolve } from "node:path";
 import type { FileContent } from "../../shared/types.ts";
@@ -41,7 +42,28 @@ export function readRepoFile(root: string, path: string): FileContent {
     return { kind: "image", size, dataUrl: `data:${mime};base64,${readFileSync(real).toString("base64")}` };
   }
   if (size > MAX_TEXT) return { kind: "tooLarge", size };
-  const buf = readFileSync(real);
+  return classify(readFileSync(real), path);
+}
+
+/** What a file's bytes are: text, an image, binary or too large to show. */
+function classify(buf: Buffer, path: string): FileContent {
+  const size = buf.length;
+  const mime = IMAGES[extname(path).toLowerCase()];
+  if (mime) return size > MAX_IMAGE ? { kind: "tooLarge", size } : { kind: "image", size, dataUrl: `data:${mime};base64,${buf.toString("base64")}` };
+  if (size > MAX_TEXT) return { kind: "tooLarge", size };
   if (buf.subarray(0, 8000).includes(0)) return { kind: "binary", size };
   return { kind: "text", size, text: buf.toString("utf8") };
+}
+
+/** The file as it was at `commit` (the branch's base, for "Original"), or null if it did not exist there. */
+export function readFileAt(root: string, commit: string, path: string): Promise<FileContent | null> {
+  if (isAbsolute(path) || path.split(/[\\/]/).includes("..")) return Promise.reject(new Error(`Not a path inside the repo: ${path}`));
+  return new Promise((resolve, reject) => {
+    execFile("git", ["show", `${commit}:${path.replace(/\\/g, "/")}`], { cwd: root, encoding: "buffer", maxBuffer: 64 * 1024 * 1024, windowsHide: true }, (err, stdout, stderr) => {
+      if (!err) return resolve(classify(stdout, path));
+      const msg = String(stderr);
+      if (/does not exist|exists on disk, but not in/.test(msg)) resolve(null);
+      else reject(new Error(msg.trim() || err.message));
+    });
+  });
 }

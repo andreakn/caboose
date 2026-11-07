@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { listFiles, readRepoFile } from "../src/main/core/files.ts";
+import { listFiles, readFileAt, readRepoFile } from "../src/main/core/files.ts";
 
 const tmp = mkdtempSync(join(tmpdir(), "caboose-files-"));
 after(() => rmSync(tmp, { recursive: true, force: true }));
@@ -36,4 +36,12 @@ test("reads text, images and binaries, and never leaves the worktree", () => {
   assert.throws(() => readRepoFile(repo, "../secret.txt"), /Not a path inside the repo/);
   assert.throws(() => readRepoFile(repo, join(tmp, "secret.txt")), /Not a path inside the repo/);
   assert.throws(() => readRepoFile(repo, "link.txt"), /points outside the repo/);
+});
+
+test("a file as it was at a commit: text, missing, refused outside the repo", async () => {
+  execFileSync("git", ["-c", "user.email=t@e", "-c", "user.name=T", "commit", "-q", "-m", "base"], { cwd: repo });
+  writeFileSync(join(repo, "src", "a.ts"), "export const a = 2;\n");
+  assert.deepEqual(await readFileAt(repo, "HEAD", "src/a.ts"), { kind: "text", size: 20, text: "export const a = 1;\n" });
+  assert.equal(await readFileAt(repo, "HEAD", "new.md"), null, "untracked: not in the commit");
+  await assert.rejects(readFileAt(repo, "HEAD", "../secret.txt"), /Not a path inside the repo/);
 });

@@ -817,3 +817,11 @@ button.repo-open:hover { color: var(--accent); text-decoration: underline; }
 .chat-corner .tab-new { border: 1px solid var(--border); border-radius: 6px; background: var(--card); padding: 0 8px; font-size: 15px; }
 .ws-header h1 .status-chip { margin-right: 0; }
 .repo-popover .repo-details { border-top: none; padding: 0; }
+
+/* Diff header: file name, Diff | Original | Changed, VS Code */
+.file-head { display: flex; align-items: center; gap: 8px; position: sticky; top: 0; z-index: 1; background: var(--card); padding: 6px 0 8px; }
+.file-head .one-line { font-family: var(--mono); min-width: 0; }
+.file-diff .file-code { margin-top: 2px; }
+.diff tr.line { cursor: default; }
+.file-head { font-family: inherit; font-size: 13px; }
+.file-code .gutter { background: var(--card); }

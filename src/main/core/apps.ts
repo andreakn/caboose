@@ -148,6 +148,41 @@ export function launchFor(app: AppId, path: string, m: Machine, override?: strin
   }
 }
 
+/**
+ * VS Code on `folder` with `file` open at `line`: its command-line tool with
+ * `-g file:line`, so a window already showing the folder is reused. On macOS
+ * the tool inside the app bundle works even if "code" was never put on PATH.
+ */
+export function launchVsCodeAt(folder: string, file: string, line: number, m: Machine, override?: string): Launch | null {
+  const goto = ["-g", `${file}:${Math.max(1, line)}`];
+  if (override?.trim()) {
+    const [exe, ...args] = splitCommand(override.replace(/\{path\}/g, folder));
+    return { file: exe, args: override.includes("{path}") ? [...args, ...goto] : [...args, folder, ...goto] };
+  }
+  if (m.platform === "darwin") {
+    const app = macApp(m, "Visual Studio Code");
+    const bundled = app && [`/Applications/${app}.app`, posix.join(m.home, "Applications", `${app}.app`)].map((a) => `${a}/Contents/Resources/app/bin/code`).find(m.exists);
+    const cli = bundled ?? which("code", m);
+    return cli ? { file: cli, args: [folder, ...goto] } : null;
+  }
+  if (m.platform === "win32") {
+    const local = m.env.LOCALAPPDATA ?? win32.join(m.home, "AppData", "Local");
+    const pf = m.env.ProgramFiles ?? "C:\\Program Files";
+    const cmd = [win32.join(local, "Programs", "Microsoft VS Code", "bin", "code.cmd"), win32.join(pf, "Microsoft VS Code", "bin", "code.cmd")].find(m.exists) ?? which("code", m);
+    return cmd ? { file: cmd, args: [folder, ...goto], shell: true } : null;
+  }
+  const cli = which("code", m) ?? which("codium", m);
+  return cli ? { file: cli, args: [folder, ...goto] } : null;
+}
+
+export function openVsCodeAt(folder: string, file: string, line: number, m: Machine, override?: string): void {
+  const l = launchVsCodeAt(folder, file, line, m, override);
+  if (!l) throw new Error("VS Code was not found on this machine.");
+  const child = spawn(l.file, l.args, { cwd: folder, shell: l.shell, detached: true, stdio: "ignore", windowsHide: true });
+  child.on("error", () => {});
+  child.unref();
+}
+
 const LABELS: Record<AppId, (p: NodeJS.Platform) => string> = {
   vscode: () => "VS Code",
   rider: () => "Rider",

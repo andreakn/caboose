@@ -600,6 +600,19 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      chat tab row ("+" in the corner); the message box starts one line high
      and grows; gaps are tighter.
 
+135. **The diff viewer has three views: Diff, Original, Changed.** Original
+     is the file at the merge-base Changes compares with (`git show`; the old
+     path for renames), Changed is the worktree copy; images show as images,
+     markdown as source. The choice is remembered; a view a file cannot have
+     (Original of a new file, Changed of a deleted one) is disabled.
+136. **"VS Code ↗" opens the feature folder in VS Code at that file**, at the
+     first changed line from the diff (double-click a diff line for that
+     line; the Files viewer has the button too). It uses VS Code's own
+     command-line tool with `-g file:line`, so a window already showing the
+     feature is reused: on macOS the one inside the app bundle (no need for
+     "code" on PATH), on Windows `bin\code.cmd`, on Linux `code`/`codium`.
+     An `openWith.vscode` override gets the folder as `{path}` and `-g` added.
+
 ## Answered (2026-11-05)
 
 - Private GitHub repo `andreakn/caboose`: yes.

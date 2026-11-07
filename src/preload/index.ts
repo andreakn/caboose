@@ -42,6 +42,8 @@ const api: CabooseApi = {
   archiveFeature: invoke("feature:archive"),
   repoFiles: invoke("files:list"),
   readRepoFile: invoke("files:read"),
+  readBaseFile: invoke("files:readBase"),
+  openInVsCode: invoke("apps:vscodeAt"),
   retirePlan: invoke("feature:retirePlan"),
   retireFeature: invoke("feature:retire"),
   restoreFeature: invoke("feature:restore"),

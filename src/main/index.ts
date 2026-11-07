@@ -2,7 +2,7 @@
 import { query, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, safeStorage, screen, shell } from "electron";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import type { Agent, Chat, Effort, Mode, Model } from "../shared/chat.ts";
 import { checksSummary } from "../shared/github.ts";
 import { commentsMessage } from "../shared/diff.ts";
@@ -29,10 +29,10 @@ import {
   saveLocalConfig,
   type SecretCodec,
 } from "./core/config.ts";
-import { availableApps, openIn, realMachine } from "./core/apps.ts";
+import { availableApps, openIn, openVsCodeAt, realMachine } from "./core/apps.ts";
 import { conductorImport, conductorRules } from "./core/conductor.ts";
-import { changes, filePatch } from "./core/diff.ts";
-import { listFiles, readRepoFile } from "./core/files.ts";
+import { changes, filePatch, mergeBase } from "./core/diff.ts";
+import { listFiles, readFileAt, readRepoFile } from "./core/files.ts";
 import { doctor } from "./core/doctor.ts";
 import { checkRepo, Features, scanRepos } from "./core/features.ts";
 import { GitHub } from "./core/github.ts";
@@ -425,6 +425,19 @@ ipcMain.handle("chat:configure", (_e, chatId: string, patch: { model?: Model; ef
 ipcMain.handle("files:list", (_e, featureId: string, repo: string) => attempt(() => listFiles(liveRepo(featureId, repo).r.path)));
 ipcMain.handle("files:read", (_e, featureId: string, repo: string, path: string) =>
   attempt(() => readRepoFile(liveRepo(featureId, repo).r.path, path)),
+);
+ipcMain.handle("files:readBase", (_e, featureId: string, repo: string, path: string) =>
+  attempt(async () => {
+    const { r } = liveRepo(featureId, repo);
+    return readFileAt(r.path, await mergeBase(r.path, r.baseRef), path);
+  }),
+);
+ipcMain.handle("apps:vscodeAt", (_e, featureId: string, repo: string, path: string, line = 1) =>
+  attempt(() => {
+    const { f, r } = liveRepo(featureId, repo);
+    if (isAbsolute(path) || path.split(/[\\/]/).includes("..")) throw new Error(`Not a path inside ${repo}: ${path}`);
+    openVsCodeAt(f.folder, join(r.path, path), line, realMachine(), localConfig.openWith?.vscode);
+  }),
 );
 ipcMain.handle("diff:changes", (_e, featureId: string, repo: string) =>
   attempt(() => {

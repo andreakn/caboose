@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { type DiffComment, type DiffLine, type FileChange, parsePatch, type WorkspaceChanges } from "../../shared/diff.ts";
-import type { Feature, FeatureRepo } from "../../shared/types.ts";
+import type { Feature, FeatureRepo, FileContent } from "../../shared/types.ts";
+import { ContentView, VsCodeButton } from "./Files.tsx";
 
 const api = window.caboose;
 const MAX_LINES = 4000;
@@ -151,6 +152,27 @@ function FileDiff(props: { ws: Feature; repo: string; file: FileChange; changes:
   const [patch, setPatch] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [composing, setComposing] = useState<string | null>(null);
+  // Diff, the file as it was at the base (Original), or as it is now (Changed).
+  const [mode, setModeRaw] = useState<"diff" | "original" | "changed">(() => (localStorage.getItem("caboose-diff-mode") as "diff" | "original" | "changed" | null) ?? "diff");
+  const setMode = (m: "diff" | "original" | "changed") => {
+    setModeRaw(m);
+    localStorage.setItem("caboose-diff-mode", m);
+  };
+  const [other, setOther] = useState<{ content?: FileContent | null; error?: string }>({});
+  const isNew = file.status === "added" || file.status === "untracked";
+  const isGone = file.status === "deleted";
+  if ((mode === "original" && isNew) || (mode === "changed" && isGone)) setModeRaw("diff");
+  useEffect(() => {
+    if (mode === "diff") return;
+    setOther({});
+    let alive = true;
+    const load =
+      mode === "original" ? api.readBaseFile(ws.id, repo, file.oldPath ?? file.path) : api.readRepoFile(ws.id, repo, file.path);
+    void load.then((r) => alive && setOther(r.ok ? { content: r.value } : { error: r.error }));
+    return () => {
+      alive = false;
+    };
+  }, [mode, ws.id, repo, file.path, changes]);
 
   // Refetch whenever the changes poll found something new.
   useEffect(() => {
@@ -172,14 +194,54 @@ function FileDiff(props: { ws: Feature; repo: string; file: FileChange; changes:
   const shown = new Set(hunks.flatMap((h) => h.lines.map(keyOf)));
   const commentsAt = (key: string) => comments.filter((c) => `${c.side}:${c.line}` === key);
   const outdated = comments.filter((c) => !shown.has(`${c.side}:${c.line}`));
+  /** Where VS Code opens: the first changed line (or the line you double-click). */
+  const firstChange = hunks.flatMap((h) => h.lines).find((l) => l.type !== "ctx");
+  const openLine = mode === "diff" ? (firstChange?.new ?? firstChange?.old ?? 1) : 1;
+  const openAt = async (line: number) => {
+    const r = await api.openInVsCode(ws.id, repo, isGone ? (file.oldPath ?? file.path) : file.path, line);
+    if (!r.ok) alert(r.error);
+  };
 
   return (
     <div className="file-diff">
       <div className="file-head">
-        {file.oldPath && <span className="muted">{file.oldPath} → </span>}
-        <b>{file.path}</b>
+        <span className="one-line">
+          {file.oldPath && <span className="muted">{file.oldPath} → </span>}
+          <b>{file.path}</b>
+        </span>
+        <span className="spacer" />
+        <div className="segmented small" role="tablist">
+          <button className={mode === "diff" ? "active" : ""} onClick={() => setMode("diff")} title="What changed">
+            Diff
+          </button>
+          <button
+            className={mode === "original" ? "active" : ""}
+            onClick={() => setMode("original")}
+            disabled={isNew}
+            title={isNew ? "A new file: there is no original" : `As it was at the base (${changes.baseRef})`}
+          >
+            Original
+          </button>
+          <button
+            className={mode === "changed" ? "active" : ""}
+            onClick={() => setMode("changed")}
+            disabled={isGone}
+            title={isGone ? "Deleted" : "As it is now in the worktree"}
+          >
+            Changed
+          </button>
+        </div>
+        {!isGone && <VsCodeButton f={ws} repo={repo} path={file.path} line={openLine} />}
       </div>
-      {outdated.length > 0 && (
+      {mode !== "diff" && (
+        <ContentView
+          path={file.path}
+          content={other.content}
+          error={other.error}
+          missing={mode === "original" ? "Not in the base: a new file." : "Not in the worktree."}
+        />
+      )}
+      {mode === "diff" && outdated.length > 0 && (
         <div className="outdated">
           <div className="muted">Comments on lines not in the diff:</div>
           {outdated.map((c) => (
@@ -188,7 +250,7 @@ function FileDiff(props: { ws: Feature; repo: string; file: FileChange; changes:
         </div>
       )}
       {error && <div className="banner error">{error}</div>}
-      {file.binary ? (
+      {mode !== "diff" ? null : file.binary ? (
         <div className="changes-empty muted">Binary file, not shown.</div>
       ) : patch === null ? (
         <div className="changes-empty muted">Loading…</div>
@@ -207,7 +269,11 @@ function FileDiff(props: { ws: Feature; repo: string; file: FileChange; changes:
                   const here = commentsAt(key);
                   return (
                     <Fragment key={`${hi}:${key}`}>
-                      <tr className={`line ${l.type}`}>
+                      <tr
+                        className={`line ${l.type}`}
+                        onDoubleClick={() => !isGone && void openAt(l.new ?? l.old ?? 1)}
+                        title="Double-click to open this line in VS Code"
+                      >
                         <td className="ln">{l.old ?? ""}</td>
                         <td className="ln">
                           <button className="add-comment" title="Comment on this line" onClick={() => setComposing(key)}>

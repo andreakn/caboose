@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { availableApps, launchFor, type Machine, splitCommand } from "../src/main/core/apps.ts";
+import { availableApps, launchFor, launchVsCodeAt, type Machine, splitCommand } from "../src/main/core/apps.ts";
 
 function machine(platform: NodeJS.Platform, files: string[], env: Record<string, string> = {}, dirs: Record<string, string[]> = {}): Machine {
   const set = new Set(files);
@@ -49,4 +49,23 @@ test("overrides from the config win", () => {
   const m = machine("linux", [], { PATH: "" });
   assert.deepEqual(launchFor("rider", "/w/x", m, '"/opt/rider/bin/rider.sh" {path}'), { file: "/opt/rider/bin/rider.sh", args: ["/w/x"], cwd: "/w/x" });
   assert.deepEqual(splitCommand(`a "b c" 'd' e`), ["a", "b c", "d", "e"]);
+});
+
+test("VS Code at a file: the feature folder with -g file:line, through its command-line tool", () => {
+  const bundled = "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code";
+  const mac = machine("darwin", ["/Applications/Visual Studio Code.app", bundled], { PATH: "" });
+  assert.deepEqual(launchVsCodeAt("/f/oslo", "/f/oslo/web/src/a.ts", 12, mac), { file: bundled, args: ["/f/oslo", "-g", "/f/oslo/web/src/a.ts:12"] });
+  assert.equal(launchVsCodeAt("/f", "/f/a", 1, machine("darwin", [], { PATH: "" })), null);
+
+  const local = "C:\\Users\\me\\AppData\\Local";
+  const win = machine("win32", [`${local}\\Programs\\Microsoft VS Code\\bin\\code.cmd`], { LOCALAPPDATA: local, PATH: "" });
+  assert.deepEqual(launchVsCodeAt("D:\\f\\oslo", "D:\\f\\oslo\\web\\a.ts", 0, win), {
+    file: `${local}\\Programs\\Microsoft VS Code\\bin\\code.cmd`,
+    args: ["D:\\f\\oslo", "-g", "D:\\f\\oslo\\web\\a.ts:1"],
+    shell: true,
+  });
+
+  const linux = machine("linux", ["/usr/bin/codium"], { PATH: "/usr/bin" });
+  assert.deepEqual(launchVsCodeAt("/f", "/f/a.ts", 3, linux), { file: "/usr/bin/codium", args: ["/f", "-g", "/f/a.ts:3"] });
+  assert.deepEqual(launchVsCodeAt("/f", "/f/a.ts", 3, linux, "/opt/code/code {path}"), { file: "/opt/code/code", args: ["/f", "-g", "/f/a.ts:3"] });
 });

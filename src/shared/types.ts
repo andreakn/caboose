@@ -436,6 +436,10 @@ export type CabooseApi = {
   repoFiles(featureId: string, repo: string): Promise<Result<{ files: string[]; truncated: boolean }>>;
   /** One file of a repo's worktree. */
   readRepoFile(featureId: string, repo: string, path: string): Promise<Result<FileContent>>;
+  /** A file as it was at the branch's base (what Changes compares with); null when it did not exist there. */
+  readBaseFile(featureId: string, repo: string, path: string): Promise<Result<FileContent | null>>;
+  /** VS Code on the feature folder, with this file of a repo open at `line`. */
+  openInVsCode(featureId: string, repo: string, path: string, line?: number): Promise<Result<void>>;
   filePatch(featureId: string, repo: string, path: string): Promise<Result<string>>;
   addComment(c: {
     featureId: string;

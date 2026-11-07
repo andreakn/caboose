@@ -189,13 +189,11 @@ function FileView(props: { f: Feature; repo: FeatureRepo; path: string; status?:
   useEffect(() => {
     void api.readRepoFile(props.f.id, props.repo.name, props.path).then((r) => (r.ok ? setContent(r.value) : setError(r.error)));
   }, [props.path]);
-  const lines = content?.kind === "text" ? content.text.split("\n") : [];
-  if (lines.at(-1) === "") lines.pop();
   return (
     <div className="file-view">
       <div className="file-view-bar">
         <code title={`${props.repo.path}/${props.path}`}>{props.path}</code>
-        {content && <span className="muted small">{size(content.size)}{content.kind === "text" ? ` · ${lines.length} lines` : ""}</span>}
+        {content && <span className="muted small">{describe(content)}</span>}
         <span className="spacer" />
         {props.status && props.status !== "untracked" && (
           <button className="small-btn" onClick={() => props.onShowChange(props.path)} title="Show what changed in this file">
@@ -212,27 +210,61 @@ function FileView(props: { f: Feature; repo: FeatureRepo; path: string; status?:
             </button>
           </div>
         )}
+        <VsCodeButton f={props.f} repo={props.repo.name} path={props.path} />
       </div>
-      {error && <div className="banner error">{error}</div>}
-      {!content && !error && <div className="changes-empty muted">Loading…</div>}
-      {content?.kind === "binary" && <div className="changes-empty muted">A binary file.</div>}
-      {content?.kind === "tooLarge" && <div className="changes-empty muted">Too large to show ({size(content.size)}).</div>}
-      {content?.kind === "image" && (
-        <div className="file-image">
-          <img src={content.dataUrl} alt={props.path} />
-        </div>
-      )}
-      {content?.kind === "text" &&
-        (isMd && preview ? (
-          <div className="file-md md">
-            <Markdown remarkPlugins={[remarkGfm]}>{content.text}</Markdown>
-          </div>
-        ) : (
-          <div className="file-code">
-            <pre className="gutter">{lines.map((_, i) => i + 1).join("\n")}</pre>
-            <pre className="code">{lines.join("\n")}</pre>
-          </div>
-        ))}
+      <ContentView path={props.path} content={content} error={error} preview={isMd && preview} />
+    </div>
+  );
+}
+
+/** "Open in VS Code" on the feature folder, at this file (and line). */
+export function VsCodeButton(props: { f: Feature; repo: string; path: string; line?: number }) {
+  return (
+    <button
+      className="small-btn"
+      title={`Open the feature in VS Code, at ${props.path}${props.line ? `:${props.line}` : ""}`}
+      onClick={async () => {
+        const r = await api.openInVsCode(props.f.id, props.repo, props.path, props.line);
+        if (!r.ok) alert(r.error);
+      }}
+    >
+      VS Code ↗
+    </button>
+  );
+}
+
+/** "1.2 KB · 40 lines" */
+export function describe(content: FileContent): string {
+  const lines = content.kind === "text" ? content.text.split("\n").length - (content.text.endsWith("\n") ? 1 : 0) : 0;
+  return `${size(content.size)}${content.kind === "text" ? ` · ${lines} lines` : ""}`;
+}
+
+/** A file's contents: text with line numbers (or markdown rendered), an image, or why it is not shown. */
+export function ContentView(props: { path: string; content: FileContent | null | undefined; error?: string | null; preview?: boolean; missing?: string }) {
+  const { content, error } = props;
+  if (error) return <div className="banner error">{error}</div>;
+  if (content === null) return <div className="changes-empty muted">{props.missing ?? "No such file."}</div>;
+  if (!content) return <div className="changes-empty muted">Loading…</div>;
+  if (content.kind === "binary") return <div className="changes-empty muted">A binary file.</div>;
+  if (content.kind === "tooLarge") return <div className="changes-empty muted">Too large to show ({size(content.size)}).</div>;
+  if (content.kind === "image")
+    return (
+      <div className="file-image">
+        <img src={content.dataUrl} alt={props.path} />
+      </div>
+    );
+  if (props.preview)
+    return (
+      <div className="file-md md">
+        <Markdown remarkPlugins={[remarkGfm]}>{content.text}</Markdown>
+      </div>
+    );
+  const lines = content.text.split("\n");
+  if (lines.at(-1) === "") lines.pop();
+  return (
+    <div className="file-code">
+      <pre className="gutter">{lines.map((_, i) => i + 1).join("\n")}</pre>
+      <pre className="code">{lines.join("\n")}</pre>
     </div>
   );
 }
