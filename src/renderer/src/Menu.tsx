@@ -84,3 +84,47 @@ export function OpenInMenu({ path, only, label = "Open ▾" }: { path: string; o
     />
   );
 }
+
+const GLYPH: Record<AppInfo["id"], string> = { vscode: "⌨", rider: "R", visualStudio: "VS", terminal: ">_", files: "📁" };
+
+function AppIcon({ app }: { app: AppInfo }) {
+  return app.icon ? <img className="app-icon" src={app.icon} alt="" /> : <span className="app-icon glyph">{GLYPH[app.id]}</span>;
+}
+
+/**
+ * Like Conductor's: the icon of the app you opened last (one click opens the
+ * folder there again) and ▾ for the others. The last app is remembered.
+ */
+export function OpenAppButton({ path, only, what }: { path: string; only?: AppInfo["id"][]; what: string }) {
+  const apps = useApps().filter((a) => !only || only.includes(a.id));
+  const [last, setLast] = useState(() => localStorage.getItem("caboose-open-app"));
+  if (!apps.length) return null;
+  const current = apps.find((a) => a.id === last) ?? apps.find((a) => a.id === "vscode") ?? apps[0];
+  const open = (a: AppInfo) => {
+    localStorage.setItem("caboose-open-app", a.id);
+    setLast(a.id);
+    void api.openIn(a.id, path).then(report);
+  };
+  return (
+    <span className="open-app">
+      <button className="open-app-main" title={`Open ${what} in ${current.label}`} onClick={() => open(current)}>
+        <AppIcon app={current} />
+      </button>
+      <MenuButton
+        className="open-app-more"
+        label="▾"
+        title={`Open ${what} in…`}
+        align="right"
+        items={apps.map((a) => ({
+          label: (
+            <span className="open-app-item">
+              <AppIcon app={a} />
+              {a.label}
+            </span>
+          ),
+          onClick: () => open(a),
+        }))}
+      />
+    </span>
+  );
+}

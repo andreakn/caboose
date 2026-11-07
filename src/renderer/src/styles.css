@@ -838,3 +838,14 @@ a.tab-pr.link { text-decoration: underline dotted; cursor: pointer; } a.tab-pr.l
 /* The tab row holds the repo's ⋯ menu and ⓘ popover: keep it above the panel below (the diff header is sticky with z-index 1). */
 .scope-panel .view-tabs { z-index: 5; }
 .scope-tabs { z-index: 6; }
+
+/* Open in app: last app's icon, ▾ for the others */
+.open-app { display: inline-flex; align-items: stretch; }
+.open-app > button, .open-app .open-app-more { display: inline-flex; align-items: center; padding: 3px 6px; }
+.open-app-main { border-radius: 6px 0 0 6px !important; border-right: none !important; }
+.open-app .open-app-more { border-radius: 0 6px 6px 0; padding: 3px 5px; font-size: 10px; color: var(--muted); }
+.app-icon { width: 20px; height: 20px; display: inline-block; }
+.app-icon.glyph { width: auto; min-width: 20px; font-size: 11px; font-weight: 700; text-align: center; line-height: 20px; }
+.open-app-item { display: inline-flex; align-items: center; gap: 8px; }
+.open-app-item .app-icon { width: 18px; height: 18px; }
+.scope-panel .view-tabs .open-app { align-self: center; margin: 0 0 4px 8px; }

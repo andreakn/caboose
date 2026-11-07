@@ -183,6 +183,36 @@ export function openVsCodeAt(folder: string, file: string, line: number, m: Mach
   child.unref();
 }
 
+/**
+ * The app's bundle or executable, for its icon (Electron's getFileIcon):
+ * macOS .app bundles, Windows .exe files. Linux has no reliable file for an
+ * app's icon, so none (the button shows a glyph instead).
+ */
+export function appIconPath(app: AppId, m: Machine): string | null {
+  if (m.platform === "darwin") {
+    const bundle = (...names: string[]) =>
+      names.flatMap((n) => [`/Applications/${n}.app`, posix.join(m.home, "Applications", `${n}.app`)]).find(m.exists) ?? null;
+    switch (app) {
+      case "vscode":
+        return bundle("Visual Studio Code");
+      case "rider":
+        return bundle("Rider", "JetBrains Rider");
+      case "terminal":
+        return bundle("iTerm", "Ghostty", "Warp") ?? ["/System/Applications/Utilities/Terminal.app", "/Applications/Utilities/Terminal.app"].find(m.exists) ?? null;
+      case "files":
+        return "/System/Library/CoreServices/Finder.app";
+      default:
+        return null;
+    }
+  }
+  if (m.platform === "win32") {
+    const l = launchFor(app, "C:\\", m);
+    if (app === "files") return (m.env.SystemRoot ?? "C:\\Windows") + "\\explorer.exe";
+    return l && /\.exe$/i.test(l.file) ? l.file : null;
+  }
+  return null;
+}
+
 const LABELS: Record<AppId, (p: NodeJS.Platform) => string> = {
   vscode: () => "VS Code",
   rider: () => "Rider",

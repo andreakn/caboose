@@ -1,6 +1,6 @@
 // Electron glue: window, IPC and state wiring. The real work is in ./core.
 import { query, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, safeStorage, screen, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, nativeTheme, safeStorage, screen, shell, systemPreferences } from "electron";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
 import type { Agent, Chat, Effort, Mode, Model } from "../shared/chat.ts";
@@ -29,7 +29,7 @@ import {
   saveLocalConfig,
   type SecretCodec,
 } from "./core/config.ts";
-import { availableApps, openIn, openVsCodeAt, realMachine } from "./core/apps.ts";
+import { appIconPath, availableApps, openIn, openVsCodeAt, realMachine } from "./core/apps.ts";
 import { conductorImport, conductorRules } from "./core/conductor.ts";
 import { changes, filePatch, mergeBase } from "./core/diff.ts";
 import { listFiles, readFileAt, readRepoFile } from "./core/files.ts";
@@ -50,6 +50,10 @@ import { checkForUpdate, update } from "./core/updater.ts";
 import { installMenu } from "./menu.ts";
 
 app.setName("Caboose");
+// After a crash macOS asks, at the next start, whether to reopen the app's
+// windows, and waits for an answer before the app can open any: Caboose
+// restores nothing that way, so it never asks.
+if (process.platform === "darwin") systemPreferences.setUserDefault("ApplePersistenceIgnoreState", "boolean", true);
 // CABOOSE_DATA points the app at another state folder (screenshots, experiments).
 if (process.env.CABOOSE_DATA) app.setPath("userData", process.env.CABOOSE_DATA);
 // One Caboose per state folder: a second start (e.g. typing `caboose` again) shows the open window instead.
@@ -298,7 +302,21 @@ ipcMain.handle("feature:scripts", (_e, featureId: string, repo: string) => {
 });
 ipcMain.handle("conductor:import", () => attempt(() => conductorImport(new Set(localConfig.repos.map((r) => r.path)))));
 ipcMain.handle("config:repoRules", (_e, path: string) => conductorRules(path));
-ipcMain.handle("apps:list", () => availableApps(realMachine(), localConfig.openWith));
+ipcMain.handle("apps:list", async () => {
+  const m = realMachine();
+  return Promise.all(
+    availableApps(m, localConfig.openWith).map(async (a) => {
+      const path = appIconPath(a.id, m);
+      // On macOS getFileIcon gives a generic icon for .app bundles; Quick Look's thumbnail is the real one.
+      const icon = !path
+        ? null
+        : process.platform === "darwin"
+          ? await nativeImage.createThumbnailFromPath(path, { width: 64, height: 64 }).catch(() => null)
+          : await app.getFileIcon(path, { size: "normal" }).catch(() => null);
+      return icon && !icon.isEmpty() ? { ...a, icon: icon.toDataURL() } : a;
+    }),
+  );
+});
 ipcMain.handle("apps:open", (_e, app: AppId, path: string) =>
   attempt(() => {
     // Only folders Caboose knows: features, their worktrees, configured repos.

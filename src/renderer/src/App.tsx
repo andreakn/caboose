@@ -21,7 +21,7 @@ import { dispatch, useCommand } from "./commands.ts";
 import { Configure } from "./Configure.tsx";
 import { JiraChip, RepoRow } from "./GitHub.tsx";
 import { ActivityView } from "./Activity.tsx";
-import { OpenInMenu } from "./Menu.tsx";
+import { OpenAppButton } from "./Menu.tsx";
 import { allMerged, Board, HealthDot, JiraStatusChip, PrTiles, useOverview } from "./Overview.tsx";
 import { DialogHost } from "./Dialog.tsx";
 import { NewFeature } from "./NewFeature.tsx";
@@ -480,7 +480,7 @@ function FeatureView(props: {
               <button className="primary" onClick={() => setTab("run")} title="The Run tab: start and stop each repo's programs (Cmd/Ctrl+R runs them all)">
                 ▶ Run{running > 0 ? ` (${running})` : ""}
               </button>
-              <OpenInMenu path={f.folder} only={["vscode", "terminal", "files"]} />
+              <OpenAppButton path={f.folder} what="the feature folder" />
               <FeatureInfo f={f} />
               <button className="danger" onClick={props.onArchive} title="Archive or delete the feature: closes its open PRs and deletes its branches">
                 Archive…
@@ -576,6 +576,7 @@ function FeatureView(props: {
                   return n > 0 ? <span className="badge ok">{n}</span> : null;
                 })()}
               </button>
+              <OpenAppButton path={scopeRepo.path} what={repoLabel(scopeRepo.name)} />
               <span className="spacer" />
               {repoRow(scopeRepo, true)}
             </div>

@@ -226,7 +226,7 @@ export type LocalConfig = {
 
 /** Apps a folder can be opened in. */
 export type AppId = "vscode" | "rider" | "visualStudio" | "terminal" | "files";
-export type AppInfo = { id: AppId; label: string };
+export type AppInfo = { id: AppId; label: string; /** The app's own icon, as a data URL (macOS and Windows). */ icon?: string };
 
 /** A repo offered for import from Conductor, with what was found for it. */
 export type ImportCandidate = RepoEntry & {

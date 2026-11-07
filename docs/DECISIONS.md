@@ -628,6 +628,19 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      (prerequisite checks, updates). The last tab is remembered; Save stays
      at the bottom and saves every tab at once.
 
+139. **"Open in" is an app icon with ▾, like Conductor's**: the icon of the
+     app you opened last (one click opens there again) and a menu of the
+     others, with their real icons (macOS: Quick Look thumbnails of the .app,
+     as Electron's getFileIcon gives a generic one; Windows: the .exe's icon;
+     Linux: a glyph). The feature's sits next to ▶ Run in the header (the
+     feature folder), a repo's next to its Run tab (its worktree). The last
+     app is remembered across both.
+140. **Caboose never waits on macOS's "reopen windows?" prompt** after a
+     crash (`ApplePersistenceIgnoreState`): every Electron app run from a
+     clone shares the "Electron" app identity, so another one crashing made
+     Caboose start with no window, waiting on a dialog that could be
+     off-screen.
+
 ## Answered (2026-11-05)
 
 - Private GitHub repo `andreakn/caboose`: yes.

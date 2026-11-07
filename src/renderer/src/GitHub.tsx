@@ -194,8 +194,13 @@ export function RepoRow(props: {
           : []),
         ...(pr ? [{ label: `Open PR #${pr.number} on GitHub`, onClick: () => void api.openUrl(pr.url) }] : []),
         "separator" as const,
-        ...apps.map((a) => ({ label: `Open in ${a.label}`, onClick: () => void api.openIn(a.id, repo.path).then((r) => !r.ok && alert(r.error)) })),
-        "separator" as const,
+        // In a repo's own tab the open-in button sits in the tab row instead.
+        ...(props.inline
+          ? []
+          : [
+              ...apps.map((a) => ({ label: `Open in ${a.label}`, onClick: () => void api.openIn(a.id, repo.path).then((r) => !r.ok && alert(r.error)) })),
+              "separator" as const,
+            ]),
         ...(b && !b.upstream ? [{ label: "Rename branch…", onClick: () => void renameBranch(feature, repo, refresh) }] : []),
         ...(props.jiraLevel !== "off"
           ? props.subtask
