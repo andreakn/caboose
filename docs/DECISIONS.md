@@ -673,6 +673,12 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      first 122 keep their ids, so existing features keep their names. The
      map credits OpenStreetMap (ODbL).
 
+144. **The map zooms** (scroll or pinch around the pointer, double-click to
+     zoom in, drag to pan, + / − / ⟲ in the corner, up to 30×): it changes
+     the svg's viewBox, and dots, labels and line widths are scaled back so
+     they stay the same size on screen. The track no longer highlights on
+     hover.
+
 ## Answered (2026-11-05)
 
 - Private GitHub repo `andreakn/caboose`: yes.

@@ -869,7 +869,6 @@ a.tab-pr.link { text-decoration: underline dotted; cursor: pointer; } a.tab-pr.l
 .map-sea { fill: color-mix(in srgb, var(--info) 7%, var(--bg)); }
 .map-land { fill: color-mix(in srgb, var(--card) 75%, var(--bg)); stroke: var(--border); stroke-width: 1.2; stroke-linejoin: round; }
 .map-line { fill: none; stroke: color-mix(in srgb, var(--muted) 55%, transparent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.map-line:hover { stroke: var(--accent); }
 .map-hub circle { fill: var(--card); stroke: var(--muted); stroke-width: 2; }
 .map-hub text { fill: var(--muted); font-size: 11px; font-style: italic; }
 .map-station text { fill: var(--text); font-size: 12px; font-weight: 600; paint-order: stroke; stroke: color-mix(in srgb, var(--card) 80%, var(--bg)); stroke-width: 3px; }
@@ -884,3 +883,10 @@ a.tab-pr.link { text-decoration: underline dotted; cursor: pointer; } a.tab-pr.l
 .map-dot.st-archived { fill: color-mix(in srgb, var(--merged) 50%, white); background: color-mix(in srgb, var(--merged) 50%, white); }
 .map-dot.st-deleted { fill: var(--muted); background: var(--muted); }
 .map-credit { margin: 6px 0 0; }
+/* Zoom: lines keep their width on screen; buttons in the corner; drag to pan */
+.map-frame { position: relative; }
+.map-line, .map-land, .map-hub circle, .map-station circle { vector-effect: non-scaling-stroke; }
+.nordic-map { cursor: grab; touch-action: none; }
+.nordic-map:active { cursor: grabbing; }
+.map-zoom { position: absolute; top: 10px; right: 10px; z-index: 1; display: flex; flex-direction: column; gap: 4px; }
+.map-zoom button { width: 30px; height: 30px; padding: 0; font-size: 16px; line-height: 1; background: var(--card); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12); }

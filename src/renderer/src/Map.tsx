@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { COUNTRIES, EDGES, LANDMARKS, STATION_INFO, STATIONS, stationLabel, stationOf } from "../../shared/stations.ts";
 import type { Feature, FeatureOverview, StationVisit } from "../../shared/types.ts";
 import { allMerged, useOverview } from "./Overview.tsx";
@@ -41,6 +41,15 @@ const WIDTH = X(32);
 const HEIGHT = Y(54.4);
 /** Labels moved down a little where two places sit close (Tornio and Kemi). */
 const LABEL_DROP: Record<string, number> = { kemi: 10, "tornio-itainen": -4 };
+type View = { x: number; y: number; w: number; h: number };
+const FULL: View = { x: 0, y: 0, w: WIDTH, h: HEIGHT };
+const MAX_ZOOM = 30;
+/** Keeps the view over the map (a little slack at the edges). */
+const clamp = (v: View): View => ({
+  ...v,
+  x: Math.min(Math.max(v.x, -v.w * 0.25), WIDTH - v.w * 0.75),
+  y: Math.min(Math.max(v.y, -v.h * 0.25), HEIGHT - v.h * 0.75),
+});
 /** All the track as one path: one element instead of 1,400 keeps the map light. */
 const TRACK = EDGES.map(([a, b]) => {
   const [p, q] = [STATION_INFO[a], STATION_INFO[b]];
@@ -49,6 +58,43 @@ const TRACK = EDGES.map(([a, b]) => {
 
 /** The Nordics as a metro map: lines always, a station's dot once a feature has been named after it. */
 export function MapView(props: { features: Feature[]; visits: StationVisit[]; onOpen: (featureId: string) => void }) {
+  // Zoom and pan: the svg's viewBox. Dots, labels and lines keep their size on screen.
+  const [view, setView] = useState(FULL);
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  const svgRef = useRef<SVGSVGElement>(null);
+  const drag = useRef<{ x: number; y: number; view: View; moved: boolean } | null>(null);
+  const suppressClick = useRef(false);
+  const k = WIDTH / view.w;
+  /** Zooms by `factor` (< 1 is in) around a point on screen, or the middle. */
+  const zoomAt = (factor: number, clientX?: number, clientY?: number) => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const v = viewRef.current;
+    let cx = v.x + v.w / 2;
+    let cy = v.y + v.h / 2;
+    if (clientX !== undefined && clientY !== undefined) {
+      const p = new DOMPoint(clientX, clientY).matrixTransform(svg.getScreenCTM()!.inverse());
+      [cx, cy] = [p.x, p.y];
+    }
+    const w = Math.min(WIDTH, Math.max(WIDTH / MAX_ZOOM, v.w * factor));
+    const f = w / v.w;
+    // Several wheel events can arrive before React renders: each builds on the last.
+    viewRef.current = clamp({ x: cx - (cx - v.x) * f, y: cy - (cy - v.y) * f, w, h: (w * HEIGHT) / WIDTH });
+    setView(viewRef.current);
+  };
+  // Scrolling zooms (a pinch on a trackpad too); React's own wheel handler cannot prevent the page from scrolling.
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      zoomAt(Math.exp(e.deltaY * (e.ctrlKey ? 0.01 : 0.0025)), e.clientX, e.clientY);
+    };
+    svg.addEventListener("wheel", onWheel, { passive: false });
+    return () => svg.removeEventListener("wheel", onWheel);
+  }, []);
+
   // Live features report their state from their own overview.
   const [live, setLive] = useState<Record<string, StationState>>({});
   const report = (id: string, s: StationState) => setLive((m) => (m[id] === s ? m : { ...m, [id]: s }));
@@ -98,8 +144,46 @@ export function MapView(props: { features: Feature[]; visits: StationVisit[]; on
         ))}
       </div>
       <div className="map-frame">
-        <svg className="nordic-map" viewBox={`0 0 ${WIDTH} ${HEIGHT}`} preserveAspectRatio="xMidYMid meet" role="img" aria-label="Map of the Nordic railway stations">
-          <rect className="map-sea" x={0} y={0} width={WIDTH} height={HEIGHT} />
+        <div className="map-zoom">
+          <button title="Zoom in (or scroll)" onClick={() => zoomAt(1 / 1.6)}>
+            +
+          </button>
+          <button title="Zoom out" onClick={() => zoomAt(1.6)}>
+            −
+          </button>
+          <button title="The whole map" disabled={k === 1} onClick={() => setView(FULL)}>
+            ⟲
+          </button>
+        </div>
+        <svg
+          ref={svgRef}
+          className={`nordic-map${drag.current ? " dragging" : ""}`}
+          viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`}
+          preserveAspectRatio="xMidYMid meet"
+          role="img"
+          aria-label="Map of the Nordic railway stations"
+          onPointerDown={(e) => {
+            drag.current = { x: e.clientX, y: e.clientY, view, moved: false };
+            e.currentTarget.setPointerCapture(e.pointerId);
+          }}
+          onPointerMove={(e) => {
+            const d = drag.current;
+            if (!d) return;
+            const dx = e.clientX - d.x;
+            const dy = e.clientY - d.y;
+            if (!d.moved && Math.hypot(dx, dy) < 4) return;
+            d.moved = true;
+            const scale = svgRef.current!.getScreenCTM()!.a;
+            setView(clamp({ ...d.view, x: d.view.x - dx / scale, y: d.view.y - dy / scale }));
+          }}
+          onPointerUp={() => {
+            // A drag is not a click on whatever was under the pointer.
+            if (drag.current?.moved) suppressClick.current = true;
+            drag.current = null;
+          }}
+          onDoubleClick={(e) => zoomAt(1 / 2, e.clientX, e.clientY)}
+        >
+          <rect className="map-sea" x={-WIDTH} y={-HEIGHT} width={WIDTH * 3} height={HEIGHT * 3} />
           {Object.entries(COUNTRIES).map(([c, shapes]) =>
             shapes.map((pts, i) => (
               <polygon key={`${c}${i}`} className={`map-land land-${c}`} points={pts.map(([lon, lat]) => `${X(lon)},${Y(lat)}`).join(" ")} />
@@ -110,8 +194,8 @@ export function MapView(props: { features: Feature[]; visits: StationVisit[]; on
             const h = STATION_INFO[id];
             return (
               <g key={id} className="map-hub">
-                <circle cx={X(h.lon)} cy={Y(h.lat)} r={4.5} />
-                <text x={X(h.lon) + 7} y={Y(h.lat) + 3.5 + (LABEL_DROP[id] ?? 0)}>
+                <circle cx={X(h.lon)} cy={Y(h.lat)} r={4.5 / k} />
+                <text x={X(h.lon) + 7 / k} y={Y(h.lat) + (3.5 + (LABEL_DROP[id] ?? 0)) / k} style={{ fontSize: 11 / k }}>
                   {label}
                 </text>
               </g>
@@ -124,13 +208,16 @@ export function MapView(props: { features: Feature[]; visits: StationVisit[]; on
               <g
                 key={id}
                 className={`map-station${s.featureId ? " live" : ""}`}
-                onClick={() => s.featureId && props.onOpen(s.featureId)}
+                onClick={() => {
+                  if (suppressClick.current) return void (suppressClick.current = false);
+                  if (s.featureId) props.onOpen(s.featureId);
+                }}
               >
                 <title>
                   {`${s.label}${s.title ? ` · ${s.title}` : ""}\n${STATE_LABELS[state]} · ${s.when}${s.uses > 1 ? `\nused ${s.uses} times` : ""}`}
                 </title>
-                <circle className={`map-dot st-${state}`} cx={X(p.lon)} cy={Y(p.lat)} r={6.5} />
-                <text x={X(p.lon) + 9} y={Y(p.lat) + 4}>
+                <circle className={`map-dot st-${state}`} cx={X(p.lon)} cy={Y(p.lat)} r={6.5 / k} />
+                <text x={X(p.lon) + 9 / k} y={Y(p.lat) + 4 / k} style={{ fontSize: 12 / k, strokeWidth: 3 / k }}>
                   {s.label}
                 </text>
               </g>
