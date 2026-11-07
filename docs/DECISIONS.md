@@ -701,6 +701,12 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      `via_TEST_v1.114`. Repos that tag several services (`cdsws_v1.335`,
      `cbsws_v1.004`) get the lowest tag per prefix. Off until stages are set.
 
+147. **The sidebar shows how deployed a feature is**: per release stage
+     (environment) a small bar with a segment per repo that has tag rules,
+     filled once that repo has a tag for the stage (and "2/3" when there are
+     several). Repos without tag rules do not count. Shown once a tracked
+     repo has a PR; hover for which repos are tagged.
+
 ## Answered (2026-11-05)
 
 - Private GitHub repo `andreakn/caboose`: yes.

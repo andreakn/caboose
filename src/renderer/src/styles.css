@@ -924,3 +924,14 @@ a.tab-pr.link { text-decoration: underline dotted; cursor: pointer; } a.tab-pr.l
 .stages-editor { display: grid; gap: 4px; }
 .stages-editor textarea { font: 12.5px/1.5 var(--mono); color: var(--text); background: var(--input-bg, var(--card)); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; max-width: 420px; }
 .stages-editor .link { justify-self: start; }
+
+/* Sidebar: how deployed a feature is, per environment */
+.deploy-bars { grid-column: 2; display: flex; flex-wrap: wrap; gap: 3px 10px; margin-top: 4px; }
+.deploy-bar { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; color: var(--muted); }
+.deploy-segments { display: inline-flex; gap: 2px; }
+.deploy-segments .seg { width: 12px; height: 5px; border-radius: 2px; background: color-mix(in srgb, var(--muted) 30%, transparent); }
+.deploy-bar.stage-0 .seg.done { background: var(--merged); }
+.deploy-bar.stage-1 .seg.done { background: var(--brown); }
+.deploy-bar.stage-2 .seg.done, .deploy-bar.stage-3 .seg.done { background: var(--ok); }
+.deploy-bar.complete .deploy-name { color: var(--text); }
+.deploy-count { font-size: 10px; }

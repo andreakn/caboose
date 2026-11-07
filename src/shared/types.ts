@@ -317,6 +317,8 @@ export type RepoOverview = {
   jira?: JiraStatus | { key: string };
   /** Once merged: the lowest tags per release stage that contain the merge commit. */
   release?: StageRelease[];
+  /** The release stages this repo is tracked for (its tag rules); none = it does not count. */
+  stages?: string[];
 };
 
 /** A feature at a glance: what the board and the feature page show. */

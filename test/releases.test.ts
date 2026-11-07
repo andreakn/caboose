@@ -57,3 +57,21 @@ test("from a real repo: tags cut after the merge carry it, earlier ones do not",
   ]);
   assert.deepEqual(await releasesOf(tmp, merge, []), [], "no stages: not tracked");
 });
+
+test("deploy progress: per stage, how many repos with tag rules are tagged; repos without rules do not count", async () => {
+  const { deployProgress } = await import("../src/shared/stages.ts");
+  const p = deployProgress([
+    { name: "via", stages: ["release", "test", "prod"], release: [{ stage: "release", tags: ["via_v1.114"] }, { stage: "test", tags: ["via_TEST_v1.114"] }, { stage: "prod", tags: [] }] },
+    { name: "cda", stages: ["release", "test", "prod"] }, // not merged yet
+    { name: "docs" }, // no tag rules
+  ]);
+  assert.deepEqual(
+    p.map((x) => [x.stage, x.done, x.total]),
+    [
+      ["release", 1, 2],
+      ["test", 1, 2],
+      ["prod", 0, 2],
+    ],
+  );
+  assert.deepEqual(p[0].repos, [{ name: "via", tagged: true }, { name: "cda", tagged: false }]);
+});

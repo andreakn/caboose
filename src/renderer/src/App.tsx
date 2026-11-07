@@ -6,6 +6,7 @@ import {
   EMPTY_SIDEBAR,
   type Feature,
   type FeatureRepo,
+  type RepoOverview,
   type UpdateInfo,
   FEATURE_STATUSES,
   type FeatureJira,
@@ -34,6 +35,7 @@ import { repoLabel, setRepoLabels } from "./labels.ts";
 import { notifySound } from "./sounds.ts";
 import { RetireDialog } from "./Retire.tsx";
 import { featureOrder, normalize } from "../../shared/sidebar.ts";
+import { deployProgress } from "../../shared/stages.ts";
 import { FeatureTree } from "./Sidebar.tsx";
 import { RunView, useRunOverview } from "./Run.tsx";
 import { TerminalPanel, useTerminals } from "./Terminals.tsx";
@@ -289,7 +291,41 @@ function FeatureRow(props: { f: Feature; activity?: Activity; active: boolean; o
       <span className="ws-branch" title={f.repos.map((r) => repoLabel(r.name)).join(" · ")}>
         {f.title || f.repos.map((r) => repoLabel(r.name)).join(" · ") || "no repos"}
       </span>
+      {ov && <DeployBars repos={ov.repos} />}
     </button>
+  );
+}
+
+/**
+ * How deployed a feature is: per environment (release stage), a segment per
+ * repo with tag rules, filled once that repo is tagged for it. Shown once a
+ * tracked repo has a PR.
+ */
+function DeployBars({ repos }: { repos: RepoOverview[] }) {
+  if (!repos.some((r) => r.stages?.length && r.pr)) return null;
+  const progress = deployProgress(repos);
+  return (
+    <span className="deploy-bars">
+      {progress.map((p, i) => (
+        <span
+          key={p.stage}
+          className={`deploy-bar stage-${i}${p.done === p.total ? " complete" : ""}`}
+          title={`${p.stage}: ${p.done} of ${p.total} repos tagged\n${p.repos.map((r) => `${r.tagged ? "✓" : "–"} ${repoLabel(r.name)}`).join("\n")}`}
+        >
+          <span className="deploy-name">{p.stage}</span>
+          <span className="deploy-segments">
+            {p.repos.map((r) => (
+              <span key={r.name} className={r.tagged ? "seg done" : "seg"} />
+            ))}
+          </span>
+          {p.total > 1 && (
+            <span className="deploy-count">
+              {p.done}/{p.total}
+            </span>
+          )}
+        </span>
+      ))}
+    </span>
   );
 }
 

@@ -80,6 +80,7 @@ export async function featureOverview(f: Feature, d: OverviewDeps, fresh = false
         pr: slugs[i] ? (r.name in prs.prs ? prs.prs[r.name] : undefined) : undefined,
         jira: jiraFor(links.subtasks[r.name]),
         ...(releases[i] ? { release: releases[i] } : {}),
+        ...((d.stagesFor?.(r.name) ?? []).length ? { stages: d.stagesFor!(r.name).map((s) => s.name) } : {}),
       };
     }),
     errors,
