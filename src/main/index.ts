@@ -43,6 +43,7 @@ import { featureOverview } from "./core/overview.ts";
 import { PrDetailsCache } from "./core/prdetails.ts";
 import { Store } from "./core/store.ts";
 import { retire, retirePlan } from "./core/retire.ts";
+import { git } from "./core/run.ts";
 import { Runner } from "./core/runner.ts";
 import { Terminals } from "./core/terminals.ts";
 import { checkForUpdate, update } from "./core/updater.ts";
@@ -60,6 +61,8 @@ app.on("second-instance", () => {
 });
 
 const dataDir = app.getPath("userData");
+/** The commit this copy of Caboose was started from (the checkout may move on while it runs). */
+const runningCommit = git(app.getAppPath(), "rev-parse", "HEAD").catch(() => undefined);
 const store = new Store(join(dataDir, "state.json"));
 // The Caboose checkout itself holds this machine's gitignored caboose.local.json.
 // CABOOSE_CONFIG_DIR points elsewhere (tests, screenshots).
@@ -525,12 +528,18 @@ ipcMain.handle("agents:logins", async () => {
   ]);
   return { claude: c, copilot: p };
 });
-ipcMain.handle("app:checkForUpdate", () => attempt(() => checkForUpdate(app.getAppPath())));
+ipcMain.handle("app:checkForUpdate", (_e, fetch = true) =>
+  attempt(async () => checkForUpdate(app.getAppPath(), fetch, await runningCommit)),
+);
 ipcMain.handle("app:update", (e) =>
   attempt(async () => {
-    await update(app.getAppPath(), (line) => e.sender.send("app:updateLog", line));
+    await update(app.getAppPath(), (line) => e.sender.send("app:updateLog", line), await runningCommit);
+    // Let the new copy take the single-instance lock while this one shuts down.
+    app.releaseSingleInstanceLock();
     app.relaunch();
     app.quit();
+    // Something holding the quit up must not leave the old version running.
+    setTimeout(() => app.exit(0), 8000).unref();
   }),
 );
 ipcMain.on("app:theme", (_e, theme: Theme) => {

@@ -5,6 +5,7 @@ import {
   type ConfigInfo,
   type Feature,
   type FeatureRepo,
+  type UpdateInfo,
   FEATURE_STATUSES,
   type FeatureJira,
   type JiraAlignment,
@@ -172,6 +173,7 @@ export function App() {
           )}
         </section>
         <div className="sidebar-foot">
+          <UpdateHint />
           <button
             className={`link${screen === "configure" ? " active" : ""}`}
             onClick={() => setScreen(screen === "configure" ? "feature" : "configure")}
@@ -660,6 +662,42 @@ function FeatureView(props: {
         setActiveId={setTermActive}
       />
     </div>
+  );
+}
+
+/** A quiet "new version" button: the checkout is newer than what runs, or GitHub has more. */
+function UpdateHint() {
+  const [info, setInfo] = useState<UpdateInfo | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    const check = (fetch: boolean) => void api.checkForUpdate(fetch).then((r) => r.ok && setInfo(r.value));
+    check(true);
+    const onFocus = () => check(false);
+    window.addEventListener("focus", onFocus);
+    const t = setInterval(() => check(true), 30 * 60_000);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      clearInterval(t);
+    };
+  }, []);
+  if (!info) return null;
+  const n = info.newer.length + (info.dirty || info.ahead > 0 ? 0 : info.behind);
+  if (n === 0) return null;
+  return (
+    <button
+      className="update-hint"
+      disabled={busy}
+      title={[...info.commits, ...info.newer].slice(0, 15).join("\n")}
+      onClick={async () => {
+        if (!confirm(`Restart Caboose into the new version (${n} commit${n === 1 ? "" : "s"})? Running chats and programs are stopped.`)) return;
+        setBusy(true);
+        const r = await api.update(); // only returns if it failed
+        setBusy(false);
+        if (!r.ok) alert(r.error);
+      }}
+    >
+      {busy ? "Updating…" : `⬆ New version (${n}) · restart`}
+    </button>
   );
 }
 

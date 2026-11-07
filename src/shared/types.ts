@@ -333,6 +333,10 @@ export type UpdateInfo = {
   /** "abc1234 subject" for each commit an update would bring. */
   commits: string[];
   note?: string;
+  /** The commit the running app was started from. */
+  running?: string;
+  /** Commits the checkout already has that the running app does not (pulled or committed since it started): a restart brings them. */
+  newer: string[];
 };
 
 export type Theme = "system" | "light" | "dark";
@@ -459,7 +463,8 @@ export type CabooseApi = {
 
   doctor(): Promise<DoctorCheck[]>;
   agentLogins(): Promise<AgentLogins>;
-  checkForUpdate(): Promise<Result<UpdateInfo>>;
+  /** Compares the running app with its checkout, and (fetch, the default) the checkout with GitHub. */
+  checkForUpdate(fetch?: boolean): Promise<Result<UpdateInfo>>;
   /** Pulls, installs and builds, then restarts the app. Resolves only on failure. */
   update(): Promise<Result<void>>;
   onUpdateLog(listener: (line: string) => void): () => void;

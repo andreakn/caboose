@@ -79,3 +79,29 @@ test("a repo's friendly name is kept trimmed, and dropped when empty", () => {
   );
   assert.deepEqual(stored.repos, [{ name: "cust-customer-data-api", path: "/c/cda", label: "CDA" }, { name: "via", path: "/c/via" }]);
 });
+
+test("a checkout that moved on since the app started: the commits are listed, and update rebuilds without pulling", async () => {
+  const origin = join(tmp, "moved-origin");
+  sh(tmp, "init", "-q", "-b", "main", origin);
+  writeFileSync(join(origin, "package.json"), JSON.stringify({ name: "fake", private: true, scripts: { build: "node -e \"require('fs').writeFileSync('built.txt', 'yes')\"" } }));
+  sh(origin, "add", ".");
+  sh(origin, "-c", "user.email=t@e", "-c", "user.name=T", "commit", "-q", "-m", "v1");
+  const clone = join(tmp, "moved-clone");
+  sh(tmp, "clone", "-q", origin, clone);
+  const running = sh(clone, "rev-parse", "HEAD");
+  // Committed in the checkout itself while the app runs (and pushed): nothing to pull.
+  sh(clone, "-c", "user.email=t@e", "-c", "user.name=T", "commit", "-q", "--allow-empty", "-m", "v2: the new thing");
+  sh(origin, "fetch", "-q", clone, "main:refs/heads/next"); // as if pushed: origin has it too
+  sh(origin, "merge", "-q", "--ff-only", "next");
+
+  const info = await checkForUpdate(clone, true, running);
+  assert.equal(info.behind, 0);
+  assert.equal(info.running, running.slice(0, 7));
+  assert.equal(info.newer.length, 1);
+  assert.match(info.newer[0], /v2: the new thing/);
+  const log: string[] = [];
+  await update(clone, (l) => log.push(l), running);
+  assert.ok(!log.some((l) => l.includes("npm install")), "package.json did not change");
+  assert.ok(log.includes("$ npm run build"));
+  assert.equal((await checkForUpdate(clone, false, sh(clone, "rev-parse", "HEAD"))).newer.length, 0);
+});

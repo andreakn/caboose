@@ -685,6 +685,8 @@ function Updates() {
   const [busy, setBusy] = useState<string | null>(null);
 
   useEffect(() => api.onUpdateLog((line) => setLog((l) => [...l, line])), []);
+  // Without asking GitHub: is the checkout already newer than what runs?
+  useEffect(() => void api.checkForUpdate(false).then((r) => r.ok && setInfo(r.value)), []);
 
   async function check() {
     setBusy("Checking…");
@@ -715,22 +717,23 @@ function Updates() {
         {info && (
           <span className="muted">
             On <code>{info.branch}</code> at <code>{info.commit}</code>
-            {info.note ? ` · ${info.note}` : info.behind ? ` · ${info.behind} new commit${info.behind === 1 ? "" : "s"}` : " · up to date"}
+            {info.note ? ` · ${info.note}` : info.behind ? ` · ${info.behind} new commit${info.behind === 1 ? "" : "s"} on GitHub` : " · up to date with GitHub"}
             {info.dirty && " · has local changes"}
+            {info.newer.length > 0 && ` · running ${info.running}, ${info.newer.length} commit${info.newer.length === 1 ? "" : "s"} older than the checkout`}
           </span>
         )}
       </div>
-      {info && info.behind > 0 && (
+      {info && (info.behind > 0 || info.newer.length > 0) && (
         <>
           <ul className="commits">
-            {info.commits.slice(0, 15).map((c) => (
+            {[...info.commits, ...info.newer].slice(0, 15).map((c) => (
               <li key={c}>
                 <code>{c.slice(0, 7)}</code> {c.slice(8)}
               </li>
             ))}
           </ul>
-          <button className="primary" onClick={update} disabled={!!busy || info.dirty || info.ahead > 0}>
-            Update and restart
+          <button className="primary" onClick={update} disabled={!!busy || (info.behind > 0 && (info.dirty || info.ahead > 0))}>
+            {info.behind > 0 ? "Update and restart" : "Rebuild and restart"}
           </button>
         </>
       )}
