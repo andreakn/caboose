@@ -572,6 +572,16 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      Board, Plan, dialogs. The repo's `name` stays the id: folder name in a
      feature, branch and Jira mapping, agent tools and instructions.
 
+131. **Merged is purple**, as on GitHub (`--merged`: #8250df light, #a371f7
+     dark): a repo's dot and PR chip once its PR is merged, and a feature's
+     sidebar dot once every repo's PR is merged (only an agent waiting for
+     you or working outranks it). The Board marks such features "all
+     merged".
+132. **When every branch of a feature is merged, the feature page offers to
+     archive it** (opens the archive-or-delete dialog). "Not now" hides the
+     offer until the set of PRs changes. A merged repo no longer makes
+     "Merge master" its main button (it stays in the ⋯ menu).
+
 ## Answered (2026-11-05)
 
 - Private GitHub repo `andreakn/caboose`: yes.

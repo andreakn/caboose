@@ -539,7 +539,6 @@ textarea.wide:focus { outline: none; border-color: var(--accent); }
 .hdot.h-done { background: var(--ok); }
 .hdot.h-idle { background: var(--muted); opacity: 0.5; }
 .pr-chip { display: inline-flex; gap: 4px; align-items: center; font-size: 12px; font-weight: 600; color: var(--accent); text-decoration: none; border: 1px solid var(--border); border-radius: 9px; padding: 0 7px; white-space: nowrap; }
-.pr-chip.pr-merged { color: var(--ok); }
 .pr-chip.pr-closed { color: var(--muted); }
 .checks-passing .pr-checks { color: var(--ok); }
 .checks-failing .pr-checks { color: var(--danger); }
@@ -606,6 +605,13 @@ textarea.wide:focus { outline: none; border-color: var(--accent); }
 :root { --info: #3f7fd8; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --info: #6ea2ef; } }
 :root[data-theme="dark"] { --info: #6ea2ef; }
+/* Merged is GitHub's purple. */
+:root { --merged: #8250df; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --merged: #a371f7; } }
+:root[data-theme="dark"] { --merged: #a371f7; }
+.hdot.h-merged, .dot.merged { background: var(--merged); }
+.pr-chip.pr-merged { color: var(--merged); }
+.merged-offer { display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 8px 12px; border: 1px solid var(--merged); border-radius: var(--radius); background: color-mix(in srgb, var(--merged) 10%, transparent); font-size: 13px; }
 .hdot.h-good { background: var(--info); }
 .act-line.t-you .one-line { color: var(--text); }
 .pr-chip { color: var(--info); }
@@ -683,3 +689,4 @@ button.repo-open { border: none; background: none; padding: 0; font-weight: 700;
 button.repo-open:hover { color: var(--accent); text-decoration: underline; }
 .repo-item input.repo-label { width: 150px; font: inherit; font-size: 12.5px; color: var(--text); background: var(--input-bg, var(--bg)); border: 1px solid var(--border); border-radius: 6px; padding: 2px 7px; }
 .update-hint { display: block; width: 100%; margin-bottom: 6px; font-size: 12px; text-align: left; border: 1px solid var(--accent); color: var(--accent); background: var(--accent-soft); border-radius: 6px; padding: 4px 8px; }
+.chip.merged-chip { background: color-mix(in srgb, var(--merged) 20%, transparent); color: var(--merged); }

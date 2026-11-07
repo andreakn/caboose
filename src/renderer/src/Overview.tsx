@@ -42,7 +42,7 @@ export function useOverview(f: Feature | undefined, active = true) {
   return { ov, loading, refresh: () => load(true), reload: () => load(false) };
 }
 
-export type Health = "attention" | "busy" | "good" | "done" | "idle";
+export type Health = "attention" | "busy" | "good" | "merged" | "done" | "idle";
 
 /** One colour per repo, most urgent first: needs you / failing / conflicts → attention; working / pending → busy; merged → done. */
 export function repoHealth(r: RepoOverview): { health: Health; why: string } {
@@ -57,10 +57,16 @@ export function repoHealth(r: RepoOverview): { health: Health; why: string } {
     if (pr.checks.state === "pending") return { health: "busy", why: "checks running" };
     return { health: "good", why: pr.reviewDecision === "APPROVED" ? "approved" : "PR open" };
   }
-  if (pr?.state === "MERGED" || s === "done") return { health: "done", why: "merged" };
+  if (pr?.state === "MERGED") return { health: "merged", why: "merged" };
+  if (s === "done") return { health: "done", why: "done" };
   if (s === "working") return { health: "busy", why: "working" };
   if (s === "ready" || s === "in-review") return { health: "good", why: s };
   return { health: "idle", why: s ?? "no report yet" };
+}
+
+/** Every repo of the feature has a merged PR: the feature is finished and can be archived. */
+export function allMerged(ov: FeatureOverview | null | undefined): boolean {
+  return Boolean(ov && ov.repos.length > 0 && ov.repos.every((r) => r.pr?.state === "MERGED"));
 }
 
 export function HealthDot({ r }: { r: RepoOverview }) {
@@ -289,6 +295,7 @@ function BoardRow({ f, chats, onOpen }: { f: Feature; chats: Chat[]; onOpen: () 
           {f.title && <span className="muted"> {f.title}</span>}
         </span>
         <span className={`status-mini st-${f.status ?? "active"}`}>{f.status ?? "active"}</span>
+        {allMerged(ov) && <span className="chip merged-chip" title="Every branch is merged: ready to archive">all merged</span>}
         {p && p.total > 0 && (
           <span className="mini-progress" title={`plan ${p.done}/${p.total}`}>
             <span style={{ width: `${(100 * p.done) / p.total}%` }} />

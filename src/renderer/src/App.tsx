@@ -22,7 +22,7 @@ import { Configure } from "./Configure.tsx";
 import { JiraChip, RepoRow } from "./GitHub.tsx";
 import { ActivityView } from "./Activity.tsx";
 import { OpenInMenu } from "./Menu.tsx";
-import { Board, HealthDot, JiraStatusChip, PrsView, useOverview } from "./Overview.tsx";
+import { allMerged, Board, HealthDot, JiraStatusChip, PrsView, useOverview } from "./Overview.tsx";
 import { DialogHost } from "./Dialog.tsx";
 import { NewFeature } from "./NewFeature.tsx";
 import { PlanView, StatusChip, useDocs } from "./Plan.tsx";
@@ -246,15 +246,18 @@ export function App() {
 
 function FeatureRow(props: { f: Feature; activity?: Activity; active: boolean; onClick: () => void }) {
   const { f, active, onClick, activity: a } = props;
+  const { ov } = useOverview(f.archived ? undefined : f);
   const setup = f.repos.some((r) => r.setup === "failed") ? "failed" : f.repos.some((r) => r.setup === "running") ? "running" : "ok";
-  // Most urgent first: an agent waiting for you, working, finished unseen; else the setup state.
+  // Most urgent first: an agent waiting for you, working; every branch merged; finished unseen; else the setup state.
   const [cls, title] = a?.waiting
     ? ["act-waiting", "Needs you"]
     : a?.running
       ? ["act-running", "Working"]
-      : a?.unread
-        ? ["act-unread", "Done"]
-        : [`setup-${setup}`, `Setup: ${setup}`];
+      : allMerged(ov)
+        ? ["merged", "Every branch is merged: ready to archive"]
+        : a?.unread
+          ? ["act-unread", "Done"]
+          : [`setup-${setup}`, `Setup: ${setup}`];
   return (
     <button className={`ws-row${active ? " active" : ""}${f.archived ? " is-archived" : ""}`} onClick={onClick}>
       <span className={`dot ${cls}`} title={title} />
@@ -483,6 +486,8 @@ function FeatureView(props: {
         </div>
       </header>
 
+      {!f.archived && allMerged(overview.ov) && <MergedOffer f={f} prs={overview.ov!.repos.map((r) => r.pr!.number)} onArchive={props.onArchive} />}
+
       <NeedsYou f={f} chats={props.chats} reported={reported} onOpenChat={(id) => {
         setTab("chat");
         setTimeout(() => dispatch(`selectChat:${id}`));
@@ -661,6 +666,34 @@ function FeatureView(props: {
         activeId={termActive}
         setActiveId={setTermActive}
       />
+    </div>
+  );
+}
+
+/** Every branch is merged: offer to archive (once per set of PRs; "Not now" hides it until another PR is merged). */
+function MergedOffer({ f, prs, onArchive }: { f: Feature; prs: number[]; onArchive: () => void }) {
+  const key = `caboose-merged-offer-${f.id}`;
+  const value = [...prs].sort((a, b) => a - b).join(",");
+  const [hidden, setHidden] = useState(() => localStorage.getItem(key) === value);
+  if (hidden) return null;
+  return (
+    <div className="merged-offer">
+      <span className="hdot h-merged" />
+      <span>
+        {f.repos.length === 1 ? "Its branch is merged." : `All ${f.repos.length} branches are merged.`} Archive the feature?
+      </span>
+      <span className="spacer" />
+      <button className="primary" onClick={onArchive}>
+        Archive…
+      </button>
+      <button
+        onClick={() => {
+          localStorage.setItem(key, value);
+          setHidden(true);
+        }}
+      >
+        Not now
+      </button>
     </div>
   );
 }

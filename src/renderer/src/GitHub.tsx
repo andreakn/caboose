@@ -173,7 +173,7 @@ export function RepoRow(props: {
             ? { label: "Push", run: () => void act("Pushing…", () => api.push(feature.id, repo.name)) }
             : live && !isDraft && !conflicts
               ? { label: "Merge", run: () => merge(method) }
-              : b && b.behindBase > 0
+              : b && b.behindBase > 0 && pr?.state !== "MERGED"
                 ? { label: `Merge ${base}`, run: () => void mergeLocally("base") }
                 : null;
 
