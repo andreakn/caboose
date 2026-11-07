@@ -37,6 +37,8 @@ scripts, archive), and **local files** rules: the gitignored files a new
 feature copies from the repo's main checkout so it can run (defaults `.env*`
 and `*.local.*`; .gitignore-style patterns, with a live preview).
 
+A sound (Configure → Sounds) plays when an agent is done or needs you.
+
 The **Board** shows every feature at a glance (a dot per repo, badges only
 for what needs you); a feature's repo rows are one line each with the action
 that matters now, and its **Pull requests** and **Activity** tabs gather every

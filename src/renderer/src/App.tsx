@@ -29,6 +29,7 @@ import { PlanView, StatusChip, useDocs } from "./Plan.tsx";
 import { notificationsOn } from "./prefs.ts";
 import { FilesView } from "./Files.tsx";
 import { repoLabel, setRepoLabels } from "./labels.ts";
+import { notifySound } from "./sounds.ts";
 import { RetireDialog } from "./Retire.tsx";
 import { RunView, useRunOverview } from "./Run.tsx";
 import { TerminalPanel, useTerminals } from "./Terminals.tsx";
@@ -72,6 +73,7 @@ export function App() {
   useEffect(
     () =>
       onActivityNotice(({ chatId, kind }) => {
+        notifySound(kind);
         if (!notificationsOn() || document.hasFocus()) return;
         const s = stateRef.current;
         const chat = s.chats.find((c) => c.id === chatId);

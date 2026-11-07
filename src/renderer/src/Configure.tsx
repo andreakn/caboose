@@ -15,6 +15,19 @@ import {
 import { MODES } from "../../shared/chat.ts";
 import { useApps } from "./Menu.tsx";
 import { applyTheme, getTheme, notificationsOn, setNotifications } from "./prefs.ts";
+import {
+  playSound,
+  setSoundFor,
+  setSoundsInBackgroundOnly,
+  setSoundVolume,
+  type SoundChoice,
+  type SoundKind,
+  type SoundName,
+  SOUNDS,
+  soundFor,
+  soundsInBackgroundOnly,
+  soundVolume,
+} from "./sounds.ts";
 
 const api = window.caboose;
 
@@ -423,6 +436,8 @@ export function Configure({ onDone, onSaved }: { onDone: () => void; onSaved?: (
         </label>
       </section>
 
+      <Sounds />
+
       <Doctor />
       {!first && <Updates />}
 
@@ -674,6 +689,75 @@ function Doctor() {
           ))}
         </ul>
       )}
+    </section>
+  );
+}
+
+/** A sound when an agent is done or needs you (like Conductor's ping); this machine only. */
+function Sounds() {
+  const [choice, setChoice] = useState<Record<SoundKind, SoundChoice>>({ done: soundFor("done"), needs: soundFor("needs") });
+  const [volume, setVolume] = useState(soundVolume);
+  const [backgroundOnly, setBackgroundOnly] = useState(soundsInBackgroundOnly);
+  const row = (kind: SoundKind, label: string) => (
+    <label>
+      <span>{label}</span>
+      <div className="row">
+        <select
+          value={choice[kind]}
+          onChange={(e) => {
+            const v = e.target.value as SoundChoice;
+            setChoice({ ...choice, [kind]: v });
+            setSoundFor(kind, v);
+            if (v !== "off") playSound(v, volume);
+          }}
+        >
+          <option value="off">No sound</option>
+          {SOUNDS.map((s) => (
+            <option key={s.value} value={s.value}>
+              {s.label}
+            </option>
+          ))}
+        </select>
+        <button disabled={choice[kind] === "off"} onClick={() => choice[kind] !== "off" && playSound(choice[kind] as SoundName, volume)} title="Play it">
+          ▶
+        </button>
+      </div>
+    </label>
+  );
+  return (
+    <section>
+      <h2>Sounds</h2>
+      <p className="muted">A sound when a chat you are not looking at finishes, or asks for an answer or a permission.</p>
+      <div className="form">
+        {row("done", "An agent is done")}
+        {row("needs", "An agent needs you")}
+        <label>
+          <span>Volume</span>
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.05}
+            value={volume}
+            onChange={(e) => {
+              setVolume(Number(e.target.value));
+              setSoundVolume(Number(e.target.value));
+            }}
+            onPointerUp={() => playSound(choice.done !== "off" ? choice.done : "ping", volume)}
+          />
+        </label>
+      </div>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={backgroundOnly}
+          onChange={(e) => {
+            setBackgroundOnly(e.target.checked);
+            setSoundsInBackgroundOnly(e.target.checked);
+          }}
+        />
+        Only while Caboose is in the background
+      </label>
     </section>
   );
 }

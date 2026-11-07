@@ -613,6 +613,15 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      "code" on PATH), on Windows `bin\code.cmd`, on Linux `code`/`codium`.
      An `openWith.vscode` override gets the folder as `{path}` and `-g` added.
 
+137. **Sounds when an agent is done or needs you**, like Conductor's ping:
+     whenever a chat you are not looking at finishes, or asks a question or
+     for a permission (the same moments as the notifications). Configure →
+     Sounds: a sound per event (Ping, Chime, Bell, Pop, Train whistle, or
+     none; defaults Ping for done, Bell for needs you), volume, and "only
+     while Caboose is in the background". Synthesised with Web Audio, so no
+     sound files and the same on every OS; several chats at once ring once.
+     Kept per machine in the window's storage, like the theme.
+
 ## Answered (2026-11-05)
 
 - Private GitHub repo `andreakn/caboose`: yes.
