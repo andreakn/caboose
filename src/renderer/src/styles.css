@@ -835,3 +835,6 @@ button.repo-open:hover { color: var(--accent); text-decoration: underline; }
 .config-tabs + section, .config-tabs ~ section:first-of-type { margin-top: 18px; }
 .settings.configure > section:first-of-type { margin-top: 18px; }
 a.tab-pr.link { text-decoration: underline dotted; cursor: pointer; } a.tab-pr.link:hover { text-decoration: underline; }
+/* The tab row holds the repo's ⋯ menu and ⓘ popover: keep it above the panel below (the diff header is sticky with z-index 1). */
+.scope-panel .view-tabs { z-index: 5; }
+.scope-tabs { z-index: 6; }
