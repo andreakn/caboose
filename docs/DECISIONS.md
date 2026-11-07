@@ -707,6 +707,11 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      several). Repos without tag rules do not count. Shown once a tracked
      repo has a PR; hover for which repos are tagged.
 
+148. **Flush panels**: the level panels no longer have side borders,
+     rounded corners or side padding, and the page margin is 12 px; the tint
+     (warm for the feature, blue for a repo) and the folder tabs are enough
+     to show the nesting, and the width goes to the content.
+
 ## Answered (2026-11-05)
 
 - Private GitHub repo `andreakn/caboose`: yes.

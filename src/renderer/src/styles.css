@@ -935,3 +935,13 @@ a.tab-pr.link { text-decoration: underline dotted; cursor: pointer; } a.tab-pr.l
 .deploy-bar.stage-2 .seg.done, .deploy-bar.stage-3 .seg.done { background: var(--ok); }
 .deploy-bar.complete .deploy-name { color: var(--text); }
 .deploy-count { font-size: 10px; }
+
+/* Flush panels: the tint says which level you are on, so no side borders or padding */
+.ws-view { padding-left: 12px; padding-right: 12px; }
+.term-panel { margin: 0 -12px; }
+.scope-panel { border-left: none; border-right: none; border-bottom: none; border-radius: 0; padding: 4px 0 0; margin: -1px -12px 0; }
+.scope-tabs { padding-left: 0; }
+.scope-panel .view-tabs { padding-left: 8px; padding-right: 8px; }
+.view-panel { border-left: none; border-right: none; border-bottom: none; border-radius: 0; padding: 0 8px; }
+.view-panel .tabs { margin: 0 -8px; padding: 4px 8px 0; }
+.view-panel .composer { margin: 0 -8px; padding: 8px 12px 10px; }
