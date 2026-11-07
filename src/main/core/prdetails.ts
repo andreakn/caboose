@@ -28,7 +28,7 @@ export function slugOf(checkout: string): Promise<string | null> {
 }
 
 const FIELDS = `number title url state isDraft reviewDecision mergeable mergeStateStatus additions deletions changedFiles
-  headRefName baseRefName updatedAt author { login }
+  headRefName baseRefName updatedAt author { login } mergeCommit { oid }
   reviewThreads(first: 100) { nodes { isResolved isOutdated path line comments(first: 1) { totalCount nodes { author { login } body url } } } }
   latestReviews(first: 30) { nodes { state author { login } } }
   reviewRequests(first: 20) { nodes { requestedReviewer { ... on User { login } } } }
@@ -84,6 +84,7 @@ export function shape(repo: string, pr: Raw): PrDetails {
     approvals: reviews.filter((r: { state: string }) => r.state === "APPROVED").map((r: { author: string }) => r.author),
     changesRequested: reviews.filter((r: { state: string }) => r.state === "CHANGES_REQUESTED").map((r: { author: string }) => r.author),
     requested: (pr.reviewRequests?.nodes ?? []).map((n: Raw) => n.requestedReviewer?.login).filter(Boolean),
+    ...(pr.mergeCommit?.oid ? { mergeCommit: pr.mergeCommit.oid as string } : {}),
     checks: {
       state: !checks.length ? "none" : failed.length ? "failing" : pending.length ? "pending" : "passing",
       total: checks.length,

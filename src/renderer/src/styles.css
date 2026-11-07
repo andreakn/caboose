@@ -914,3 +914,13 @@ a.tab-pr.link { text-decoration: underline dotted; cursor: pointer; } a.tab-pr.l
 .brand-icon:hover { background: var(--card); color: var(--text); }
 .brand-icon.active { background: var(--accent-soft); color: var(--accent); }
 .brand-icon svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
+
+/* Releases carrying a merged PR */
+.release-chips { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
+.chip.release { background: color-mix(in srgb, var(--merged) 18%, transparent); font-family: var(--mono); }
+.chip.stage { text-transform: lowercase; }
+.chip.pending { background: none; border: 1px dashed var(--border); color: var(--muted); }
+.repo-releases { display: grid; gap: 6px; padding: 6px 0 4px 12px; }
+.stages-editor { display: grid; gap: 4px; }
+.stages-editor textarea { font: 12.5px/1.5 var(--mono); color: var(--text); background: var(--input-bg, var(--card)); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; max-width: 420px; }
+.stages-editor .link { justify-self: start; }

@@ -12,11 +12,18 @@ export type RepoScripts = {
   run?: { name: string; command: string }[];
 };
 
+/** A release stage: a name and the tag pattern (glob) that marks it, e.g. test = *_TEST_v*. */
+export type ReleaseStage = { name: string; pattern: string };
+/** The lowest tags of one stage that carry a change (one per tag prefix, for repos with several services). */
+export type StageRelease = { stage: string; tags: string[] };
+
 /** A repo the user works in, from the config: its name is also its folder name inside a feature. */
 export type RepoEntry = {
   name: string;
   /** A friendly name shown instead of `name` (tabs, rows); `name` stays the id and folder name. */
   label?: string;
+  /** Release tag stages for this repo, instead of the config's `releaseStages`; [] = do not track. */
+  releaseStages?: ReleaseStage[];
   path: string;
   scripts?: RepoScripts;
   /**
@@ -251,6 +258,8 @@ export type LocalConfig = {
   defaultAgent?: Agent;
   /** The permission mode new chats start in. Default: bypass (like Conductor). */
   defaultMode?: Mode;
+  /** Release tag stages for every repo (optional): which tag marks a release, a test deploy, a prod deploy… */
+  releaseStages?: ReleaseStage[];
   /** A moniker file (moniker, path, description per line) that names and describes repos and their run_<moniker>.sh scripts. */
   monikersFile?: string;
   /** How PRs should be written (title, description style); added to Create PR requests to the agent. */
@@ -306,6 +315,8 @@ export type RepoOverview = {
   local?: { uncommitted: number; ahead: number; behindBase: number; pushed: boolean };
   pr?: PrDetails | null;
   jira?: JiraStatus | { key: string };
+  /** Once merged: the lowest tags per release stage that contain the merge commit. */
+  release?: StageRelease[];
 };
 
 /** A feature at a glance: what the board and the feature page show. */

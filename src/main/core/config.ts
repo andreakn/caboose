@@ -31,6 +31,7 @@ export type ResolvedLocalConfig = {
   terminalFont?: string;
   prInstructions?: string;
   monikersFile?: string;
+  releaseStages?: LocalConfig["releaseStages"];
   openWith?: LocalConfig["openWith"];
   defaultAgent: "claude" | "copilot";
   defaultMode: NonNullable<LocalConfig["defaultMode"]>;
@@ -66,6 +67,7 @@ export function loadLocalConfig(cabooseDir: string): ResolvedLocalConfig {
     terminalFont: c.terminalFont,
     prInstructions: c.prInstructions,
     monikersFile: c.monikersFile ? expandHome(c.monikersFile) : undefined,
+    releaseStages: c.releaseStages,
     defaultAgent: c.defaultAgent ?? "claude",
     defaultMode: c.defaultMode ?? "bypassPermissions",
     openWith: c.openWith,

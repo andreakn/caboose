@@ -690,6 +690,17 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      next/previous feature follow the tree's order. The logic is pure
      (`shared/sidebar.ts`) and tested.
 
+146. **Which release carries a feature** (optional): release *stages* are
+     named tag patterns, `release = *_v*`, `test = *_TEST_v*`,
+     `prod = *_PROD_v*` (Configure → Repositories → Releases, for all repos;
+     each repo can use its own or switch it off). Once a repo's PR is
+     merged, its merge commit (from GitHub) is looked up with
+     `git tag --contains`, and per stage the lowest version tag is shown
+     next to the PR: `🏷 via_v1.114 · test ✓ · prod –`. A tag matching
+     several patterns counts for the last one, so `*_v*` does not also claim
+     `via_TEST_v1.114`. Repos that tag several services (`cdsws_v1.335`,
+     `cbsws_v1.004`) get the lowest tag per prefix. Off until stages are set.
+
 ## Answered (2026-11-05)
 
 - Private GitHub repo `andreakn/caboose`: yes.

@@ -1,8 +1,9 @@
 // A feature at a glance: per repo what its agent reported, its local git
 // state, its PR (one GraphQL call per feature) and its Jira subtask (one search
 // per feature). GitHub and Jira answers are cached 60 s.
-import type { Feature, FeatureJira, FeatureOverview, JiraStatus } from "../../shared/types.ts";
+import type { Feature, FeatureJira, FeatureOverview, JiraStatus, ReleaseStage } from "../../shared/types.ts";
 import { readDocs } from "./docs.ts";
+import { releasesOf } from "./releases.ts";
 import type { GitHub } from "./github.ts";
 import type { Jira } from "./jira.ts";
 import { type PrDetailsCache, slugOf } from "./prdetails.ts";
@@ -14,6 +15,8 @@ export type OverviewDeps = {
   jiraOf: (featureId: string) => FeatureJira;
   /** Called when a worktree is on another branch than the one recorded (switched by an agent or by hand). */
   onBranch?: (featureId: string, repo: string, branch: string) => void;
+  /** A repo's release tag stages (none: releases are not tracked). */
+  stagesFor?: (repo: string) => ReleaseStage[];
 };
 
 const jiraCache = new Map<string, { at: number; value: Promise<Record<string, JiraStatus>> }>();
@@ -53,6 +56,16 @@ export async function featureOverview(f: Feature, d: OverviewDeps, fresh = false
   if (j) statuses = await jiraStatuses(j, keys, fresh).catch((e: Error) => (errors.push(e.message), {}));
   const jiraFor = (key?: string) => (key ? (statuses[key] ?? { key }) : undefined);
 
+  // Merged PRs: the lowest release tags carrying the merge commit (read from the main checkout's tags).
+  const releases = await Promise.all(
+    f.repos.map(async (r) => {
+      const pr = prs.prs[r.name];
+      const stages = d.stagesFor?.(r.name) ?? [];
+      if (!pr || pr.state !== "MERGED" || !pr.mergeCommit || !stages.length) return undefined;
+      return releasesOf(r.source, pr.mergeCommit, stages).catch(() => undefined);
+    }),
+  );
+
   return {
     id: f.id,
     progress: docs.progress,
@@ -66,6 +79,7 @@ export async function featureOverview(f: Feature, d: OverviewDeps, fresh = false
         local: b ? { uncommitted: b.uncommitted, ahead: b.ahead, behindBase: b.behindBase, pushed: Boolean(b.upstream) } : undefined,
         pr: slugs[i] ? (r.name in prs.prs ? prs.prs[r.name] : undefined) : undefined,
         jira: jiraFor(links.subtasks[r.name]),
+        ...(releases[i] ? { release: releases[i] } : {}),
       };
     }),
     errors,

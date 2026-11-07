@@ -62,6 +62,8 @@ export type PrDetails = {
   changesRequested: string[];
   requested: string[];
   checks: { state: "none" | "passing" | "pending" | "failing"; total: number; passed: number; failed: { name: string; url?: string }[]; pending: number };
+  /** The commit a merged PR became on its base (a merge or squash commit). */
+  mergeCommit?: string;
 };
 
 /** "origin/main" → "main" */

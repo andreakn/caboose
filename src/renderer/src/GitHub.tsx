@@ -9,7 +9,7 @@ import {
   type MergeMethod,
   resolveConflictsMessage,
 } from "../../shared/github.ts";
-import type { Feature, FeatureRepo, JiraLevel, RepoOverview } from "../../shared/types.ts";
+import type { Feature, FeatureRepo, JiraLevel, RepoOverview, StageRelease } from "../../shared/types.ts";
 import { activeChat } from "./Chat.tsx";
 import { askText } from "./Dialog.tsx";
 import { MenuButton, type MenuItem, useApps } from "./Menu.tsx";
@@ -222,6 +222,7 @@ export function RepoRow(props: {
         </span>
       )}
       {ov?.pr ? <PrChip pr={ov.pr} /> : ghPr && <PrLink pr={ghPr} />}
+      {ov?.release && <ReleaseChips release={ov.release} />}
       {ov?.jira ? <JiraStatusChip j={ov.jira} site={props.jiraSite} /> : props.subtask && <JiraStatusChip j={{ key: props.subtask }} site={props.jiraSite} />}
     </>
   );
@@ -320,6 +321,23 @@ export function RepoRow(props: {
       </div>
       {open && details}
     </div>
+  );
+}
+
+/** "🏷 via_v1.114 · test ✓ · prod –": the first release carrying the merged PR, and which later stages have it. */
+function ReleaseChips({ release }: { release: StageRelease[] }) {
+  const [first, ...later] = release;
+  if (!first) return null;
+  const title = release.map((r) => `${r.stage}: ${r.tags.length ? r.tags.join(", ") : "not yet"}`).join("\n");
+  return (
+    <span className="release-chips" title={title}>
+      <span className={`chip release${first.tags.length ? "" : " pending"}`}>🏷 {first.tags.length ? first.tags.join(", ") : `no ${first.stage} yet`}</span>
+      {later.map((r) => (
+        <span key={r.stage} className={`chip stage${r.tags.length ? " ok" : " pending"}`}>
+          {r.stage} {r.tags.length ? "✓" : "–"}
+        </span>
+      ))}
+    </span>
   );
 }
 

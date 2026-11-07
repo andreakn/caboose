@@ -7,6 +7,7 @@ import {
   type JiraLevel,
   type AgentLogins,
   type ConductorImport,
+  type ReleaseStage,
   type RepoEntry,
   type RepoScripts,
   type Theme,
@@ -28,6 +29,7 @@ import {
   soundsInBackgroundOnly,
   soundVolume,
 } from "./sounds.ts";
+import { EXAMPLE_STAGES, formatStages, parseStages } from "../../shared/stages.ts";
 
 const api = window.caboose;
 
@@ -216,6 +218,7 @@ export function Configure({ onDone, onSaved }: { onDone: () => void; onSaved?: (
                   key={r.path}
                   repo={r}
                   defaults={info.defaults.localFiles}
+                  stages={form.releaseStages}
                   onChange={(next) => setForm({ ...form, repos: repos.map((x) => (x.path === r.path ? next : x)) })}
                   onRemove={() => setForm({ ...form, repos: repos.filter((x) => x.path !== r.path) })}
                 />
@@ -302,6 +305,16 @@ export function Configure({ onDone, onSaved }: { onDone: () => void; onSaved?: (
               </div>
             )}
           </section>
+
+            <section>
+              <h2>Releases</h2>
+              <p className="muted">
+                Optional. Which git tags mark that a merged change has shipped, so a feature shows the first version that carries it (per
+                repo, once its PR is merged). One stage per line, <code>name = tag pattern</code>; a tag matching several patterns counts
+                for the last. Repos can override this (their "releases" link above).
+              </p>
+              <StagesEditor value={form.releaseStages} onChange={(releaseStages) => setForm({ ...form, releaseStages })} />
+            </section>
         </>
       )}
 
@@ -509,10 +522,12 @@ export function Configure({ onDone, onSaved }: { onDone: () => void; onSaved?: (
 }
 
 /** A configured repo, with its local-file rules and a live preview of what they copy. */
-function RepoItem(props: { repo: RepoEntry; defaults: string[]; onChange: (r: RepoEntry) => void; onRemove: () => void }) {
+function RepoItem(props: { repo: RepoEntry; defaults: string[]; stages?: ReleaseStage[]; onChange: (r: RepoEntry) => void; onRemove: () => void }) {
   const { repo, defaults } = props;
   const [open, setOpen] = useState(false);
   const [scriptsOpen, setScriptsOpen] = useState(false);
+  const [releasesOpen, setReleasesOpen] = useState(false);
+  const own = repo.releaseStages;
   const runCount = repo.scripts?.run?.length ?? 0;
   const patterns = repo.localFiles ?? defaults;
   const [text, setText] = useState(patterns.join("\n"));
@@ -553,6 +568,9 @@ function RepoItem(props: { repo: RepoEntry; defaults: string[]; onChange: (r: Re
         <button className="link" onClick={() => setScriptsOpen(!scriptsOpen)}>
           {scriptsOpen ? "▾" : "▸"} scripts: {[repo.scripts?.setup && "setup", runCount && `${runCount} run`, repo.scripts?.archive && "archive"].filter(Boolean).join(", ") || "none"}
         </button>
+        <button className="link" onClick={() => setReleasesOpen(!releasesOpen)} title="Which git tags mark a release of this repo">
+          {releasesOpen ? "▾" : "▸"} releases: {own === undefined ? (props.stages?.length ? "as all repos" : "off") : own.length ? own.map((s) => s.name).join(", ") : "off"}
+        </button>
         <span className="spacer" />
         <button className="link" onClick={props.onRemove}>
           Remove
@@ -588,6 +606,22 @@ function RepoItem(props: { repo: RepoEntry; defaults: string[]; onChange: (r: Re
               </>
             )}
           </div>
+        </div>
+      )}
+      {releasesOpen && (
+        <div className="repo-releases">
+          <div className="segmented small">
+            <button className={own === undefined ? "active" : ""} onClick={() => props.onChange({ ...repo, releaseStages: undefined })}>
+              As all repos
+            </button>
+            <button className={own !== undefined && own.length > 0 ? "active" : ""} onClick={() => props.onChange({ ...repo, releaseStages: own?.length ? own : (props.stages?.length ? props.stages : parseStages(EXAMPLE_STAGES)) })}>
+              Own tags
+            </button>
+            <button className={own !== undefined && own.length === 0 ? "active" : ""} onClick={() => props.onChange({ ...repo, releaseStages: [] })}>
+              Off
+            </button>
+          </div>
+          {own !== undefined && own.length > 0 && <StagesEditor value={own} onChange={(releaseStages) => props.onChange({ ...repo, releaseStages: releaseStages ?? [] })} />}
         </div>
       )}
       {scriptsOpen && <ScriptsEditor scripts={repo.scripts ?? {}} onChange={(scripts) => props.onChange({ ...repo, scripts })} />}
@@ -738,6 +772,31 @@ function Doctor() {
         </ul>
       )}
     </section>
+  );
+}
+
+/** Release stages as "name = pattern" lines. */
+function StagesEditor({ value, onChange }: { value?: ReleaseStage[]; onChange: (stages: ReleaseStage[] | undefined) => void }) {
+  const [text, setText] = useState(formatStages(value));
+  return (
+    <div className="stages-editor">
+      <textarea
+        rows={Math.max(3, text.split("\n").length + 1)}
+        value={text}
+        spellCheck={false}
+        placeholder={EXAMPLE_STAGES}
+        onChange={(e) => {
+          setText(e.target.value);
+          const stages = parseStages(e.target.value);
+          onChange(stages.length ? stages : undefined);
+        }}
+      />
+      {!text.trim() && (
+        <button className="link" onClick={() => (setText(EXAMPLE_STAGES), onChange(parseStages(EXAMPLE_STAGES)))}>
+          Use the example (release = *_v*, test = *_TEST_v*, prod = *_PROD_v*)
+        </button>
+      )}
+    </div>
   );
 }
 

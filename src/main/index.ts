@@ -439,7 +439,14 @@ ipcMain.handle("docs:note", (_e, featureId: string, to: string | undefined, text
 ipcMain.handle("docs:status", (_e, featureId: string) => coordinator.status(featureId));
 const prDetails = new PrDetailsCache();
 ipcMain.handle("feature:overview", (_e, featureId: string, fresh?: boolean) =>
-  featureOverview(featureOrThrow(featureId), { github, prs: prDetails, jira, jiraOf: (id) => features.jiraOf(id), onBranch: (id, repo, branch) => features.setBranch(id, repo, branch) }, Boolean(fresh)),
+  featureOverview(featureOrThrow(featureId), {
+      github,
+      prs: prDetails,
+      jira,
+      jiraOf: (id) => features.jiraOf(id),
+      onBranch: (id, repo, branch) => features.setBranch(id, repo, branch),
+      stagesFor: (repo) => localConfig.repos.find((r) => r.name === repo)?.releaseStages ?? localConfig.releaseStages ?? [],
+    }, Boolean(fresh)),
 );
 ipcMain.handle("chat:models", (_e, agent: Agent) => attempt(() => chats.models(agent)));
 ipcMain.handle("chat:remove", (_e, chatId: string) => chats.remove(chatId));
