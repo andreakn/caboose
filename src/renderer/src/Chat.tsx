@@ -113,54 +113,66 @@ export function ChatArea({ ws, chats, hidden, repo }: { ws: Feature; chats: Chat
     if (c === "stopClaude" && active) void api.interrupt(active.id);
   });
 
+  const plus = (
+    <>
+      {!ws.archived && repo && (
+        <button className="tab-new" title={`A chat working in ${repo}/`} onClick={() => void breakOut(repo)}>
+          +
+        </button>
+      )}
+      {!ws.archived && !repo && (
+        <MenuButton
+          className="tab-new"
+          title="New chat"
+          label="+"
+          items={[
+            ...AGENTS.map((a) => ({ label: `New ${a.label} chat (whole feature)`, onClick: () => void newChat(a.value) })),
+            ...(ws.repos.length ? (["separator"] as const) : []),
+            ...ws.repos.map((r) => ({
+              label: chats.some((c) => c.repo === r.name) ? `${r.name}'s chat` : `Break out a chat for ${r.name}…`,
+              title: `A chat working in ${r.name}/`,
+              onClick: () => void breakOut(r.name),
+            })),
+          ]}
+        />
+      )}
+    </>
+  );
+  // One chat needs no tab row: the "+" sits in the corner instead.
+  const single = chats.length <= 1;
+
   return (
-    <div className="chat-area" hidden={hidden}>
-      <div className="tabs">
-        {chats.map((c) => (
-          <div key={c.id} className={`tab${c.id === active?.id ? " active" : ""}`} onClick={() => select(c.id)}>
-            <TabState chatId={c.id} />
-            {agentOf(c) === "copilot" && <span className="agent-chip">Copilot</span>}
-            {c.repo ? (
-              <span className="tab-title repo-tab" title={`Works in ${c.repo}/`}>
-                ⑂ {c.title}
-              </span>
-            ) : (
-              <span className="tab-title">{c.title}</span>
-            )}
-            <button
-              className="tab-close"
-              title="Close chat"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (confirm(`Close "${c.title}"? Its transcript is deleted.`)) void api.removeChat(c.id);
-              }}
-            >
-              ×
-            </button>
-          </div>
-        ))}
-        {!ws.archived && repo && (
-          <button className="tab-new" title={`A chat working in ${repo}/`} onClick={() => void breakOut(repo)}>
-            +
-          </button>
-        )}
-        {!ws.archived && !repo && (
-          <MenuButton
-            className="tab-new"
-            title="New chat"
-            label="+"
-            items={[
-              ...AGENTS.map((a) => ({ label: `New ${a.label} chat (whole feature)`, onClick: () => void newChat(a.value) })),
-              ...(ws.repos.length ? (["separator"] as const) : []),
-              ...ws.repos.map((r) => ({
-                label: chats.some((c) => c.repo === r.name) ? `${r.name}'s chat` : `Break out a chat for ${r.name}…`,
-                title: `A chat working in ${r.name}/`,
-                onClick: () => void breakOut(r.name),
-              })),
-            ]}
-          />
-        )}
-      </div>
+    <div className={`chat-area${single ? " single" : ""}`} hidden={hidden}>
+      {single ? (
+        <div className="chat-corner">{plus}</div>
+      ) : (
+        <div className="tabs">
+          {chats.map((c) => (
+            <div key={c.id} className={`tab${c.id === active?.id ? " active" : ""}`} onClick={() => select(c.id)}>
+              <TabState chatId={c.id} />
+              {agentOf(c) === "copilot" && <span className="agent-chip">Copilot</span>}
+              {c.repo ? (
+                <span className="tab-title repo-tab" title={`Works in ${c.repo}/`}>
+                  ⑂ {c.title}
+                </span>
+              ) : (
+                <span className="tab-title">{c.title}</span>
+              )}
+              <button
+                className="tab-close"
+                title="Close chat"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (confirm(`Close "${c.title}"? Its transcript is deleted.`)) void api.removeChat(c.id);
+                }}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+          {plus}
+        </div>
+      )}
       {active ? (
         <ChatPanel key={active.id} chat={active} ws={ws} />
       ) : repo && !ws.archived ? (
@@ -539,6 +551,14 @@ function Composer(props: { chat: Chat; running: boolean; asking: boolean; disabl
   const efforts = supported?.length ? [...new Set([...supported, chat.effort])] : undefined;
   const [text, setText] = useState("");
   const input = useRef<HTMLTextAreaElement>(null);
+  // One line to start with; grows with what is typed (wrapped lines too), up to about ten lines.
+  useLayoutEffect(() => {
+    const el = input.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight + 2, 240)}px`;
+    el.style.overflowY = el.scrollHeight + 2 > 240 ? "auto" : "hidden";
+  }, [text]);
 
   useEffect(() => input.current?.focus(), [chat.id]);
   useCommand((c) => {
@@ -567,7 +587,7 @@ function Composer(props: { chat: Chat; running: boolean; asking: boolean; disabl
       <textarea
         ref={input}
         value={text}
-        rows={Math.min(10, Math.max(2, text.split("\n").length))}
+        rows={1}
         placeholder={
           props.asking
             ? `Answer ${agentName(chat)}'s question in your own words…`

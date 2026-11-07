@@ -80,6 +80,8 @@ export function RepoRow(props: {
   onAskedAgent: () => void;
   /** Opens the repo's own view (its files, changes, chat, programs). */
   onOpen?: () => void;
+  /** Shown in the repo's own tab row: one line, no card, details behind ⓘ. */
+  inline?: boolean;
   onChanged: () => void;
 }) {
   const { feature, repo, jiraKey, ov } = props;
@@ -207,6 +209,87 @@ export function RepoRow(props: {
           : []),
       ];
 
+  const chips = (
+    <>
+      {ov?.reported?.status && (
+        <span title={`${ov.reported.at}: ${ov.reported.text}`}>
+          <StatusChip status={ov.reported.status} />
+        </span>
+      )}
+      {ov?.pr ? <PrChip pr={ov.pr} /> : ghPr && <PrLink pr={ghPr} />}
+      {ov?.jira ? <JiraStatusChip j={ov.jira} site={props.jiraSite} /> : props.subtask && <JiraStatusChip j={{ key: props.subtask }} site={props.jiraSite} />}
+    </>
+  );
+  const actions = (
+    <span className="row" onClick={(e) => e.stopPropagation()}>
+      {primary && (
+        <button className="primary" onClick={primary.run} disabled={!!busy}>
+          {primary.label}
+        </button>
+      )}
+      {items.length > 0 && <MenuButton label="⋯" title="More" align="right" items={items} />}
+    </span>
+  );
+  const details = (
+    <div className="repo-details">
+      <div>
+        <span className="muted">branch</span> <code>{repo.branch}</code> <span className="muted">from</span> <code>{repo.baseRef}</code>
+        {b && (
+          <span className="muted">
+            {" "}
+            · {b.upstream ? `pushed to ${b.upstream}` : "not pushed"}
+            {b.ahead ? ` · ${b.ahead} commit(s) ahead` : ""}
+            {b.uncommitted ? ` · ${b.uncommitted} uncommitted` : ""}
+            {b.behind ? ` · ${b.behind} to pull` : ""}
+            {b.behindBase ? ` · ${b.behindBase} behind ${repo.baseRef}` : ""}
+          </span>
+        )}
+      </div>
+      {ov?.reported && (
+        <div>
+          <span className="muted">last report ({ov.reported.at})</span> <StatusChip status={ov.reported.status!} /> {ov.reported.text}
+        </div>
+      )}
+      {ov?.jira && "status" in ov.jira && (
+        <div>
+          <span className="muted">Jira</span> {ov.jira.key}: {ov.jira.summary} · {ov.jira.status}
+          {ov.jira.assignee ? ` · ${ov.jira.assignee}` : ""}
+        </div>
+      )}
+      {status && !status.available && <div className="muted">{status.reason}</div>}
+      {ov?.pr && (
+        <div>
+          <a href="#" onClick={(e) => (e.preventDefault(), api.openUrl(ov.pr!.url))}>
+            PR #{ov.pr.number}: {ov.pr.title}
+          </a>
+          <PrDetailsPanel pr={ov.pr} />
+        </div>
+      )}
+    </div>
+  );
+
+  // In the repo's own tab row: no card and no name (the tab says it), details behind ⓘ.
+  if (props.inline) {
+    return (
+      <span className="repo-inline">
+        {chips}
+        <span className="muted repo-local one-line">{busy ?? (error ? "status failed" : local.join(" · "))}</span>
+        {actions}
+        <span className="info-wrap">
+          <button className={`icon${open ? " active" : ""}`} title="Branch, last report, PR details" onClick={() => setOpen(!open)}>
+            ⓘ
+          </button>
+          {open && (
+            <>
+              <div className="popover-backdrop" onClick={() => setOpen(false)} />
+              <div className="popover repo-popover">{details}</div>
+            </>
+          )}
+        </span>
+      </span>
+    );
+  }
+
   return (
     <div className={`repo-row${open ? " open" : ""}`}>
       <div className="repo-line" onClick={() => setOpen(!open)}>
@@ -226,60 +309,11 @@ export function RepoRow(props: {
         ) : (
           <b className="repo-name-cell" title={repo.name}>{repoLabel(repo.name)}</b>
         )}
-        {ov?.reported?.status && (
-          <span title={`${ov.reported.at}: ${ov.reported.text}`}>
-            <StatusChip status={ov.reported.status} />
-          </span>
-        )}
-        {ov?.pr ? <PrChip pr={ov.pr} /> : ghPr && <PrLink pr={ghPr} />}
-        {ov?.jira ? <JiraStatusChip j={ov.jira} site={props.jiraSite} /> : props.subtask && <JiraStatusChip j={{ key: props.subtask }} site={props.jiraSite} />}
+        {chips}
         <span className="muted repo-local one-line">{busy ?? (error ? "status failed" : local.join(" · "))}</span>
-        <span className="row" onClick={(e) => e.stopPropagation()}>
-          {primary && (
-            <button className="primary" onClick={primary.run} disabled={!!busy}>
-              {primary.label}
-            </button>
-          )}
-          {items.length > 0 && <MenuButton label="⋯" title="More" align="right" items={items} />}
-        </span>
+        {actions}
       </div>
-      {open && (
-        <div className="repo-details">
-          <div>
-            <span className="muted">branch</span> <code>{repo.branch}</code> <span className="muted">from</span> <code>{repo.baseRef}</code>
-            {b && (
-              <span className="muted">
-                {" "}
-                · {b.upstream ? `pushed to ${b.upstream}` : "not pushed"}
-                {b.ahead ? ` · ${b.ahead} commit(s) ahead` : ""}
-                {b.uncommitted ? ` · ${b.uncommitted} uncommitted` : ""}
-                {b.behind ? ` · ${b.behind} to pull` : ""}
-                {b.behindBase ? ` · ${b.behindBase} behind ${repo.baseRef}` : ""}
-              </span>
-            )}
-          </div>
-          {ov?.reported && (
-            <div>
-              <span className="muted">last report ({ov.reported.at})</span> <StatusChip status={ov.reported.status!} /> {ov.reported.text}
-            </div>
-          )}
-          {ov?.jira && "status" in ov.jira && (
-            <div>
-              <span className="muted">Jira</span> {ov.jira.key}: {ov.jira.summary} · {ov.jira.status}
-              {ov.jira.assignee ? ` · ${ov.jira.assignee}` : ""}
-            </div>
-          )}
-          {status && !status.available && <div className="muted">{status.reason}</div>}
-          {ov?.pr && (
-            <div>
-              <a href="#" onClick={(e) => (e.preventDefault(), api.openUrl(ov.pr!.url))}>
-                PR #{ov.pr.number}: {ov.pr.title}
-              </a>
-              <PrDetailsPanel pr={ov.pr} />
-            </div>
-          )}
-        </div>
-      )}
+      {open && details}
     </div>
   );
 }

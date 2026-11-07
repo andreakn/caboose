@@ -590,6 +590,16 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      colour says where you are. Shades are mixed from the theme tokens, so
      light and dark both work.
 
+134. **Vertical room over repetition.** The Feature level no longer lists
+     the repo rows: they live in its **Repos** tab (was Pull requests), under
+     the PR totals. Repo tabs carry the PR number and its check mark. Inside
+     a repo, its status, main action and ⋯ sit at the end of its tab row,
+     with branch/report/PR details behind ⓘ. The header is one line (title
+     inline, "+ add a title" only on hover); feature details (folder, ports,
+     setup, copied files) moved behind ⓘ next to Open. One chat shows no
+     chat tab row ("+" in the corner); the message box starts one line high
+     and grows; gaps are tighter.
+
 ## Answered (2026-11-05)
 
 - Private GitHub repo `andreakn/caboose`: yes.

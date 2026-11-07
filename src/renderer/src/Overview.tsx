@@ -120,30 +120,24 @@ export function JiraStatusChip({ j, site }: { j: JiraStatus | { key: string }; s
 
 // ---- Pull requests tab -----------------------------------------------------
 
-export function PrsView({ f, ov, loading, refresh }: { f: Feature; ov: FeatureOverview | null; loading: boolean; refresh: () => void }) {
-  const [open, setOpen] = useState<Set<string>>(new Set());
-  if (!ov) return <div className="changes-empty muted">Loading…</div>;
+/** The feature's PRs in numbers: open, merged, failing builds, comments, approvals… (the Repos tab's header). */
+export function PrTiles({ ov, loading, refresh }: { ov: FeatureOverview | null; loading: boolean; refresh: () => void }) {
+  if (!ov) return <div className="muted small">Loading…</div>;
   const prs = ov.repos.filter((r) => r.pr).map((r) => r.pr!);
   const live = prs.filter((p) => p.state === "OPEN" || p.state === "DRAFT");
   const without = ov.repos.filter((r) => r.pr === null);
   const tiles: [string, number, string?][] = [
     ["open", prs.filter((p) => p.state === "OPEN").length],
     ["draft", prs.filter((p) => p.state === "DRAFT").length],
-    ["merged", prs.filter((p) => p.state === "MERGED").length, "good"],
+    ["merged", prs.filter((p) => p.state === "MERGED").length, "merged"],
     ["failing builds", live.filter((p) => p.checks.state === "failing").length, "bad"],
     ["unresolved comments", live.reduce((n, p) => n + p.threads.length, 0), "bad"],
     ["approved", live.filter((p) => p.reviewDecision === "APPROVED").length, "good"],
     ["changes requested", live.filter((p) => p.reviewDecision === "CHANGES_REQUESTED").length, "bad"],
     ["repos without a PR", without.length],
   ];
-  const toggle = (k: string) => {
-    const n = new Set(open);
-    if (n.has(k)) n.delete(k);
-    else n.add(k);
-    setOpen(n);
-  };
   return (
-    <div className="plan-view">
+    <>
       <div className="tiles">
         {tiles.map(([label, n, tone]) => (
           <div key={label} className={`tile${n && tone ? ` ${tone}` : ""}`}>
@@ -161,40 +155,7 @@ export function PrsView({ f, ov, loading, refresh }: { f: Feature; ov: FeatureOv
           {e}
         </div>
       ))}
-      <div className="plan-section">
-        {ov.repos.map((r) => {
-          const pr = r.pr;
-          const isOpen = open.has(r.name);
-          return (
-            <div key={r.name} className="pr-row">
-              <div className="pr-line" onClick={() => pr && toggle(r.name)}>
-                <span className="twisty">{pr ? (isOpen ? "▾" : "▸") : ""}</span>
-                <HealthDot r={r} />
-                <b className="repo-name-cell">{repoLabel(r.name)}</b>
-                {pr ? (
-                  <>
-                    <PrChip pr={pr} />
-                    <span className="one-line">{pr.title}</span>
-                    {pr.reviewDecision === "APPROVED" && <span className="chip ok">approved</span>}
-                    {pr.reviewDecision === "CHANGES_REQUESTED" && <span className="chip bad">changes requested</span>}
-                    {pr.mergeable === "CONFLICTING" && <span className="chip bad">conflicts</span>}
-                    <span className="muted size">
-                      <span className="add">+{pr.additions}</span> <span className="del">−{pr.deletions}</span>
-                    </span>
-                  </>
-                ) : (
-                  <span className="muted">{pr === null ? "no PR yet" : "not on GitHub"}</span>
-                )}
-              </div>
-              {pr && isOpen && <PrDetailsPanel pr={pr} />}
-            </div>
-          );
-        })}
-      </div>
-      <p className="muted small">
-        {f.repos.length} repo(s) · PR data from one GitHub request, refreshed every 30 s while shown.
-      </p>
-    </div>
+    </>
   );
 }
 

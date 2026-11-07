@@ -22,7 +22,7 @@ import { Configure } from "./Configure.tsx";
 import { JiraChip, RepoRow } from "./GitHub.tsx";
 import { ActivityView } from "./Activity.tsx";
 import { OpenInMenu } from "./Menu.tsx";
-import { allMerged, Board, HealthDot, JiraStatusChip, PrsView, useOverview } from "./Overview.tsx";
+import { allMerged, Board, HealthDot, JiraStatusChip, PrTiles, useOverview } from "./Overview.tsx";
 import { DialogHost } from "./Dialog.tsx";
 import { NewFeature } from "./NewFeature.tsx";
 import { PlanView, StatusChip, useDocs } from "./Plan.tsx";
@@ -390,9 +390,10 @@ function FeatureView(props: {
   });
 
   const missing = (config.config.repos ?? []).filter((r) => !f.repos.some((x) => x.name === r.name));
-  const repoRow = (r: FeatureRepo) => (
+  const repoRow = (r: FeatureRepo, inline = false) => (
     <RepoRow
       key={r.name}
+      inline={inline}
       feature={f}
       repo={r}
       chats={props.chats}
@@ -461,8 +462,8 @@ function FeatureView(props: {
                   }}
                 />
               ))}
+            <FeatureTitle f={f} />
           </h1>
-          <FeatureTitle f={f} />
         </div>
         <div className="actions">
           {f.archived ? (
@@ -478,6 +479,7 @@ function FeatureView(props: {
                 ▶ Run{running > 0 ? ` (${running})` : ""}
               </button>
               <OpenInMenu path={f.folder} only={["vscode", "terminal", "files"]} />
+              <FeatureInfo f={f} />
               <button className="danger" onClick={props.onArchive} title="Archive or delete the feature: closes its open PRs and deletes its branches">
                 Archive…
               </button>
@@ -508,7 +510,13 @@ function FeatureView(props: {
             <button key={r.name} className={scopeRepo?.name === r.name ? "active" : ""} onClick={() => setScope(r.name)} title={r.path}>
               {rov && <HealthDot r={rov} />}
               {repoLabel(r.name)}
-              {n > 0 && <span className="badge">{n}</span>}
+              {rov?.pr && (
+                <span className={`tab-pr pr-${rov.pr.state.toLowerCase()}`} title={`PR #${rov.pr.number}: ${rov.pr.title}`}>
+                  #{rov.pr.number}
+                  {{ passing: "✓", failing: "✗", pending: "●", none: "" }[rov.pr.checks.state]}
+                </span>
+              )}
+              {n > 0 && <span className="badge" title={`${n} changed file(s)`}>{n}</span>}
             </button>
           );
         })}
@@ -517,7 +525,6 @@ function FeatureView(props: {
       <div className={`scope-panel ${scopeRepo ? "in-repo" : "in-feature"}`}>
         {scopeRepo ? (
           <>
-            <div className="repos">{repoRow(scopeRepo)}</div>
             <div className="view-tabs">
               <button className={repoTab === "files" ? "active" : ""} onClick={() => setRepoTab("files")}>
                 Files
@@ -544,6 +551,8 @@ function FeatureView(props: {
                   return n > 0 ? <span className="badge ok">{n}</span> : null;
                 })()}
               </button>
+              <span className="spacer" />
+              {repoRow(scopeRepo, true)}
             </div>
             <div className="view-panel">
               {repoTab === "files" && (
@@ -586,47 +595,6 @@ function FeatureView(props: {
           </>
         ) : (
           <>
-            <div className="repos">
-              {f.repos.map(repoRow)}
-              {!f.archived && missing.length > 0 && (
-                <div className="add-repo-row">
-                  <select
-                    value=""
-                    onChange={async (e) => {
-                      const name = e.target.value;
-                      if (!name) return;
-                      const r = await api.addRepoToFeature(f.id, name);
-                      if (!r.ok) alert(r.error);
-                      void loadJira();
-                    }}
-                  >
-                    <option value="">+ Add a repo to this feature…</option>
-                    {missing.map((r) => (
-                      <option key={r.name} value={r.name}>
-                        {repoLabel(r.name)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-            </div>
-          <details className="ws-info">
-            <summary>
-              Feature details · ports {f.port}–{f.port + 99}
-            </summary>
-            <dl className="facts">
-              <dt>Folder</dt>
-              <dd>
-                <code>{f.folder}</code>
-              </dd>
-              {f.repos.map((r, i) => (
-                <SetupFacts key={r.name} f={f} repo={r.name} setup={r.setup} port={f.port + 10 * i} path={r.path} copied={r.copied} />
-              ))}
-              <dt>Created</dt>
-              <dd>{new Date(f.createdAt).toLocaleString()}</dd>
-            </dl>
-          </details>
-
             <div className="view-tabs">
               <button className={tab === "chat" ? "active" : ""} onClick={() => setTab("chat")}>
                 Chat
@@ -642,8 +610,8 @@ function FeatureView(props: {
               <button className={tab === "run" ? "active" : ""} onClick={() => setTab("run")}>
                 Run{running > 0 && <span className="badge ok">{running}</span>}
               </button>
-              <button className={tab === "prs" ? "active" : ""} onClick={() => setTab("prs")}>
-                Pull requests
+              <button className={tab === "prs" ? "active" : ""} onClick={() => setTab("prs")} title="Every repo: its branch, PR, Jira and what to do next">
+                Repos
                 {(() => {
                   const n = overview.ov?.repos.filter((r) => r.pr && (r.pr.state === "OPEN" || r.pr.state === "DRAFT")).length ?? 0;
                   return n > 0 ? <span className="badge">{n}</span> : null;
@@ -658,7 +626,35 @@ function FeatureView(props: {
               <ChatArea ws={f} chats={props.chats} hidden={tab !== "chat"} />
               {tab === "plan" && <PlanView f={f} docs={docs} reload={() => void reloadDocs()} />}
               {tab === "run" && <RunView f={f} ov={runs.ov} reload={runs.reload} onShow={showTerminal} />}
-              {tab === "prs" && <PrsView f={f} ov={overview.ov} loading={overview.loading} refresh={() => void overview.refresh()} />}
+              {tab === "prs" && (
+                <div className="plan-view">
+                  <PrTiles ov={overview.ov} loading={overview.loading} refresh={() => void overview.refresh()} />
+                <div className="repos">
+                  {f.repos.map((r) => repoRow(r))}
+                  {!f.archived && missing.length > 0 && (
+                    <div className="add-repo-row">
+                      <select
+                        value=""
+                        onChange={async (e) => {
+                          const name = e.target.value;
+                          if (!name) return;
+                          const r = await api.addRepoToFeature(f.id, name);
+                          if (!r.ok) alert(r.error);
+                          void loadJira();
+                        }}
+                      >
+                        <option value="">+ Add a repo to this feature…</option>
+                        {missing.map((r) => (
+                          <option key={r.name} value={r.name}>
+                            {repoLabel(r.name)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+                </div>
+              )}
               {tab === "activity" && <ActivityView f={f} chats={props.chats} onOpenChat={openChat} />}
             </div>
           </>
@@ -673,6 +669,39 @@ function FeatureView(props: {
         setActiveId={setTermActive}
       />
     </div>
+  );
+}
+
+/** ⓘ in the header: folder, ports, setup and copied files per repo, created. */
+function FeatureInfo({ f }: { f: Feature }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="info-wrap">
+      <button className={open ? "active" : ""} title="Feature details: folder, ports, setup" onClick={() => setOpen(!open)}>
+        ⓘ
+      </button>
+      {open && (
+        <>
+          <div className="popover-backdrop" onClick={() => setOpen(false)} />
+          <div className="popover info-popover">
+            <div className="muted small">
+              Ports {f.port}–{f.port + 99}
+            </div>
+            <dl className="facts">
+              <dt>Folder</dt>
+              <dd>
+                <code>{f.folder}</code>
+              </dd>
+              {f.repos.map((r, i) => (
+                <SetupFacts key={r.name} f={f} repo={r.name} setup={r.setup} port={f.port + 10 * i} path={r.path} copied={r.copied} />
+              ))}
+              <dt>Created</dt>
+              <dd>{new Date(f.createdAt).toLocaleString()}</dd>
+            </dl>
+          </div>
+        </>
+      )}
+    </span>
   );
 }
 
@@ -795,9 +824,9 @@ function FeatureTitle({ f }: { f: Feature }) {
     );
   }
   return (
-    <div className="feature-title" onClick={() => !f.archived && setEditing(true)} title={f.folder}>
-      {f.title ? <span>{f.title}</span> : <span className="muted">{f.archived ? "" : "+ add a title"}</span>}
-    </div>
+    <span className={`feature-title${f.title ? "" : " empty"}`} onClick={() => !f.archived && setEditing(true)} title={f.folder}>
+      {f.title ? f.title : f.archived ? "" : "+ add a title"}
+    </span>
   );
 }
 
