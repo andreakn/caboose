@@ -3,6 +3,7 @@ import type { Chat } from "../../shared/chat.ts";
 import type { DiffComment } from "../../shared/diff.ts";
 import {
   type ConfigInfo,
+  EMPTY_SIDEBAR,
   type Feature,
   type FeatureRepo,
   type UpdateInfo,
@@ -32,6 +33,8 @@ import { liveState, MapView } from "./Map.tsx";
 import { repoLabel, setRepoLabels } from "./labels.ts";
 import { notifySound } from "./sounds.ts";
 import { RetireDialog } from "./Retire.tsx";
+import { featureOrder, normalize } from "../../shared/sidebar.ts";
+import { FeatureTree } from "./Sidebar.tsx";
 import { RunView, useRunOverview } from "./Run.tsx";
 import { TerminalPanel, useTerminals } from "./Terminals.tsx";
 import { stationLabel } from "../../shared/stations.ts";
@@ -42,7 +45,7 @@ type Screen = "feature" | "configure" | "board" | "map";
 
 export function App() {
   const terminals = useTerminals();
-  const [state, setState] = useState<State>({ features: [], chats: [], comments: [], visits: [] });
+  const [state, setState] = useState<State>({ features: [], chats: [], comments: [], visits: [], sidebar: EMPTY_SIDEBAR });
   const [config, setConfig] = useState<ConfigInfo | null>(null);
   const [screen, setScreen] = useState<Screen>("feature");
   const [creating, setCreating] = useState(false);
@@ -130,8 +133,10 @@ export function App() {
     if (c === "settings" || c === "addRepo") setScreen((s) => (s === "configure" ? "feature" : "configure"));
     if (c === "newFeature") setCreating(true);
     if ((c === "nextFeature" || c === "prevFeature") && live.length) {
-      const i = live.findIndex((f) => f.id === feature?.id);
-      select(live[(i + (c === "nextFeature" ? 1 : -1) + live.length) % live.length].id);
+      // In the order the sidebar shows them.
+      const order = featureOrder(normalize(state.sidebar, live));
+      const i = order.indexOf(feature?.id ?? "");
+      select(order[(i + (c === "nextFeature" ? 1 : -1) + order.length) % order.length]);
     }
   });
 
@@ -161,15 +166,13 @@ export function App() {
           + New feature
         </button>
         <section className="repo">
-          {live.map((f) => (
-            <FeatureRow
-              key={f.id}
-              f={f}
-              activity={activity(f)}
-              active={screen === "feature" && f.id === feature?.id}
-              onClick={() => select(f.id)}
-            />
-          ))}
+          <FeatureTree
+            sidebar={state.sidebar}
+            features={live}
+            renderFeature={(f) => (
+              <FeatureRow f={f} activity={activity(f)} active={screen === "feature" && f.id === feature?.id} onClick={() => select(f.id)} />
+            )}
+          />
           {archived.length > 0 && (
             <details className="archived">
               <summary>Archived ({archived.length})</summary>

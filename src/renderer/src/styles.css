@@ -890,3 +890,20 @@ a.tab-pr.link { text-decoration: underline dotted; cursor: pointer; } a.tab-pr.l
 .nordic-map:active { cursor: grabbing; }
 .map-zoom { position: absolute; top: 10px; right: 10px; z-index: 1; display: flex; flex-direction: column; gap: 4px; }
 .map-zoom button { width: 30px; height: 30px; padding: 0; font-size: 16px; line-height: 1; background: var(--card); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12); }
+
+/* Sidebar folders, and where a dragged feature or folder will land */
+.feature-tree { display: flex; flex-direction: column; min-height: 40px; padding-bottom: 6px; }
+.tree-item, .folder-row { position: relative; }
+.folder-row { display: flex; align-items: center; gap: 6px; padding: 5px 6px; border-radius: 8px; cursor: pointer; font-size: 13px; color: var(--muted); font-weight: 600; user-select: none; }
+.folder-row:hover { background: var(--card); color: var(--text); }
+.folder-row .twisty { width: 10px; font-size: 10px; }
+.folder-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.folder-count { font-size: 11px; font-weight: 400; }
+.folder-row .folder-menu { visibility: hidden; border: none; background: none; padding: 0 4px; color: var(--muted); }
+.folder-row:hover .folder-menu { visibility: visible; }
+.dragging { opacity: 0.4; }
+.drop-before > .ws-row, .drop-before.tree-item, .tree-folder.drop-before > .folder-row { box-shadow: inset 0 2px 0 var(--accent); }
+.drop-after.tree-item, .tree-folder.drop-after > .folder-row { box-shadow: inset 0 -2px 0 var(--accent); }
+.tree-folder.drop-inside > .folder-row { background: var(--accent-soft); color: var(--text); }
+.feature-tree.drop-end { box-shadow: inset 0 -2px 0 var(--accent); }
+.new-folder { align-self: flex-start; margin: 4px 0 0 6px; font-size: 12px; }

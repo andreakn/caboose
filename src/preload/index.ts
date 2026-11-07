@@ -9,6 +9,7 @@ const invoke =
 
 const api: CabooseApi = {
   getState: invoke("state:get"),
+  saveSidebar: invoke("sidebar:save"),
   onStateChanged: (listener) => {
     const handler = (_e: unknown, s: State) => listener(s);
     ipcRenderer.on("state:changed", handler);

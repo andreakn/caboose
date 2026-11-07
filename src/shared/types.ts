@@ -177,12 +177,24 @@ export type StationVisit = {
   merged: boolean;
 };
 
+/** The sidebar's folders and the order of everything in it. */
+export type Sidebar = {
+  folders: { id: string; name: string }[];
+  /** What each folder ("root" for the top level) holds, in order: "f:<feature id>" or "d:<folder id>". */
+  children: Record<string, string[]>;
+  /** Folders shown closed. */
+  collapsed: string[];
+};
+
+export const EMPTY_SIDEBAR: Sidebar = { folders: [], children: {}, collapsed: [] };
+
 export type State = {
   features: Feature[];
   chats: Chat[];
   comments: DiffComment[];
   /** Features that have ended, newest last. */
   visits: StationVisit[];
+  sidebar: Sidebar;
 };
 
 /** Per-repo settings, read from `caboose.json` in the repo's main checkout. */
@@ -402,6 +414,8 @@ export type CabooseApi = {
   featureJira(featureId: string): Promise<FeatureJira>;
   /** Links (or unlinks) the feature's task; linking adds subtasks and puts their keys in unpushed branches. */
   setFeatureTask(featureId: string, key: string | null): Promise<Result<JiraAlignment>>;
+  /** Saves the sidebar's folders and order. */
+  saveSidebar(sidebar: Sidebar): Promise<void>;
   setFeatureDetails(featureId: string, details: { title?: string; status?: FeatureStatus }): Promise<Result<void>>;
   /** The repo's scripts: from the config, plus its own caboose.json. */
   repoScripts(featureId: string, repo: string): Promise<RepoScripts>;

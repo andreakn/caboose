@@ -679,6 +679,17 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      they stay the same size on screen. The track no longer highlights on
      hover.
 
+145. **Folders in the sidebar**: "+ Folder" under the features; folders
+     nest; drag features and folders to reorder them or drop them on a
+     folder to put them in it (top or bottom edge of a row = before/after,
+     a folder's middle = inside; a folder cannot go into itself). Click a
+     folder to open or close it, double-click or ⋯ to rename; deleting one
+     moves what it held up a level. The layout is `sidebar` in the state
+     file (folders, each folder's ordered contents, which are closed); new
+     features join the end of the top level, ended ones drop out, and
+     next/previous feature follow the tree's order. The logic is pure
+     (`shared/sidebar.ts`) and tested.
+
 ## Answered (2026-11-05)
 
 - Private GitHub repo `andreakn/caboose`: yes.

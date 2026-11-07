@@ -1,7 +1,7 @@
 // App state: one JSON file in the app's data folder, written atomically.
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import type { State } from "../../shared/types.ts";
+import { EMPTY_SIDEBAR, type State } from "../../shared/types.ts";
 
 export class Store {
   private state: State;
@@ -23,9 +23,10 @@ export class Store {
         chats: (s.chats ?? []).filter((c) => c.featureId),
         comments: (s.comments ?? []).filter((c) => c.featureId),
         visits: s.visits ?? [],
+        sidebar: { ...EMPTY_SIDEBAR, ...s.sidebar },
       };
     } catch {
-      return { features: [], chats: [], comments: [], visits: [] };
+      return { features: [], chats: [], comments: [], visits: [], sidebar: EMPTY_SIDEBAR };
     }
   }
 

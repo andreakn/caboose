@@ -7,7 +7,7 @@ import type { Agent, Chat, Effort, Mode, Model } from "../shared/chat.ts";
 import { checksSummary } from "../shared/github.ts";
 import { commentsMessage } from "../shared/diff.ts";
 import type { MergeMethod } from "../shared/github.ts";
-import type { AppId, ConfigInput, Feature, FeatureStatus, NewFeature, RetireMode, State, Theme } from "../shared/types.ts";
+import type { AppId, ConfigInput, Feature, FeatureStatus, NewFeature, RetireMode, Sidebar, State, Theme } from "../shared/types.ts";
 import { CopilotClient } from "@github/copilot-sdk";
 import { ClaudeProvider, Inbox } from "./core/agents/claude.ts";
 import { copilotEnv, CopilotProvider } from "./core/agents/copilot.ts";
@@ -258,6 +258,7 @@ function liveRepo(featureId: string, repo: string) {
 }
 
 ipcMain.handle("state:get", () => store.get());
+ipcMain.handle("sidebar:save", (_e, sidebar: Sidebar) => store.update((s) => ({ ...s, sidebar })));
 
 // --- config
 ipcMain.handle("config:get", () => ({
