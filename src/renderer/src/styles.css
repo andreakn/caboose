@@ -966,3 +966,8 @@ a.tab-pr.link { text-decoration: underline dotted; cursor: pointer; } a.tab-pr.l
 /* Chat: no browser scroll anchoring fighting streamed output; a way back to the latest */
 .messages { overflow-anchor: none; }
 .to-latest { position: sticky; bottom: 8px; align-self: center; width: auto !important; margin: 0 auto !important; z-index: 2; font-size: 12.5px; padding: 4px 12px; border-radius: 14px; background: var(--card); border: 1px solid var(--border); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25); }
+/* Shipped all the way: a gold ring round the station */
+:root { --gold: #c8960c; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --gold: #e3b341; } }
+:root[data-theme="dark"] { --gold: #e3b341; }
+.map-shipped { fill: none; stroke: var(--gold); stroke-width: 2.5; vector-effect: non-scaling-stroke; }

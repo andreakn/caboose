@@ -175,6 +175,9 @@ export type RunOverview = {
   strayError?: string;
 };
 
+/** A merged repo of an ended feature, with what is needed to keep reading its release tags. */
+export type VisitRelease = { repo: string; source: string; mergeCommit: string; stages: string[]; release: StageRelease[] };
+
 /** A feature that ended (archived or deleted), kept for the map. */
 export type StationVisit = {
   /** The feature's name: a station id, maybe with "-2". */
@@ -187,6 +190,8 @@ export type StationVisit = {
   ended: "archived" | "deleted";
   /** Every repo's PR was merged when it ended. */
   merged: boolean;
+  /** Its merged repos' releases, still followed after it ended. */
+  releases?: VisitRelease[];
 };
 
 /** The sidebar's folders and the order of everything in it. */
@@ -207,6 +212,8 @@ export type State = {
   /** Features that have ended, newest last. */
   visits: StationVisit[];
   sidebar: Sidebar;
+  /** "<feature id>:<stage>" for every feature that reached a stage and was announced. */
+  releaseNews?: string[];
 };
 
 /** Per-repo settings, read from `caboose.json` in the repo's main checkout. */
@@ -432,6 +439,8 @@ export type CabooseApi = {
   featureJira(featureId: string): Promise<FeatureJira>;
   /** Links (or unlinks) the feature's task; linking adds subtasks and puts their keys in unpushed branches. */
   setFeatureTask(featureId: string, key: string | null): Promise<Result<JiraAlignment>>;
+  /** A feature reached a release stage (every tracked repo tagged for it). */
+  onReleaseNews(listener: (news: { featureId: string; station: string; title?: string; stage: string; repos: number }) => void): () => void;
   /** Saves the sidebar's folders and order. */
   saveSidebar(sidebar: Sidebar): Promise<void>;
   setFeatureDetails(featureId: string, details: { title?: string; status?: FeatureStatus }): Promise<Result<void>>;

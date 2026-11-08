@@ -43,6 +43,7 @@ import { cabooseCopilotTools, cabooseInstructions, cabooseMcp } from "./core/mcp
 import { featureOverview } from "./core/overview.ts";
 import { PrDetailsCache } from "./core/prdetails.ts";
 import { Store } from "./core/store.ts";
+import { ReleaseWatch, visitReleases } from "./core/releasewatch.ts";
 import { retire, retirePlan } from "./core/retire.ts";
 import { git } from "./core/run.ts";
 import { Runner } from "./core/runner.ts";
@@ -362,6 +363,9 @@ ipcMain.handle("feature:retirePlan", (_e, id: string) =>
 ipcMain.handle("feature:retire", (_e, id: string, mode: RetireMode) =>
   attempt(async () => {
     const f = featureOrThrow(id);
+    // Its merge commits, so its releases can still be followed after it ends.
+    const ov = await overviewOf(f.id).catch(() => null);
+    const releases = ov ? visitReleases(ov, Object.fromEntries(f.repos.map((r) => [r.name, r.source])), stagesFor) : [];
     const out = await retire(f, mode, {
       github,
       archiveRoot: localConfig.archiveRoot,
@@ -391,6 +395,7 @@ ipcMain.handle("feature:retire", (_e, id: string, mode: RetireMode) =>
           endedAt: new Date().toISOString(),
           ended: mode === "archive" ? "archived" : "deleted",
           merged: out.merged,
+          ...(releases.length ? { releases } : {}),
         },
       ],
     }));
@@ -442,16 +447,17 @@ ipcMain.handle("docs:note", (_e, featureId: string, to: string | undefined, text
 );
 ipcMain.handle("docs:status", (_e, featureId: string) => coordinator.status(featureId));
 const prDetails = new PrDetailsCache();
-ipcMain.handle("feature:overview", (_e, featureId: string, fresh?: boolean) =>
-  featureOverview(featureOrThrow(featureId), {
-      github,
-      prs: prDetails,
-      jira,
-      jiraOf: (id) => features.jiraOf(id),
-      onBranch: (id, repo, branch) => features.setBranch(id, repo, branch),
-      stagesFor: (repo) => localConfig.repos.find((r) => r.name === repo)?.releaseStages ?? localConfig.releaseStages ?? [],
-    }, Boolean(fresh)),
-);
+const stagesFor = (repo: string) => localConfig.repos.find((r) => r.name === repo)?.releaseStages ?? localConfig.releaseStages ?? [];
+const overviewOf = (featureId: string, fresh = false) =>
+  featureOverview(
+    featureOrThrow(featureId),
+    { github, prs: prDetails, jira, jiraOf: (id) => features.jiraOf(id), onBranch: (id, repo, branch) => features.setBranch(id, repo, branch), stagesFor },
+    fresh,
+  );
+ipcMain.handle("feature:overview", (_e, featureId: string, fresh?: boolean) => overviewOf(featureId, Boolean(fresh)));
+// Features reaching a release stage (also after they have ended) are announced in the window.
+const releaseWatch = new ReleaseWatch({ store, overview: (id) => overviewOf(id), stagesFor, announce: (news) => win?.webContents.send("release:news", news) });
+releaseWatch.start();
 ipcMain.handle("chat:models", (_e, agent: Agent) => attempt(() => chats.models(agent)));
 ipcMain.handle("chat:remove", (_e, chatId: string) => chats.remove(chatId));
 // Synchronous on purpose: chat events sent after this reply are newer than the file it read.

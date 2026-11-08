@@ -105,6 +105,25 @@ export function App() {
     [],
   );
 
+  // A feature reached a release stage (test, prod…): a notification and the "done" sound, even in the foreground.
+  useEffect(
+    () =>
+      api.onReleaseNews((n) => {
+        notifySound("done");
+        if (!notificationsOn()) return;
+        const what = `${stationLabel(n.station)}${n.title ? ` (${n.title})` : ""}`;
+        const note = new Notification(`${what}: ${n.stage} ✓`, {
+          body: `${n.repos === 1 ? "Its repo is" : `All ${n.repos} repos are`} tagged for ${n.stage}.`,
+          silent: true,
+        });
+        note.onclick = () => {
+          api.focusWindow();
+          if (stateRef.current.features.some((f) => f.id === n.featureId)) select(n.featureId);
+        };
+      }),
+    [],
+  );
+
   // Dock/taskbar badge: chats that finished unseen or wait for an answer.
   useEffect(() => {
     const count = state.chats.filter((c) => {
@@ -821,6 +840,7 @@ function MergedOffer({ f, prs, onArchive }: { f: Feature; prs: number[]; onArchi
       <span className="hdot h-merged" />
       <span>
         {f.repos.length === 1 ? "Its branch is merged." : `All ${f.repos.length} branches are merged.`} Archive the feature?
+        <span className="muted"> Its releases are still followed afterwards.</span>
       </span>
       <span className="spacer" />
       <button className="primary" onClick={onArchive}>

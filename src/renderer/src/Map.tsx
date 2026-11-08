@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { COUNTRIES, EDGES, LANDMARKS, STATION_INFO, STATIONS, stationLabel, stationOf } from "../../shared/stations.ts";
 import type { Feature, FeatureOverview, StationVisit } from "../../shared/types.ts";
+import { deployProgress } from "../../shared/stages.ts";
 import { allMerged, useOverview } from "./Overview.tsx";
 
 /**
@@ -18,6 +19,16 @@ export const STATE_LABELS: Record<StationState, string> = {
   archived: "merged and archived",
   deleted: "merged and deleted",
 };
+
+/** Every tracked repo is tagged for its last stage (e.g. in prod). */
+export function shippedAll(repos: { name: string; stages?: string[]; release?: { stage: string; tags: string[] }[] }[]): boolean {
+  const progress = deployProgress(repos);
+  const last = progress.at(-1);
+  return Boolean(last && last.total > 0 && last.done === last.total);
+}
+
+/** An ended feature's releases as repos with stages (as the overview gives them). */
+const visitRepos = (v: StationVisit) => (v.releases ?? []).map((r) => ({ name: r.repo, stages: r.stages, release: r.release }));
 
 /** A live feature's state from its overview. */
 export function liveState(f: Feature, ov: FeatureOverview | null | undefined): StationState {
@@ -98,9 +109,12 @@ export function MapView(props: { features: Feature[]; visits: StationVisit[]; on
   // Live features report their state from their own overview.
   const [live, setLive] = useState<Record<string, StationState>>({});
   const report = (id: string, s: StationState) => setLive((m) => (m[id] === s ? m : { ...m, [id]: s }));
+  // Features that have reached the last release stage everywhere they are tracked (a gold ring).
+  const [liveShipped, setLiveShipped] = useState<Record<string, boolean>>({});
+  const reportShipped = (id: string, v: boolean) => setLiveShipped((m) => (m[id] === v ? m : { ...m, [id]: v }));
 
   // Per station: the newest live feature, else the newest ended one.
-  const byStation = new Map<string, { label: string; state?: StationState; title?: string; featureId?: string; uses: number; when: string }>();
+  const byStation = new Map<string, { label: string; state?: StationState; title?: string; featureId?: string; uses: number; when: string; shipped?: boolean }>();
   for (const v of props.visits) {
     const id = stationOf(v.station);
     if (!id) continue;
@@ -111,13 +125,14 @@ export function MapView(props: { features: Feature[]; visits: StationVisit[]; on
       title: v.title,
       uses: (prev?.uses ?? 0) + 1,
       when: `${visitState(v) === "aborted" ? "ended" : STATE_LABELS[visitState(v)]} ${v.endedAt.slice(0, 10)}`,
+      shipped: shippedAll(visitRepos(v)),
     });
   }
   for (const f of [...props.features].sort((a, b) => a.createdAt.localeCompare(b.createdAt))) {
     const id = stationOf(f.name);
     if (!id) continue;
     const prev = byStation.get(id);
-    byStation.set(id, { label: stationLabel(f.name), state: live[f.id], title: f.title, featureId: f.id, uses: (prev?.uses ?? 0) + 1, when: `since ${f.createdAt.slice(0, 10)}` });
+    byStation.set(id, { label: stationLabel(f.name), state: live[f.id], title: f.title, featureId: f.id, uses: (prev?.uses ?? 0) + 1, when: `since ${f.createdAt.slice(0, 10)}`, shipped: liveShipped[f.id] });
   }
 
   const counts: Partial<Record<StationState, number>> = {};
@@ -126,7 +141,7 @@ export function MapView(props: { features: Feature[]; visits: StationVisit[]; on
   return (
     <div className="settings map-page">
       {props.features.map((f) => (
-        <LiveProbe key={f.id} f={f} report={report} />
+        <LiveProbe key={f.id} f={f} report={report} reportShipped={reportShipped} />
       ))}
       <header className="ws-header">
         <h1>Map</h1>
@@ -214,8 +229,9 @@ export function MapView(props: { features: Feature[]; visits: StationVisit[]; on
                 }}
               >
                 <title>
-                  {`${s.label}${s.title ? ` · ${s.title}` : ""}\n${STATE_LABELS[state]} · ${s.when}${s.uses > 1 ? `\nused ${s.uses} times` : ""}`}
+                  {`${s.label}${s.title ? ` · ${s.title}` : ""}\n${STATE_LABELS[state]} · ${s.when}${s.shipped ? "\nshipped all the way (every release stage)" : ""}${s.uses > 1 ? `\nused ${s.uses} times` : ""}`}
                 </title>
+                {s.shipped && <circle className="map-shipped" cx={X(p.lon)} cy={Y(p.lat)} r={10 / k} />}
                 <circle className={`map-dot st-${state}`} cx={X(p.lon)} cy={Y(p.lat)} r={6.5 / k} />
                 <text x={X(p.lon) + 9 / k} y={Y(p.lat) + 4 / k} style={{ fontSize: 12 / k, strokeWidth: 3 / k }}>
                   {s.label}
@@ -231,9 +247,12 @@ export function MapView(props: { features: Feature[]; visits: StationVisit[]; on
 }
 
 /** Asks a live feature's overview for its state (PRs merged, checks running) and reports it. */
-function LiveProbe({ f, report }: { f: Feature; report: (id: string, s: StationState) => void }) {
+function LiveProbe(props: { f: Feature; report: (id: string, s: StationState) => void; reportShipped: (id: string, v: boolean) => void }) {
+  const { f, report } = props;
   const { ov } = useOverview(f);
   const state = liveState(f, ov);
+  const shipped = shippedAll(ov?.repos ?? []);
   useEffect(() => report(f.id, state), [f.id, state]);
+  useEffect(() => props.reportShipped(f.id, shipped), [f.id, shipped]);
   return null;
 }

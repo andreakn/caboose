@@ -12,6 +12,7 @@ jobs:
       matrix:
         os: [macos-latest, windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -24,5 +25,6 @@ jobs:
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
       - run: npm run typecheck
-      - run: npm test
+      # A hung test fails with its name instead of holding the job for hours.
+      - run: node --test --test-timeout=60000 --test-reporter=spec test/
       - run: npm run build

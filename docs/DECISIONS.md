@@ -756,6 +756,16 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      instructions tell agents to use these instead of starting servers in a
      shell, which leaves programs holding ports.
 
+155. **Releases are followed after a feature ends, and announced.** When a
+     feature is archived or deleted, its merged repos' merge commits are kept
+     with it (`visits[].releases`), and every few minutes Caboose reads the
+     tags of live and ended features alike. When every tracked repo of a
+     feature is tagged for a stage (test, prod…), a notification and the
+     "done" sound say so, once (`releaseNews` in the state; the very first
+     look only remembers what had already shipped). On the map a gold ring
+     marks a feature that has reached its last stage everywhere. Jira is not
+     touched: it follows the branch names.
+
 ## Answered (2026-11-05)
 
 - Private GitHub repo `andreakn/caboose`: yes.
