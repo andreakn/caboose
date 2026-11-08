@@ -114,7 +114,9 @@ export function App() {
         if (!notificationsOn()) return;
         const what = `${stationLabel(n.station)}${n.title ? ` (${n.title})` : ""}`;
         const note = new Notification(`${what}: ${n.stage} ✓`, {
-          body: `${n.repos === 1 ? "Its repo is" : `All ${n.repos} repos are`} tagged for ${n.stage}.`,
+          body: n.running
+            ? `It runs in ${n.stage} (${n.repos === 1 ? "its repo" : `all ${n.repos} repos`}).`
+            : `${n.repos === 1 ? "Its repo is" : `All ${n.repos} repos are`} tagged for ${n.stage}.`,
           silent: true,
         });
         note.onclick = () => {
@@ -346,20 +348,22 @@ function FeatureRow(props: { f: Feature; activity?: Activity; run?: RunSummary; 
  * tracked repo has a PR.
  */
 function DeployBars({ repos }: { repos: RepoOverview[] }) {
-  if (!repos.some((r) => r.stages?.length && r.pr)) return null;
+  if (!repos.some((r) => (r.stages?.length || r.running) && r.pr)) return null;
   const progress = deployProgress(repos);
+  const state = (r: { tagged: boolean; running?: boolean }) =>
+    r.running === true ? "✓ running" : r.running === false ? (r.tagged ? "… tagged, not running yet" : "– not running") : r.tagged ? "✓ tagged" : "–";
   return (
     <span className="deploy-bars">
       {progress.map((p, i) => (
         <span
           key={p.stage}
           className={`deploy-bar stage-${i}${p.done === p.total ? " complete" : ""}`}
-          title={`${p.stage}: ${p.done} of ${p.total} repos tagged\n${p.repos.map((r) => `${r.tagged ? "✓" : "–"} ${repoLabel(r.name)}`).join("\n")}`}
+          title={`${p.stage}: ${p.done} of ${p.total} repos there${p.pending ? ` (${p.pending} tagged, not running yet)` : ""}\n${p.repos.map((r) => `${state(r)} ${repoLabel(r.name)}`).join("\n")}`}
         >
           <span className="deploy-name">{p.stage}</span>
           <span className="deploy-segments">
             {p.repos.map((r) => (
-              <span key={r.name} className={r.tagged ? "seg done" : "seg"} />
+              <span key={r.name} className={r.done ? "seg done" : r.tagged ? "seg pending" : "seg"} />
             ))}
           </span>
           {p.total > 1 && (

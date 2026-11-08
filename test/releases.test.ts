@@ -73,5 +73,5 @@ test("deploy progress: per stage, how many repos with tag rules are tagged; repo
       ["prod", 0, 2],
     ],
   );
-  assert.deepEqual(p[0].repos, [{ name: "shop", tagged: true }, { name: "reports", tagged: false }]);
+  assert.deepEqual(p[0].repos, [{ name: "shop", tagged: true, done: true }, { name: "reports", tagged: false, done: false }]);
 });

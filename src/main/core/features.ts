@@ -341,6 +341,21 @@ export class Features {
     return ok(undefined);
   }
 
+  /** Which components (monikers) of a repo the feature touches; null or [] = all of them. */
+  setComponents(featureId: string, repo: string, components: string[] | null): Result<void> {
+    const f = this.get(featureId);
+    if (!f) return fail("Unknown feature.");
+    if (!f.repos.some((r) => r.name === repo)) return fail(`${repo} is not in this feature.`);
+    const list = [...new Set((components ?? []).map((c) => c.trim()).filter(Boolean))].sort();
+    this.patch(featureId, (x) => {
+      const { [repo]: _old, ...others } = x.components ?? {};
+      const next = list.length ? { ...others, [repo]: list } : others;
+      const { components: _c, ...rest } = x;
+      return Object.keys(next).length ? { ...rest, components: next } : rest;
+    });
+    return ok(undefined);
+  }
+
   /** `<prefix>/<KEY>-<station>` with a Jira key, else `<prefix>/<station>`. */
   private branchName(f: Feature, key?: string): string {
     return `${this.eff(f.line).branchPrefix}/${key ? `${key}-` : ""}${f.name}`;

@@ -286,3 +286,16 @@ test("a feature on a line with its own folder and branch prefix uses them", asyn
   assert.ok(plain.ok && plain.value.folder.startsWith(join(tmp, "features")) && plain.value.repos[0].branch.startsWith("caboose/"));
   await until(settled(store));
 });
+
+test("a feature remembers which components of a repo it touches", async () => {
+  const store = new Store(join(tmp, "s11", "state.json"));
+  const features = new Features(store, config(), join(tmp, "s11", "logs"));
+  const r = await features.create({ repos: ["api"] });
+  assert.ok(r.ok);
+  assert.ok(features.setComponents(r.value.id, "api", [" orders", "stock", "orders", ""]).ok);
+  assert.deepEqual(features.get(r.value.id)?.components, { api: ["orders", "stock"] });
+  assert.ok(!features.setComponents(r.value.id, "web", ["x"]).ok, "web is not in it");
+  assert.ok(features.setComponents(r.value.id, "api", null).ok);
+  assert.equal(features.get(r.value.id)?.components, undefined, "all of them again");
+  await until(settled(store));
+});

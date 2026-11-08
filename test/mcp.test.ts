@@ -48,3 +48,13 @@ test("unsent comments become one message for Claude", () => {
   comments.markSent(comments.unsent("w1").map((c) => c.id));
   assert.equal(comments.unsent("w1").length, 0);
 });
+
+test("SetComponents: the repo chat's repo (or the only one) by default; an empty list means all", () => {
+  const calls: [string, string, string[] | null][] = [];
+  const withSet = cabooseHandlers(() => feature, comments, undefined, { setComponents: (f, r, c) => (calls.push([f, r, c]), { ok: true, value: undefined }) });
+  assert.match(withSet.setComponents({ components: ["orders", " ", "orders"] }), /app: this feature touches orders\./);
+  assert.match(withSet.setComponents({ components: [] }), /all its components count again/);
+  assert.match(withSet.setComponents({ repo: "nope", components: ["x"] }), /No repo "nope"/);
+  assert.deepEqual(calls, [["w1", "app", ["orders"]], ["w1", "app", null]]);
+  assert.match(h.setComponents({ components: ["x"] }), /cannot be set from here/);
+});

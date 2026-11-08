@@ -805,6 +805,29 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      ones. Configure shows a Lines tab only while some repo is on a line.
      The codebase stays generic: no customer's names, keys or services in
      code, tests or docs (examples use Acme, ABC, shop).
+160. **What runs where, from the repo's own script.** Tags start deploys;
+     approval steps and failing pods mean a tag is not proof. A repo's
+     `.caboose/running.sh` prints `component env version` lines (two fields
+     for a repo with one component); a version starts with the tag that made
+     its release, so Caboose finds the longest tag it starts with (and that it
+     does not continue: v1.4 is not v1.43's) and asks git whether that tag
+     contains the merge commit. The script stays simple: it knows nothing
+     about features, PRs or Jira. It runs from the main checkout with the
+     user's credentials, cached a minute, 20 s limit; a failure shows as
+     "could not tell", never as "not running". Deploy progress counts what
+     runs where a repo has the script and tags elsewhere; tagged-not-running
+     is shown as pending. Ended features keep being checked until their
+     change runs everywhere. Announcements say "runs in" when confirmed.
+     Not modelled: an "approved" state (the script only sees what runs).
+161. **A feature's components.** For repos with several monikers, a feature
+     records which ones it touches (`Feature.components`), set in the picker
+     behind the running chips or by the agent (SetComponents, mentioned to
+     agents only when a repo has several components). Only those are shown
+     and counted; their release tags too. None chosen: all count.
+162. **A `.caboose/` folder in repos** holds Caboose's files to keep the
+     root tidy: `config.json` (else `caboose.json`), `run.sh`,
+     `run_<moniker>.sh` (run from the repo root; the root's wins on a clash)
+     and `running.sh`.
 
 ## Answered (2026-11-05)
 

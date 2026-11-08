@@ -69,14 +69,16 @@ each repo you pick (`<features folder>/<station>/<repo>/`). The agents work in
 the feature folder and see all of its repos. With Jira on, a feature can be
 tied to a task (`jira.txt` in its folder) and each repo to a subtask.
 
-In a repo you add to Caboose, an optional `caboose.json` sets its scripts:
+In a repo you add to Caboose, an optional `.caboose/config.json` (or
+`caboose.json` at the root) sets its scripts:
 
 ```json
 { "setup": "npm install", "run": "PORT=$CABOOSE_PORT npm run dev", "archive": "", "copy": [".env"] }
 ```
 
 The **Run** tab lists every repo's programs: `run.sh` and `run_<moniker>.sh`
-at the root of its worktree (as cross_conductor found them), plus the run
+at the root of its worktree or in its `.caboose/` folder (they run from the
+root either way; the root's wins if both have one), plus the run
 scripts from Configure / `caboose.json`. ▶ starts one in a terminal tab, ■
 stops it (Ctrl-C, then a hang-up after 10 s), ↻ runs one that exited again;
 "▶ all" per repo, "▶ Run feature" (Cmd/Ctrl+R) and "■ Stop all" for the lot.
@@ -87,6 +89,26 @@ the Run tab did not start (by hand, by an agent, from an IDE) are flagged with
 a stop button, as is whatever holds a port a script declares. An optional
 **moniker file** (Configure → Terminals; `moniker path description` per line)
 labels repos and their `run_<moniker>.sh`.
+
+**What runs where.** A tag starts a deploy, but an approval step or pods that
+will not start can keep new code from running. A repo can say what actually
+runs with `.caboose/running.sh`, which prints one line per component (a
+moniker; leave it out for a repo with one) and environment:
+
+```
+orders  test  orders_TEST_v1.437
+orders  prod  orders_PROD_v1.430+build.12
+```
+
+A version starts with the git tag that made its release; Caboose finds that
+tag and checks with git whether it has a feature's merge commit. Each repo
+shows what runs in each environment; once its PR is merged, ✓ where the change
+runs. Where a repo has the script, a feature's deploy progress and
+announcements count what runs, not just tags. The script runs from the main
+checkout with your own credentials (kubectl, VPN), at most every minute, and
+gives up after 20 s; it does not need to know about features. A feature
+can say which components it touches (the picker behind the chips, or the
+agent's SetComponents), and only those are shown and counted.
 
 Scripts run through bash on every OS (Git Bash on Windows). They get
 `CABOOSE_PORT` (the first of 10 ports reserved for the workspace),

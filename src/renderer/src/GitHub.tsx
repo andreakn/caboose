@@ -16,6 +16,7 @@ import { MenuButton, type MenuItem, useApps } from "./Menu.tsx";
 import { HealthDot, JiraStatusChip, PrChip, PrDetailsPanel } from "./Overview.tsx";
 import { StatusChip } from "./Plan.tsx";
 import { repoLabel } from "./labels.ts";
+import { RunningChips } from "./Running.tsx";
 
 const api = window.caboose;
 
@@ -222,7 +223,8 @@ export function RepoRow(props: {
         </span>
       )}
       {ov?.pr ? <PrChip pr={ov.pr} /> : ghPr && <PrLink pr={ghPr} />}
-      {ov?.release && <ReleaseChips release={ov.release} />}
+      {ov?.release && <ReleaseChips release={ov.release} hide={otherComponents(ov)} />}
+      {ov?.running && <RunningChips feature={feature} ov={ov} onChanged={props.onChanged} />}
       {ov?.jira ? <JiraStatusChip j={ov.jira} site={props.jiraSite} /> : props.subtask && <JiraStatusChip j={{ key: props.subtask }} site={props.jiraSite} />}
     </>
   );
@@ -325,7 +327,17 @@ export function RepoRow(props: {
 }
 
 /** "🏷 shop_v1.114 · test ✓ · prod –": the first release carrying the merged PR, and which later stages have it. */
-function ReleaseChips({ release }: { release: StageRelease[] }) {
+/** Components of the repo this feature does not touch (their tags are not shown). */
+function otherComponents(ov: RepoOverview): string[] {
+  if (!ov.components?.length) return [];
+  const all = new Set((ov.running?.versions ?? []).map((v) => v.component).filter(Boolean));
+  return [...all].filter((c) => !ov.components!.includes(c));
+}
+
+function ReleaseChips({ release: all, hide = [] }: { release: StageRelease[]; hide?: string[] }) {
+  // Tags of components this feature does not touch (orders_v1.2 when only stock matters) are left out.
+  const other = (tag: string) => hide.some((c) => tag.startsWith(`${c}_`) || tag.startsWith(`${c}-`));
+  const release = all.map((r) => ({ ...r, tags: r.tags.filter((t) => !other(t)) }));
   const [first, ...later] = release;
   if (!first) return null;
   const title = release.map((r) => `${r.stage}: ${r.tags.length ? r.tags.join(", ") : "not yet"}`).join("\n");

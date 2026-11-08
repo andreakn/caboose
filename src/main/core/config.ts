@@ -197,9 +197,13 @@ function cleanStrings<T extends object>(o: T): T {
   ) as T;
 }
 
-/** A repo's `caboose.json`, read from its main checkout. */
+/** The folder in a repo where Caboose's files can live, to keep the repo's root tidy. */
+export const REPO_DIR = ".caboose";
+
+/** A repo's own config: `.caboose/config.json`, else `caboose.json` at its root. */
 export function loadRepoConfig(repoPath: string): RepoConfig {
-  return readJson<RepoConfig>(join(repoPath, "caboose.json"));
+  const inDir = join(repoPath, REPO_DIR, "config.json");
+  return readJson<RepoConfig>(existsSync(inDir) ? inDir : join(repoPath, "caboose.json"));
 }
 
 function expandHome(p: string): string {

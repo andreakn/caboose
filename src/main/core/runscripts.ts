@@ -6,7 +6,7 @@
 // Without url lines, a localhost URL in the script's header comment counts.
 import { accessSync, constants, existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import type { RepoScripts, RunUrl } from "../../shared/types.ts";
 
 export const RUN_SCRIPT_RE = /^run(?:_([A-Za-z0-9][A-Za-z0-9._-]*))?\.sh$/;
@@ -32,29 +32,41 @@ export function declaredUrls(text: string): RunUrl[] {
   return [...new Set(found.map((u) => u.replace(/[.:]+$/, "")))].map((url) => ({ url }));
 }
 
-/** run.sh / run_*.sh at the root of a checkout, and the configured run scripts that are not one of them. */
-export function runnables(path: string, configured: RepoScripts["run"] = []): RunnableScript[] {
-  let files: string[] = [];
+/** The run scripts in one folder of a checkout (its root, or .caboose), as paths from the root. */
+function runFiles(path: string, dir: string): string[] {
+  const folder = dir ? join(path, dir) : path;
   try {
-    files = existsSync(path) ? readdirSync(path) : [];
+    if (!existsSync(folder)) return [];
+    return readdirSync(folder)
+      .filter((f) => RUN_SCRIPT_RE.test(f) && statSync(join(folder, f)).isFile())
+      .sort()
+      .map((f) => (dir ? `${dir}/${f}` : f));
   } catch {
-    // unreadable: nothing to run
+    return []; // unreadable: nothing to run
   }
-  const scripts = files
-    .filter((f) => RUN_SCRIPT_RE.test(f) && statSync(join(path, f)).isFile())
-    .sort()
-    .map((file): RunnableScript => {
-      const moniker = file.match(RUN_SCRIPT_RE)?.[1];
-      let text = "";
-      try {
-        text = readFileSync(join(path, file), "utf8");
-      } catch {
-        // no URLs then
-      }
-      return { id: file, label: moniker ?? "run", ...(moniker ? { moniker } : {}), command: commandFor(path, file), urls: declaredUrls(text) };
-    });
+}
+
+/**
+ * run.sh / run_*.sh at the root of a checkout or in its .caboose folder (the
+ * root's wins when both have one), and the configured run scripts that are not
+ * one of them. Scripts in .caboose run from the root too.
+ */
+export function runnables(path: string, configured: RepoScripts["run"] = []): RunnableScript[] {
+  const root = runFiles(path, "");
+  const names = new Set(root);
+  const files = [...root, ...runFiles(path, ".caboose").filter((f) => !names.has(basename(f)))];
+  const scripts = files.map((file): RunnableScript => {
+    const moniker = basename(file).match(RUN_SCRIPT_RE)?.[1];
+    let text = "";
+    try {
+      text = readFileSync(join(path, file), "utf8");
+    } catch {
+      // no URLs then
+    }
+    return { id: file, label: moniker ?? "run", ...(moniker ? { moniker } : {}), command: commandFor(path, file), urls: declaredUrls(text) };
+  });
   // A configured script that only calls one of those files is that file (Conductor's run actions often are).
-  const sameFile = (command: string) => command.trim().match(/^(?:\.\/|(?:ba)?sh\s+)?(run(?:_[A-Za-z0-9._-]+)?\.sh)$/)?.[1];
+  const sameFile = (command: string) => command.trim().match(/^(?:\.\/|(?:ba)?sh\s+)?((?:\.caboose\/)?run(?:_[A-Za-z0-9._-]+)?\.sh)$/)?.[1];
   const fromConfig = configured
     .filter((s) => !scripts.some((x) => x.id === sameFile(s.command)))
     .map((s): RunnableScript => ({ id: `config:${s.name}`, label: s.name, command: s.command, urls: [] }));

@@ -21,14 +21,15 @@ export const STATE_LABELS: Record<StationState, string> = {
 };
 
 /** Every tracked repo is tagged for its last stage (e.g. in prod). */
-export function shippedAll(repos: { name: string; stages?: string[]; release?: { stage: string; tags: string[] }[] }[]): boolean {
+export function shippedAll(repos: Parameters<typeof deployProgress>[0]): boolean {
   const progress = deployProgress(repos);
   const last = progress.at(-1);
   return Boolean(last && last.total > 0 && last.done === last.total);
 }
 
 /** An ended feature's releases as repos with stages (as the overview gives them). */
-const visitRepos = (v: StationVisit) => (v.releases ?? []).map((r) => ({ name: r.repo, stages: r.stages, release: r.release }));
+const visitRepos = (v: StationVisit) =>
+  (v.releases ?? []).map((r) => ({ name: r.repo, stages: r.stages, release: r.release, running: r.running, components: r.components }));
 
 /** A live feature's state from its overview. */
 export function liveState(f: Feature, ov: FeatureOverview | null | undefined): StationState {

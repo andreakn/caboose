@@ -6,13 +6,17 @@
 // every chat report status and notes to the feature's log.
 import { createSdkMcpServer, tool } from "@anthropic-ai/claude-agent-sdk";
 import { defineTool, type Tool } from "@github/copilot-sdk";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { z } from "zod";
 import { type Agent, type Chat } from "../../shared/chat.ts";
-import { type Feature, type FeatureRepo, REPO_STATUSES, type RepoEntry, type RepoStatus, type RunOverview, type RunRepo, type RunScript, type Terminal } from "../../shared/types.ts";
+import { type Feature, type FeatureRepo, REPO_STATUSES, type RepoEntry, type RepoStatus, type Result, type RunOverview, type RunRepo, type RunScript, type Terminal } from "../../shared/types.ts";
 import type { Comments } from "./comments.ts";
 import type { Coordinator } from "./coordination.ts";
 import { changes, fullPatch } from "./diff.ts";
 import { readFeatureJira } from "./jira.ts";
+import { RUNNING_SCRIPT } from "./running.ts";
+import { runnables } from "./runscripts.ts";
 
 const MAX_CHARS = 100_000;
 const text = (t: string) => ({ content: [{ type: "text" as const, text: t }] });
@@ -35,6 +39,8 @@ export type ToolContext = {
   terminals?: TerminalSource;
   coord?: Coordinator;
   runner?: ProgramRunner;
+  /** Records which components (monikers) of a repo the feature touches; null: all of them. */
+  setComponents?: (featureId: string, repo: string, components: string[] | null) => Result<void>;
 };
 
 /** The tool handlers, separate from the MCP wrapper so they can be tested directly. */
@@ -274,6 +280,18 @@ export function cabooseHandlers(feature: () => Feature, comments: Comments, term
       return r.ok ? r.value : r.error;
     },
 
+    setComponents(args: { repo?: string; components: string[] }): string {
+      if (!ctx.setComponents) return "Components cannot be set from here.";
+      const repo = programRepo(args.repo);
+      if (typeof repo !== "string") return repo.error;
+      const list = [...new Set(args.components.map((c) => c.trim()).filter(Boolean))];
+      const r = ctx.setComponents(feature().id, repo, list.length ? list : null);
+      if (!r.ok) return r.error;
+      return list.length
+        ? `${repo}: this feature touches ${list.join(", ")}. Caboose now shows and tracks the deployment of only those.`
+        : `${repo}: all its components count again.`;
+    },
+
     setFeatureTitle(args: { title: string }): string {
       if (!coord) return noCoord;
       const r = coord.setTitle(feature().id, args.title);
@@ -457,6 +475,17 @@ const TOOLS: ToolDef[] = [
     only: "central",
   },
   {
+    claude: "SetComponents",
+    copilot: "caboose_set_components",
+    description:
+      "For a repo with several components (services, workers: the monikers of its run_<moniker>.sh scripts and of its .caboose/running.sh), says which ones this feature changes, so Caboose shows and tracks the deployment of only those. An empty list: all count again.",
+    shape: {
+      repo: repoArg.optional(),
+      components: z.array(z.string()).describe("The components' names (monikers), e.g. [\"orders\"]"),
+    },
+    run: (h, a: { repo?: string; components: string[] }) => h.setComponents(a),
+  },
+  {
     claude: "GetRepoChat",
     copilot: "caboose_get_repo_chat",
     description: "What a repo's chat is doing (working, waiting for the user, idle) and its last reply.",
@@ -512,6 +541,9 @@ export function cabooseInstructions(f: Feature, agent: "claude" | "copilot" = "c
     `The feature's working files are plain markdown in ${f.folder}: brief.md (the goal), plan.md (a checklist the user follows; tick items as they are done), briefs/<repo>.md (each repo's part) and log.md (append-only; write to it with ${n("Log")} and ${n("ReportStatus")}, not by editing). Read them when they exist.`,
     `The user sees the changes in Caboose's Changes view. Use ${n("GetWorkspaceDiff")} to see the same diff, ${n("GetDiffComments")} to read the user's review comments, and ${n("DiffComment")} to point the user at specific lines.`,
     `Use ${n("GetTerminalOutput")} to read the user's terminals in Caboose, such as a dev server started by the Run button. Ports ${f.port}–${f.port + 99} are reserved for this feature; each repo's scripts and terminals get their own CABOOSE_PORT.`,
+    ...(f.repos.some((r) => runnables(r.path).filter((s) => s.moniker).length > 1 || existsSync(join(r.path, RUNNING_SCRIPT)))
+      ? [`Some repos have several components (run_<moniker>.sh scripts, services). Once you know which ones this feature changes, say so with ${n("SetComponents")}: the user then sees only their deployments.`]
+      : []),
     `${n("GetFeatureStatus")} shows every repo's reported status, chat, git state and PR at a glance.`,
     `To check that your work runs, use ${n("ListPrograms")}, ${n("StartProgram")} (it waits until the program answers on its URL and tells you if it crashed) and ${n("FetchLocal")} to call its endpoints; ${n("StopProgram")} when done, unless the user wants it running. These run in the user's Run tab, where they can see them. Do not start servers yourself in a shell: they keep holding their ports after you are done.`,
   ];

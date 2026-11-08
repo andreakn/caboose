@@ -42,6 +42,7 @@ import { doctor } from "./core/doctor.ts";
 import { checkRepo, Features, scanRepos } from "./core/features.ts";
 import { GitHub } from "./core/github.ts";
 import { Jira } from "./core/jira.ts";
+import { RunningCache } from "./core/running.ts";
 import { DEFAULT_LOCAL_FILES, scanLocalFiles } from "./core/localfiles.ts";
 import { cabooseCopilotTools, cabooseInstructions, cabooseMcp } from "./core/mcp.ts";
 import { featureOverview } from "./core/overview.ts";
@@ -143,6 +144,7 @@ const toolContext = (chat: Chat, f: Feature) => ({
   terminals,
   coord: coordinator,
   runner,
+  setComponents: (featureId: string, repo: string, components: string[] | null) => features.setComponents(featureId, repo, components),
 });
 const claude = new ClaudeProvider(query, (chat, f) => ({
   mcpServers: { caboose: cabooseMcp(toolContext(chat, f)) },
@@ -317,6 +319,7 @@ ipcMain.handle("jira:mine", (_e, line?: string) => attempt(() => needJira(line).
 ipcMain.handle("jira:feature", (_e, featureId: string) => features.jiraOf(featureId));
 ipcMain.handle("jira:setTask", (_e, featureId: string, key: string | null) => features.setTask(featureId, key));
 ipcMain.handle("feature:details", (_e, featureId: string, details: FeatureDetails) => features.setDetails(featureId, details));
+ipcMain.handle("feature:components", (_e, featureId: string, repo: string, components: string[] | null) => features.setComponents(featureId, repo, components));
 ipcMain.handle("feature:addable", (_e, featureId: string) => addable(featureId).map((r) => r.name));
 ipcMain.handle("feature:scripts", (_e, featureId: string, repo: string) => {
   const r = featureById(featureId)?.repos.find((x) => x.name === repo);
@@ -463,6 +466,7 @@ ipcMain.handle("docs:note", (_e, featureId: string, to: string | undefined, text
 );
 ipcMain.handle("docs:status", (_e, featureId: string) => coordinator.status(featureId));
 const prDetails = new PrDetailsCache();
+const runningCache = new RunningCache(() => localConfig.bashPath);
 /** A repo's release stages: its own, else its line's, else everyone's. */
 const stagesFor = (repo: string) => {
   const r = localConfig.repos.find((x) => x.name === repo);
@@ -471,12 +475,26 @@ const stagesFor = (repo: string) => {
 const overviewOf = (featureId: string, fresh = false) =>
   featureOverview(
     featureOrThrow(featureId),
-    { github, prs: prDetails, jira, jiraOf: (id) => features.jiraOf(id), onBranch: (id, repo, branch) => features.setBranch(id, repo, branch), stagesFor },
+    {
+      github,
+      prs: prDetails,
+      jira,
+      jiraOf: (id) => features.jiraOf(id),
+      onBranch: (id, repo, branch) => features.setBranch(id, repo, branch),
+      stagesFor,
+      running: (source, fresh) => runningCache.get(source, fresh),
+    },
     fresh,
   );
 ipcMain.handle("feature:overview", (_e, featureId: string, fresh?: boolean) => overviewOf(featureId, Boolean(fresh)));
 // Features reaching a release stage (also after they have ended) are announced in the window.
-const releaseWatch = new ReleaseWatch({ store, overview: (id) => overviewOf(id), stagesFor, announce: (news) => win?.webContents.send("release:news", news) });
+const releaseWatch = new ReleaseWatch({
+  store,
+  overview: (id) => overviewOf(id),
+  stagesFor,
+  announce: (news) => win?.webContents.send("release:news", news),
+  running: (source) => runningCache.get(source),
+});
 releaseWatch.start();
 ipcMain.handle("chat:models", (_e, agent: Agent) => attempt(() => chats.models(agent)));
 ipcMain.handle("chat:remove", (_e, chatId: string) => chats.remove(chatId));

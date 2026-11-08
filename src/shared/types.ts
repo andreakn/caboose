@@ -16,6 +16,15 @@ export type RepoScripts = {
 export type ReleaseStage = { name: string; pattern: string };
 /** The lowest tags of one stage that carry a change (one per tag prefix, for repos with several services). */
 export type StageRelease = { stage: string; tags: string[] };
+/**
+ * What runs in an environment, from the repo's .caboose/running.sh: one
+ * component (a moniker; "" for a repo with one) in one environment. `tag` is
+ * the release tag the version starts with; `contains`, once a PR is merged,
+ * whether that release has its merge commit.
+ */
+export type RunningVersion = { component: string; env: string; version: string; tag?: string; contains?: boolean };
+/** A repo's running.sh answer; `error` when it could not tell (which is not "nothing runs"). */
+export type Running = { versions: RunningVersion[]; error?: string };
 
 /** A repo the user works in, from the config: its name is also its folder name inside a feature. */
 export type RepoEntry = {
@@ -72,6 +81,8 @@ export type Feature = {
   repos: FeatureRepo[];
   /** The line it runs on: only repos on it (or on none) can join. Taken from its first repo on a line, if not chosen. */
   line?: string;
+  /** Per repo, the components (monikers) this feature touches: only those are shown and counted. Absent: all. */
+  components?: Record<string, string[]>;
 };
 
 export type Terminal = {
@@ -180,7 +191,16 @@ export type RunOverview = {
 };
 
 /** A merged repo of an ended feature, with what is needed to keep reading its release tags. */
-export type VisitRelease = { repo: string; source: string; mergeCommit: string; stages: string[]; release: StageRelease[] };
+export type VisitRelease = {
+  repo: string;
+  source: string;
+  mergeCommit: string;
+  stages: string[];
+  release: StageRelease[];
+  /** What ran where at the last look (repos with a running.sh), and the components that mattered. */
+  running?: Running;
+  components?: string[];
+};
 
 /** A feature that ended (archived or deleted), kept for the map. */
 export type StationVisit = {
@@ -365,6 +385,10 @@ export type RepoOverview = {
   release?: StageRelease[];
   /** The release stages this repo is tracked for (its tag rules); none = it does not count. */
   stages?: string[];
+  /** What runs where now, if the repo has a .caboose/running.sh. */
+  running?: Running;
+  /** The components (monikers) that matter to this feature; absent = all of them. */
+  components?: string[];
 };
 
 /** A feature at a glance: what the board and the feature page show. */
@@ -482,12 +506,14 @@ export type CabooseApi = {
   /** Links (or unlinks) the feature's task; linking adds subtasks and puts their keys in unpushed branches. */
   setFeatureTask(featureId: string, key: string | null): Promise<Result<JiraAlignment>>;
   /** A feature reached a release stage (every tracked repo tagged for it). */
-  onReleaseNews(listener: (news: { featureId: string; station: string; title?: string; stage: string; repos: number }) => void): () => void;
+  onReleaseNews(listener: (news: { featureId: string; station: string; title?: string; stage: string; repos: number; running?: boolean }) => void): () => void;
   /** Saves the sidebar's folders and order. */
   saveSidebar(sidebar: Sidebar): Promise<void>;
   setFeatureDetails(featureId: string, details: FeatureDetails): Promise<Result<void>>;
   /** The configured repos this feature can add (its line's and those on no line), by name. */
   addableRepos(featureId: string): Promise<string[]>;
+  /** Which components (monikers) of a repo the feature touches; null: all of them. */
+  setComponents(featureId: string, repo: string, components: string[] | null): Promise<Result<void>>;
   /** The repo's scripts: from the config, plus its own caboose.json. */
   repoScripts(featureId: string, repo: string): Promise<RepoScripts>;
   conductorImport(): Promise<Result<ConductorImport>>;

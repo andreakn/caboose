@@ -1,9 +1,10 @@
 // A feature at a glance: per repo what its agent reported, its local git
 // state, its PR (one GraphQL call per feature) and its Jira subtask (one search
 // per feature). GitHub and Jira answers are cached 60 s.
-import type { Feature, FeatureJira, FeatureOverview, JiraStatus, ReleaseStage } from "../../shared/types.ts";
+import type { Feature, FeatureJira, FeatureOverview, JiraStatus, ReleaseStage, Running } from "../../shared/types.ts";
 import { readDocs } from "./docs.ts";
 import { releasesOf } from "./releases.ts";
+import { resolveRunning } from "./running.ts";
 import type { GitHub } from "./github.ts";
 import type { Jira } from "./jira.ts";
 import { type PrDetailsCache, slugOf } from "./prdetails.ts";
@@ -18,6 +19,8 @@ export type OverviewDeps = {
   onBranch?: (featureId: string, repo: string, branch: string) => void;
   /** A repo's release tag stages (none: releases are not tracked). */
   stagesFor?: (repo: string) => ReleaseStage[];
+  /** What a repo's .caboose/running.sh reports (null: it has none). Cached by the caller. */
+  running?: (source: string, fresh: boolean) => Promise<Running | null>;
 };
 
 const jiraCache = new Map<string, { at: number; value: Promise<Record<string, JiraStatus>> }>();
@@ -68,6 +71,18 @@ export async function featureOverview(f: Feature, d: OverviewDeps, fresh = false
     }),
   );
 
+  // What runs where (repos with a running.sh), and whether it has the merged change.
+  const running = await Promise.all(
+    f.repos.map(async (r): Promise<Running | undefined> => {
+      const report = await d.running?.(r.source, fresh).catch(() => null);
+      if (!report) return undefined;
+      const pr = prs.prs[r.name];
+      const merge = pr?.state === "MERGED" ? pr.mergeCommit : undefined;
+      const versions = await resolveRunning(r.source, report.versions, merge).catch(() => report.versions);
+      return { versions, ...(report.error ? { error: report.error } : {}) };
+    }),
+  );
+
   return {
     id: f.id,
     progress: docs.progress,
@@ -83,6 +98,8 @@ export async function featureOverview(f: Feature, d: OverviewDeps, fresh = false
         jira: jiraFor(links.subtasks[r.name]),
         ...(releases[i] ? { release: releases[i] } : {}),
         ...((d.stagesFor?.(r.name) ?? []).length ? { stages: d.stagesFor!(r.name).map((s) => s.name) } : {}),
+        ...(running[i] ? { running: running[i] } : {}),
+        ...(f.components?.[r.name]?.length ? { components: f.components[r.name] } : {}),
       };
     }),
     errors,
