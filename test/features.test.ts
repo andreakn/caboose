@@ -107,7 +107,7 @@ test("repos can be added later; archive keeps branches and folder, restore bring
   assert.ok(sh(api, "branch", "--list", f.repos[0].branch));
   const back = await features.restore(f.id);
   assert.ok(back.ok, !back.ok ? back.error : "");
-  assert.equal(readFileSync(join(f.folder, "api", "work.txt"), "utf8"), "wip\n");
+  assert.equal(readFileSync(join(f.folder, "api", "work.txt"), "utf8").replace(/\r\n/g, "\n"), "wip\n");
   await until(settled(store));
 });
 

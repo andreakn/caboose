@@ -120,6 +120,6 @@ function real(p: string): string {
   try {
     return realpathSync(clean);
   } catch {
-    return clean;
+    return resolve(clean);
   }
 }

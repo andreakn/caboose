@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { after, test } from "node:test";
 import { cabooseHandlers } from "../src/main/core/mcp.ts";
 import { Comments } from "../src/main/core/comments.ts";
@@ -19,7 +19,8 @@ const terms = new Terminals({
 });
 after(() => {
   terms.closeAll();
-  rmSync(dir, { recursive: true, force: true });
+  // Windows: the console host can hold the folder a moment after its shell has gone.
+  rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
 });
 
 const until = async (fn: () => boolean, ms = 10_000) => {
@@ -35,7 +36,7 @@ test("the run script runs through bash in the workspace with its port", async ()
   const t = await terms.run("w1", "web", "echo port=$CABOOSE_PORT in $(basename $PWD); exit 3", where);
   await until(() => terms.list("w1").find((x) => x.id === t.id)?.exitCode !== undefined);
   assert.equal(terms.list("w1")[0].exitCode, 3);
-  assert.match(terms.output(t.id), new RegExp(`port=41010 in ${dir.split("/").pop()}`));
+  assert.match(terms.output(t.id), new RegExp(`port=41010 in ${basename(dir)}`));
   assert.match(terms.output(t.id), /process exited with code 3/);
   assert.ok(data.get(t.id)?.includes("port=41010"), "output is streamed");
 });

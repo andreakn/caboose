@@ -42,7 +42,7 @@ test("pull fast-forwards what was pushed to the branch elsewhere", async () => {
   const gh = new GitHub();
   assert.equal((await gh.branchStatus(ws, "origin/main")).behind, 1, "fetched and counted");
   assert.deepEqual(await gh.pull(ws), { conflicts: [] });
-  assert.equal(readFileSync(join(ws, "c.txt"), "utf8"), "theirs\n");
+  assert.equal(readFileSync(join(ws, "c.txt"), "utf8").replace(/\r\n/g, "\n"), "theirs\n");
   assert.equal((await gh.branchStatus(ws, "origin/main")).behind, 0);
 });
 
@@ -64,7 +64,7 @@ test("a merge that conflicts is undone, and names the files", async () => {
   commit(ws, "a.txt", "my version\n");
   const r = await new GitHub().mergeBase(ws, "origin/main");
   assert.deepEqual(r, { conflicts: ["a.txt"] });
-  assert.equal(readFileSync(join(ws, "a.txt"), "utf8"), "my version\n");
+  assert.equal(readFileSync(join(ws, "a.txt"), "utf8").replace(/\r\n/g, "\n"), "my version\n");
   assert.equal(sh(ws, "status", "--porcelain"), "", "no merge left half-done");
 });
 

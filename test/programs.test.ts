@@ -15,7 +15,8 @@ const dir = realpathSync(mkdtempSync(join(tmpdir(), "caboose-prog-")));
 const terms = new Terminals({ onData: () => {}, onChange: () => {} });
 after(() => {
   terms.closeAll();
-  rmSync(dir, { recursive: true, force: true });
+  // Windows: the console host can hold the folder a moment after its shell has gone.
+  rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
 });
 const port = 47000 + Math.floor(Math.random() * 900);
 const web = join(dir, "oslo", "web");

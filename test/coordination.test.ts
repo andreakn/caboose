@@ -85,7 +85,7 @@ test("a repo chat works in its worktree, reads the feature folder, and starts wi
   assert.deepEqual(s.options.additionalDirectories, [folder]);
   const kickoff = s.prompts[0];
   assert.match(kickoff, /agent for the web repo in the feature "Checkout v2"/);
-  assert.match(kickoff, new RegExp(`${folder}/briefs/web.md`));
+  assert.ok(kickoff.includes(`${folder}/briefs/web.md`), "names the repo's brief");
   assert.match(kickoff, /mcp__caboose__ReportStatus/);
   assert.match(kickoff, /Add the gift-receipt toggle/);
   assert.match(readLog(folder).at(-1)!.text, /Started a chat for web/);
@@ -161,7 +161,7 @@ test("the central chat and repo chats get their own system notes", () => {
   assert.match(central, /caboose_start_repo_chat/);
   const repo = cabooseInstructions(feature, "claude", { id: "c", featureId: "f1", repo: "api", title: "api", model: "default", effort: "high", mode: "acceptEdits", createdAt: "" });
   assert.match(repo, /agent for the api repo/);
-  assert.match(repo, /You work in .*\/api, a git worktree on branch caboose\/NWP-3-finse/);
+  assert.match(repo, /You work in .*[\\/]api, a git worktree on branch caboose\/NWP-3-finse/);
   assert.doesNotMatch(repo, /central chat/);
 });
 

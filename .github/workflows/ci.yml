@@ -25,6 +25,7 @@ jobs:
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
       - run: npm run typecheck
-      # A hung test fails with its name instead of holding the job for hours.
-      - run: node --test --test-timeout=60000 --test-reporter=spec test/
+      # A hung test fails with its name instead of holding the job for hours. Force-exit:
+      # on Windows, node-pty's ConPTY keeps a test process alive after its terminals are closed.
+      - run: node --test --test-timeout=60000 --test-force-exit --test-reporter=spec test/
       - run: npm run build

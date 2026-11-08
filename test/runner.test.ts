@@ -16,7 +16,8 @@ const dir = realpathSync(mkdtempSync(join(tmpdir(), "caboose-run-")));
 const terms = new Terminals({ onData: () => {}, onChange: () => {} });
 after(() => {
   terms.closeAll();
-  rmSync(dir, { recursive: true, force: true });
+  // Windows: the console host can hold the folder a moment after its shell has gone.
+  rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
 });
 const until = async (fn: () => boolean | Promise<boolean>, ms = 10_000) => {
   const end = Date.now() + ms;
@@ -52,7 +53,7 @@ test("run.sh and run_<moniker>.sh at the root, plus configured scripts that are 
   assert.deepEqual(
     list.map((x) => [x.id, x.label, x.command]),
     [
-      ["run.sh", "run", "./run.sh"],
+      ["run.sh", "run", process.platform === "win32" ? "bash run.sh" : "./run.sh"],
       ["run_ccws.sh", "ccws", "bash run_ccws.sh"],
       ["config:test", "test", "npm test"],
     ],
