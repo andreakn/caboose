@@ -646,6 +646,7 @@ ipcMain.on("term:resize", (_e, id: string, cols: number, rows: number) => termin
 
 // --- the Run tab
 ipcMain.handle("run:overview", (_e, featureId: string) => runner.overview(featureId));
+ipcMain.handle("run:summary", () => runner.summary());
 ipcMain.handle("run:start", (_e, featureId: string, repo: string, script?: string) => attempt(() => runner.start(featureId, repo, script)));
 ipcMain.handle("run:startAll", (_e, featureId: string, repo?: string) => attempt(() => runner.startAll(featureId, repo)));
 ipcMain.handle("run:stop", (_e, terminalId: string) => runner.stop(terminalId));

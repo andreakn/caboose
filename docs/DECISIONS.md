@@ -720,6 +720,14 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      are positioned by line number over the gutter, so the code stays one
      plain block however long the file is.
 
+150. **Running programs are visible across features.** The sidebar shows
+     `▶ 1/3` next to a feature with programs running (green when all of its
+     programs run, amber when some; hover lists them), since a running
+     program holds its port. A start button for a program (same repo, same
+     script) already running in another feature gets an amber outline and
+     a "⚠ running in Korsør" tag beside it; hovering explains, clicking goes
+     to that feature.
+
 ## Answered (2026-11-05)
 
 - Private GitHub repo `andreakn/caboose`: yes.

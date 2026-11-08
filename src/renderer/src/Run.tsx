@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { Feature, PortHolder, RunOverview, RunRepo, RunScript, Terminal } from "../../shared/types.ts";
 import { repoLabel } from "./labels.ts";
+import { stationLabel } from "../../shared/stations.ts";
+import { dispatch } from "./commands.ts";
 
 const api = window.caboose;
 
@@ -170,7 +172,12 @@ function ScriptChip(props: { f: Feature; repo: string; s: RunScript; strays: Por
   const what = `${s.description ? `${s.description}\n` : ""}${s.command}`;
   const chip =
     s.state === "stopped" ? (
-      <button className="run-chip" disabled={disabled} title={`Start: ${what}`} onClick={() => act(`Starting ${s.label}`, () => api.runStart(f.id, repo, s.id))}>
+      <button
+        className={`run-chip${s.elsewhere ? " elsewhere" : ""}`}
+        disabled={disabled}
+        title={`Start: ${what}${s.elsewhere ? `\n\nAlready running in ${s.elsewhere.map((e) => stationLabel(e.feature)).join(", ")}: it probably holds the port, so this one may not start.` : ""}`}
+        onClick={() => act(`Starting ${s.label}`, () => api.runStart(f.id, repo, s.id))}
+      >
         ▶ {s.label}
       </button>
     ) : (
@@ -209,6 +216,17 @@ function ScriptChip(props: { f: Feature; repo: string; s: RunScript; strays: Por
           🌐{u.label ? ` ${u.label}` : ""}
         </button>
       ))}
+      {s.state !== "running" &&
+        s.elsewhere?.map((e) => (
+          <button
+            key={e.featureId}
+            className="run-elsewhere"
+            title={`${s.label} is already running in ${stationLabel(e.feature)}: it probably holds the port. Click to go there.`}
+            onClick={() => dispatch(`openFeature:${e.featureId}`)}
+          >
+            ⚠ running in {stationLabel(e.feature)}
+          </button>
+        ))}
       {s.busy
         ?.filter((h) => !props.strays.some((x) => x.pid === h.pid))
         .map((h) => <Holder key={h.pid} f={f} h={h} lead={`port ${h.ports.join(", ")} is taken by`} act={act} />)}

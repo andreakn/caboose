@@ -205,3 +205,25 @@ test("the Run tab starts, shows and stops a feature's programs, and finds the on
   );
   assert.equal(terms.list(f.id).length, 0, "stopping closes their terminals");
 });
+
+test("the same program running in another feature is flagged, and each feature's programs are summed up", async () => {
+  const mk = (name: string) => {
+    const path = join(dir, name, "web");
+    mkdirSync(path, { recursive: true });
+    writeFileSync(join(path, "run_web.sh"), "exec sleep 30\n");
+    writeFileSync(join(path, "run_api.sh"), "exec sleep 30\n");
+    return { id: `f-${name}`, name, folder: join(dir, name), port: 41000, createdAt: "", archived: false, repos: [{ name: "web", source: join(dir, "src"), path, branch: `caboose/${name}`, baseRef: "main", setup: "none", copied: [] }] } as Feature;
+  };
+  const a = mk("bodo");
+  const b = mk("finse");
+  const runner = new Runner({ terminals: terms, features: () => [a, b], repos: () => [], scriptsFor: () => ({}), scriptEnv: () => ({}), monikersFile: () => undefined, system: async () => ({ procs: new Map(), ports: new Map() }) });
+  await runner.start(a.id, "web", "run_web.sh");
+  const ov = await runner.overview(b.id);
+  const web = ov.repos[0].scripts.find((s) => s.id === "run_web.sh")!;
+  assert.deepEqual(web.elsewhere, [{ featureId: a.id, feature: "bodo" }]);
+  assert.equal(ov.repos[0].scripts.find((s) => s.id === "run_api.sh")!.elsewhere, undefined, "a different program is fine");
+  const sum = runner.summary();
+  assert.deepEqual([sum[a.id].running, sum[a.id].total], [1, 2]);
+  assert.equal(sum[b.id].running, 0);
+  await runner.stopAll(a.id, 1000);
+});

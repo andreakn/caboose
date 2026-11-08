@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import type { MenuCommand } from "../../shared/types.ts";
 
-export type Command = MenuCommand | `selectChat:${string}` | `breakOut:${string}`;
+export type Command = MenuCommand | `selectChat:${string}` | `breakOut:${string}` | `openFeature:${string}`;
 
 export function dispatch(command: Command): void {
   window.dispatchEvent(new CustomEvent<Command>("caboose-command", { detail: command }));

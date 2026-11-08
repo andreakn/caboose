@@ -112,6 +112,7 @@ const api: CabooseApi = {
   terminals: invoke("term:list"),
   openShell: invoke("term:openShell"),
   runOverview: invoke("run:overview"),
+  runSummary: invoke("run:summary"),
   runStart: invoke("run:start"),
   runStartAll: invoke("run:startAll"),
   runStop: invoke("run:stop"),

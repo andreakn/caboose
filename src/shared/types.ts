@@ -152,7 +152,12 @@ export type RunScript = {
   exitCode?: number;
   /** While it is not running: what already listens on a port its URLs use. */
   busy?: PortHolder[];
+  /** The same program (repo and script) running in other features: it likely holds the port this one needs. */
+  elsewhere?: { featureId: string; feature: string }[];
 };
+
+/** A feature's programs at a glance, for the sidebar. */
+export type RunSummary = { running: number; total: number; programs: string[] };
 
 export type RunRepo = {
   repo: string;
@@ -531,6 +536,8 @@ export type CabooseApi = {
   terminals(): Promise<Terminal[]>;
   /** A shell in one of the feature's repos, or in the feature folder. */
   openShell(featureId: string, repo?: string): Promise<Result<Terminal>>;
+  /** Per feature: how many of its programs run, of how many (for the sidebar). */
+  runSummary(): Promise<Record<string, RunSummary>>;
   /** Every repo's run scripts with their state, and programs running outside the Run tab. */
   runOverview(featureId: string): Promise<RunOverview>;
   /** Starts a run script (by id; absent = the repo's first). */

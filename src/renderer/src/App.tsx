@@ -7,6 +7,7 @@ import {
   type Feature,
   type FeatureRepo,
   type RepoOverview,
+  type RunSummary,
   type UpdateInfo,
   FEATURE_STATUSES,
   type FeatureJira,
@@ -47,6 +48,7 @@ type Screen = "feature" | "configure" | "board" | "map";
 
 export function App() {
   const terminals = useTerminals();
+  const runSummary = useRunSummary(terminals);
   const [state, setState] = useState<State>({ features: [], chats: [], comments: [], visits: [], sidebar: EMPTY_SIDEBAR });
   const [config, setConfig] = useState<ConfigInfo | null>(null);
   const [screen, setScreen] = useState<Screen>("feature");
@@ -134,6 +136,7 @@ export function App() {
   useCommand((c) => {
     if (c === "settings" || c === "addRepo") setScreen((s) => (s === "configure" ? "feature" : "configure"));
     if (c === "newFeature") setCreating(true);
+    if (c.startsWith("openFeature:")) select(c.slice("openFeature:".length));
     if ((c === "nextFeature" || c === "prevFeature") && live.length) {
       // In the order the sidebar shows them.
       const order = featureOrder(normalize(state.sidebar, live));
@@ -179,7 +182,7 @@ export function App() {
             sidebar={state.sidebar}
             features={live}
             renderFeature={(f) => (
-              <FeatureRow f={f} activity={activity(f)} active={screen === "feature" && f.id === feature?.id} onClick={() => select(f.id)} />
+              <FeatureRow f={f} activity={activity(f)} run={runSummary[f.id]} active={screen === "feature" && f.id === feature?.id} onClick={() => select(f.id)} />
             )}
           />
           {archived.length > 0 && (
@@ -265,7 +268,20 @@ export function App() {
   );
 }
 
-function FeatureRow(props: { f: Feature; activity?: Activity; active: boolean; onClick: () => void }) {
+/** Per feature, how many of its programs are running (refreshed when terminals change, and now and then). */
+function useRunSummary(terminals: Terminal[]): Record<string, RunSummary> {
+  const [summary, setSummary] = useState<Record<string, RunSummary>>({});
+  const key = terminals.map((t) => `${t.id}:${t.exitCode ?? ""}`).join();
+  useEffect(() => {
+    const load = () => void api.runSummary().then(setSummary);
+    load();
+    const t = setInterval(load, 15_000);
+    return () => clearInterval(t);
+  }, [key]);
+  return summary;
+}
+
+function FeatureRow(props: { f: Feature; activity?: Activity; run?: RunSummary; active: boolean; onClick: () => void }) {
   const { f, active, onClick, activity: a } = props;
   const { ov } = useOverview(f.archived ? undefined : f);
   const setup = f.repos.some((r) => r.setup === "failed") ? "failed" : f.repos.some((r) => r.setup === "running") ? "running" : "ok";
@@ -287,6 +303,14 @@ function FeatureRow(props: { f: Feature; activity?: Activity; active: boolean; o
       <span className="ws-name">
         {stationLabel(f.name)}
         {f.status && f.status !== "active" && <span className={`status-mini st-${f.status}`}>{f.status}</span>}
+        {props.run && props.run.running > 0 && (
+          <span
+            className={`run-ind${props.run.running >= props.run.total ? " full" : ""}`}
+            title={`Running ${props.run.running} of ${props.run.total} programs (they hold their ports):\n${props.run.programs.join("\n")}`}
+          >
+            ▶ {props.run.running}/{props.run.total}
+          </span>
+        )}
       </span>
       <span className="ws-branch" title={f.repos.map((r) => repoLabel(r.name)).join(" · ")}>
         {f.title || f.repos.map((r) => repoLabel(r.name)).join(" · ") || "no repos"}

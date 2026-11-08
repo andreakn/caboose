@@ -3,7 +3,7 @@
 // of iTerm tabs. Stop is Ctrl-C, a grace period, then a hang-up; programs
 // listening from a worktree that the Run tab did not start are shown so they
 // can be stopped too.
-import type { Feature, PortHolder, RepoEntry, RepoScripts, RunOverview, RunScript, Terminal } from "../../shared/types.ts";
+import type { Feature, PortHolder, RepoEntry, RepoScripts, RunOverview, RunScript, RunSummary, Terminal } from "../../shared/types.ts";
 import { type Listener, listeners, type Proc, readSystem, runsFrom, stopPids } from "./listeners.ts";
 import { monikersOf, readMonikers, runnables } from "./runscripts.ts";
 import type { TerminalEnv, Terminals } from "./terminals.ts";
@@ -83,6 +83,9 @@ export class Runner {
     const f = this.feature(featureId);
     const monikers = readMonikers(this.deps.monikersFile());
     const terms = this.deps.terminals.list(f.id).filter((t) => t.kind === "run");
+    // The same programs running in other features (same repo, same script).
+    const others = this.deps.terminals.list().filter((t) => t.kind === "run" && t.featureId !== f.id && t.exitCode === undefined);
+    const featureName = (id: string) => this.deps.features().find((x) => x.id === id)?.name ?? "another feature";
     let all: Listener[] = [];
     let strayError: string | undefined;
     try {
@@ -98,6 +101,7 @@ export class Runner {
         const ports = s.urls.map((u) => localPort(u.url)).filter((p): p is number => p !== undefined);
         const busy = state === "running" ? [] : all.filter((l) => l.ports.some((p) => ports.includes(p))).map((l) => this.holder(l));
         const description = s.id.startsWith("config:") ? undefined : names.describe(s.moniker);
+        const elsewhere = others.filter((o) => o.repo === r.name && o.script === s.id).map((o) => ({ featureId: o.featureId, feature: featureName(o.featureId) }));
         return {
           id: s.id,
           label: s.label,
@@ -108,6 +112,7 @@ export class Runner {
           ...(t ? { terminalId: t.id } : {}),
           ...(t?.exitCode !== undefined ? { exitCode: t.exitCode } : {}),
           ...(busy.length ? { busy } : {}),
+          ...(elsewhere.length ? { elsewhere } : {}),
         };
       });
       const strays = all.filter((l) => !l.terminalId && runsFrom(l.command, [r.path])).map((l) => this.holder(l));
@@ -121,6 +126,20 @@ export class Runner {
       };
     });
     return { repos, ...(strayError ? { strayError } : {}) };
+  }
+
+  /** Every live feature's programs: how many run, of how many. Cheap: a directory listing per repo. */
+  summary(): Record<string, RunSummary> {
+    const running = this.deps.terminals.list().filter((t) => t.kind === "run" && t.exitCode === undefined);
+    const out: Record<string, RunSummary> = {};
+    for (const f of this.deps.features().filter((x) => !x.archived)) {
+      let total = 0;
+      for (const r of f.repos) total += runnables(r.path, this.deps.scriptsFor(r.name, r.source).run).length;
+      const mine = running.filter((t) => t.featureId === f.id);
+      const programs = [...new Set(mine.map((t) => t.title))];
+      if (total || programs.length) out[f.id] = { running: programs.length, total: Math.max(total, programs.length), programs };
+    }
+    return out;
   }
 
   /** Starts one script (absent: the repo's first) in a terminal; a running one is left alone. */
