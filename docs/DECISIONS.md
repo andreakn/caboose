@@ -844,6 +844,11 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      sends data; found anywhere in it, also inside a script it writes and
      runs), and the whole command, not its first line. Asks in Bypass mode
      come from the user's own hooks or rules, which win over the mode.
+165. **A PR GitHub would merge now gets a green "✓ Merge".** "Cleared" is
+     GitHub's own `mergeStateStatus` CLEAN (or HAS_HOOKS): required checks
+     and reviews done, no conflicts, up to date where that is required.
+     Otherwise the button stays as it was, and its tooltip says what is
+     missing (a review or check, the branch behind its base, a draft).
 
 ## Answered (2026-11-05)
 

@@ -150,6 +150,16 @@ export function RepoRow(props: {
   const failing = ov?.pr ? ov.pr.checks.state === "failing" : ghPr ? checksSummary(ghPr.checks).failed > 0 : false;
   const conflicts = pr?.mergeable === "CONFLICTING";
   const canPush = Boolean(b?.upstream && b.ahead > 0);
+  // GitHub says CLEAN (or HAS_HOOKS) once required checks and reviews are done and nothing conflicts.
+  const mergeState = ov?.pr?.mergeState;
+  const cleared = mergeState === "CLEAN" || mergeState === "HAS_HOOKS";
+  const notYet: Record<string, string> = {
+    BLOCKED: "GitHub would not merge yet: a required review or check is missing.",
+    BEHIND: `The branch must be brought up to date with ${repo.baseRef.replace(/^origin\//, "")} first.`,
+    UNSTABLE: "Checks that are not required are failing; it can still be merged.",
+    DRAFT: "Still a draft.",
+    UNKNOWN: "GitHub is still working out whether it can be merged.",
+  };
   const method = (localStorage.getItem("caboose-merge-method") as MergeMethod) || "squash";
 
   const local = b
@@ -162,7 +172,7 @@ export function RepoRow(props: {
     : [];
 
   // The one action that matters now.
-  const primary: { label: string; run: () => void } | null = feature.archived
+  const primary: { label: string; run: () => void; ready?: boolean; title?: string } | null = feature.archived
     ? null
     : b && b.behind > 0
       ? { label: "Pull", run: () => void mergeLocally("pull") }
@@ -175,7 +185,12 @@ export function RepoRow(props: {
           : canPush
             ? { label: "Push", run: () => void act("Pushing…", () => api.push(feature.id, repo.name)) }
             : live && !isDraft && !conflicts
-              ? { label: "Merge", run: () => merge(method) }
+              ? {
+                  label: cleared ? "✓ Merge" : "Merge",
+                  run: () => merge(method),
+                  ready: cleared,
+                  title: cleared ? `Cleared for merging: checks and reviews are done (${method})` : (mergeState && notYet[mergeState]) || undefined,
+                }
               : b && b.behindBase > 0 && pr?.state !== "MERGED"
                 ? { label: `Merge ${base}`, run: () => void mergeLocally("base") }
                 : null;
@@ -231,7 +246,7 @@ export function RepoRow(props: {
   const actions = (
     <span className="row" onClick={(e) => e.stopPropagation()}>
       {primary && (
-        <button className="primary" onClick={primary.run} disabled={!!busy}>
+        <button className={primary.ready ? "primary merge-ready" : "primary"} onClick={primary.run} disabled={!!busy} title={primary.title}>
           {primary.label}
         </button>
       )}
