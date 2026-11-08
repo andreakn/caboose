@@ -712,6 +712,14 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      (warm for the feature, blue for a repo) and the folder tabs are enough
      to show the nesting, and the width goes to the content.
 
+149. **Changed lines are marked in the file viewers** (Files, and the diff
+     viewer's Changed view): a thin bar beside the line numbers, green for
+     new lines, amber for changed ones, and a red tick where lines were
+     removed, all against the branch's base. Within a change block, as many
+     added lines as were removed count as changed, the rest as new. The marks
+     are positioned by line number over the gutter, so the code stays one
+     plain block however long the file is.
+
 ## Answered (2026-11-05)
 
 - Private GitHub repo `andreakn/caboose`: yes.

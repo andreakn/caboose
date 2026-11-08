@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { type DiffComment, type DiffLine, type FileChange, parsePatch, type WorkspaceChanges } from "../../shared/diff.ts";
+import { type DiffComment, type DiffLine, type FileChange, lineMarks, parsePatch, type WorkspaceChanges } from "../../shared/diff.ts";
 import type { Feature, FeatureRepo, FileContent } from "../../shared/types.ts";
 import { ContentView, VsCodeButton } from "./Files.tsx";
 
@@ -238,6 +238,7 @@ function FileDiff(props: { ws: Feature; repo: string; file: FileChange; changes:
           path={file.path}
           content={other.content}
           error={other.error}
+          marks={mode === "changed" ? lineMarks(hunks) : undefined}
           missing={mode === "original" ? "Not in the base: a new file." : "Not in the worktree."}
         />
       )}

@@ -66,6 +66,56 @@ export function parsePatch(patch: string): Hunk[] {
   return hunks;
 }
 
+/** How a line of the current file differs from the base: new, changed, or with lines removed just before it. */
+export type LineMarks = {
+  /** Runs of lines (1-based, inclusive) that are new or changed. */
+  runs: { from: number; to: number; kind: "added" | "modified" }[];
+  /** Line numbers that lines were removed just before (file length + 1: removed at the end). */
+  removedBefore: number[];
+};
+
+/**
+ * Marks for the new side of a diff. Within a change block (removals followed
+ * by additions), as many added lines as were removed count as changed, the
+ * rest as new; removals with no additions leave a "removed here" mark.
+ */
+export function lineMarks(hunks: Hunk[]): LineMarks {
+  const marks: { line: number; kind: "added" | "modified" }[] = [];
+  const removedBefore: number[] = [];
+  for (const h of hunks) {
+    let dels = 0;
+    let nextNew = 0;
+    const flush = () => {
+      if (dels) removedBefore.push(nextNew);
+      dels = 0;
+    };
+    for (const l of h.lines) {
+      if (l.type === "del") {
+        dels++;
+        continue;
+      }
+      if (l.type === "add") {
+        marks.push({ line: l.new!, kind: dels > 0 ? "modified" : "added" });
+        if (dels > 0) dels--;
+        nextNew = l.new! + 1;
+        continue;
+      }
+      // a context line ends the block: removals not matched by additions were removed right here
+      nextNew = l.new!;
+      flush();
+      nextNew = l.new! + 1;
+    }
+    flush();
+  }
+  const runs: LineMarks["runs"] = [];
+  for (const m of marks) {
+    const last = runs.at(-1);
+    if (last && last.kind === m.kind && last.to === m.line - 1) last.to = m.line;
+    else runs.push({ from: m.line, to: m.line, kind: m.kind });
+  }
+  return { runs, removedBefore: [...new Set(removedBefore)].filter((n) => n > 0) };
+}
+
 /** The message that hands the user's review comments to Claude. */
 export function commentsMessage(comments: DiffComment[]): string {
   const parts = comments.map((c) => {

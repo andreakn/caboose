@@ -945,3 +945,13 @@ a.tab-pr.link { text-decoration: underline dotted; cursor: pointer; } a.tab-pr.l
 .view-panel { border-left: none; border-right: none; border-bottom: none; border-radius: 0; padding: 0 8px; }
 .view-panel .tabs { margin: 0 -8px; padding: 4px 8px 0; }
 .view-panel .composer { margin: 0 -8px; padding: 8px 12px 10px; }
+
+/* New / changed / removed lines, beside the line numbers */
+.file-code { --code-lh: calc(12px * 1.55); }
+.gutter-wrap { position: sticky; left: 0; z-index: 1; align-self: stretch; background: var(--card); }
+.file-code .gutter { position: static; }
+.change-marks { position: absolute; top: 8px; right: 0; width: 3px; }
+.change-marks .mark { position: absolute; left: 0; width: 3px; border-radius: 1px; }
+.change-marks .mark.added { background: var(--ok); }
+.change-marks .mark.modified { background: var(--warn); }
+.change-marks .mark.removed { width: 7px; height: 6px; left: -2px; background: var(--danger); clip-path: polygon(0 0, 100% 50%, 0 100%); }

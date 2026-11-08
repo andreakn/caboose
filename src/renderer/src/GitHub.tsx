@@ -418,7 +418,7 @@ export function JiraChip(props: {
         >
           {jiraKey}
         </a>
-        <button className="link" title={`Unlink this ${props.label}`} onClick={() => confirm(`Unlink ${jiraKey}?`) && props.onSet(null)}>
+        <button className="link" title={`Unlink this ${/jira/i.test(props.label) ? props.label : `Jira ${props.label}`}`} onClick={() => confirm(`Unlink ${jiraKey}?`) && props.onSet(null)}>
           ×
         </button>
       </span>
@@ -429,7 +429,7 @@ export function JiraChip(props: {
       <button
         className="link"
         onClick={async () => {
-          const key = await askText({ title: `Link a Jira ${props.label}`, label: "Its key or URL", placeholder: "e.g. NWP-1234", ok: "Link" });
+          const key = await askText({ title: `Link a ${/jira/i.test(props.label) ? props.label : `Jira ${props.label}`}`, label: "Its key or URL", placeholder: "e.g. NWP-1234", ok: "Link" });
           if (key) props.onSet(key);
         }}
       >

@@ -72,3 +72,29 @@ test("the full patch for Claude covers every file, or just one", async () => {
   const one = await fullPatch(repo, "main", "keep.txt");
   assert.doesNotMatch(one, /fresh\.md/);
 });
+
+test("line marks: changed where lines were replaced, new where only added, a tick where only removed", async () => {
+  const { lineMarks, parsePatch } = await import("../src/shared/diff.ts");
+  const patch = [
+    "@@ -1,8 +1,9 @@",
+    " keep 1",
+    "-old 2",
+    "+changed 2",
+    "+brand new 3",
+    " keep 4",
+    "-gone 5",
+    " keep 6",
+    "+added 7",
+    "+added 8",
+    " keep 9",
+    " keep 10",
+  ].join("\n");
+  assert.deepEqual(lineMarks(parsePatch(patch)), {
+    runs: [
+      { from: 2, to: 2, kind: "modified" },
+      { from: 3, to: 3, kind: "added" },
+      { from: 6, to: 7, kind: "added" },
+    ],
+    removedBefore: [5],
+  });
+});

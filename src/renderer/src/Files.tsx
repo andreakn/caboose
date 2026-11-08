@@ -1,7 +1,7 @@
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { FileChange, WorkspaceChanges } from "../../shared/diff.ts";
+import { type FileChange, type LineMarks, lineMarks, parsePatch, type WorkspaceChanges } from "../../shared/diff.ts";
 import type { Feature, FeatureRepo, FileContent } from "../../shared/types.ts";
 
 const api = window.caboose;
@@ -189,6 +189,13 @@ function FileView(props: { f: Feature; repo: FeatureRepo; path: string; status?:
   useEffect(() => {
     void api.readRepoFile(props.f.id, props.repo.name, props.path).then((r) => (r.ok ? setContent(r.value) : setError(r.error)));
   }, [props.path]);
+  // A changed file shows which lines are new or changed.
+  const [marks, setMarks] = useState<LineMarks | undefined>();
+  useEffect(() => {
+    setMarks(undefined);
+    if (!props.status || props.status === "deleted") return;
+    void api.filePatch(props.f.id, props.repo.name, props.path).then((r) => r.ok && setMarks(lineMarks(parsePatch(r.value))));
+  }, [props.path, props.status]);
   return (
     <div className="file-view">
       <div className="file-view-bar">
@@ -212,7 +219,7 @@ function FileView(props: { f: Feature; repo: FeatureRepo; path: string; status?:
         )}
         <VsCodeButton f={props.f} repo={props.repo.name} path={props.path} />
       </div>
-      <ContentView path={props.path} content={content} error={error} preview={isMd && preview} />
+      <ContentView path={props.path} content={content} error={error} preview={isMd && preview} marks={marks} />
     </div>
   );
 }
@@ -233,6 +240,29 @@ export function VsCodeButton(props: { f: Feature; repo: string; path: string; li
   );
 }
 
+/**
+ * A thin bar beside the code: green for new lines, amber for changed ones, a
+ * red tick where lines were removed. Positioned by line, so the code itself
+ * stays one plain block however long the file is.
+ */
+function ChangeMarks({ marks, lines }: { marks: LineMarks; lines: number }) {
+  return (
+    <div className="change-marks" style={{ height: `calc(var(--code-lh) * ${lines})` }}>
+      {marks.runs.map((r) => (
+        <span
+          key={`${r.from}-${r.kind}`}
+          className={`mark ${r.kind}`}
+          title={r.kind === "added" ? "New" : "Changed"}
+          style={{ top: `calc(var(--code-lh) * ${r.from - 1})`, height: `calc(var(--code-lh) * ${r.to - r.from + 1})` }}
+        />
+      ))}
+      {marks.removedBefore.map((n) => (
+        <span key={`d${n}`} className="mark removed" title="Lines removed here" style={{ top: `calc(var(--code-lh) * ${n - 1} - 3px)` }} />
+      ))}
+    </div>
+  );
+}
+
 /** "1.2 KB · 40 lines" */
 export function describe(content: FileContent): string {
   const lines = content.kind === "text" ? content.text.split("\n").length - (content.text.endsWith("\n") ? 1 : 0) : 0;
@@ -240,7 +270,15 @@ export function describe(content: FileContent): string {
 }
 
 /** A file's contents: text with line numbers (or markdown rendered), an image, or why it is not shown. */
-export function ContentView(props: { path: string; content: FileContent | null | undefined; error?: string | null; preview?: boolean; missing?: string }) {
+export function ContentView(props: {
+  path: string;
+  content: FileContent | null | undefined;
+  error?: string | null;
+  preview?: boolean;
+  missing?: string;
+  /** New and changed lines, and where lines were removed (against the branch's base). */
+  marks?: LineMarks;
+}) {
   const { content, error } = props;
   if (error) return <div className="banner error">{error}</div>;
   if (content === null) return <div className="changes-empty muted">{props.missing ?? "No such file."}</div>;
@@ -263,7 +301,10 @@ export function ContentView(props: { path: string; content: FileContent | null |
   if (lines.at(-1) === "") lines.pop();
   return (
     <div className="file-code">
-      <pre className="gutter">{lines.map((_, i) => i + 1).join("\n")}</pre>
+      <div className="gutter-wrap">
+        <pre className="gutter">{lines.map((_, i) => i + 1).join("\n")}</pre>
+        {props.marks && <ChangeMarks marks={props.marks} lines={lines.length} />}
+      </div>
       <pre className="code">{lines.join("\n")}</pre>
     </div>
   );
