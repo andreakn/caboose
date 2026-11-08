@@ -866,6 +866,12 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      told the transcripts are in `history/`, so they read what they need.
      The archive itself is left as it was; the feature records
      `continuedFrom`, and the archived view says what it was continued as.
+167. **Caboose's own icon**: a red caboose at dusk (lit windows, cupola,
+     stove pipe, the red marker lamp at the end of the train), drawn as
+     `assets/icon.svg`. `assets/icon.png` (1024 px) is rendered from it with
+     Electron (`npx electron scripts/make-icon.mjs`, any OS) and committed.
+     Run from a clone, Caboose is Electron itself, so the icon is set at
+     runtime: the Dock icon on macOS, the window icon on Windows and Linux.
 
 ## Answered (2026-11-05)
 

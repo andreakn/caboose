@@ -1,7 +1,7 @@
 // Electron glue: window, IPC and state wiring. The real work is in ./core.
 import { query, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import { app, BrowserWindow, dialog, ipcMain, nativeImage, nativeTheme, safeStorage, screen, shell, systemPreferences } from "electron";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join } from "node:path";
 import type { Agent, Chat, Effort, Mode, Model } from "../shared/chat.ts";
@@ -105,6 +105,8 @@ const needJira = (line?: string) => {
 const features = new Features(store, localConfig, join(dataDir, "logs"), jira);
 // Worktrees and features thrown away while Caboose was quitting: finish deleting them.
 for (const root of featureRoots(localConfig)) void rm(join(root, ".caboose-trash"), { recursive: true, force: true }).catch(() => {});
+/** The app's icon (assets/icon.svg, rendered by scripts/make-icon.mjs). */
+const APP_ICON = join(app.getAppPath(), "assets", "icon.png");
 const featureById = (id: string) => store.get().features.find((f) => f.id === id);
 
 let win: BrowserWindow | null = null;
@@ -209,6 +211,8 @@ function createWindow() {
     minWidth: 720,
     minHeight: 480,
     title: "Caboose",
+    // Windows and Linux show the window's icon in the taskbar (macOS uses the Dock icon set at start).
+    ...(process.platform !== "darwin" ? { icon: APP_ICON } : {}),
     backgroundColor: nativeTheme.shouldUseDarkColors ? "#1c1b1a" : "#f7f5f2",
     webPreferences: {
       preload: join(import.meta.dirname, "../preload/index.mjs"),
@@ -744,6 +748,8 @@ ipcMain.handle("run:browse", (_e, featureId: string, repo: string, script: strin
 store.subscribe((s: State) => win?.webContents.send("state:changed", s));
 
 app.whenReady().then(() => {
+  // Run from a clone, Caboose is Electron itself: give it its own icon in the Dock.
+  if (process.platform === "darwin" && existsSync(APP_ICON)) app.dock?.setIcon(nativeImage.createFromPath(APP_ICON));
   installMenu(() => win);
   createWindow();
   app.on("activate", () => {

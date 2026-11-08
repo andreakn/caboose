@@ -1,0 +1,101 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Caboose's app icon: a red caboose at dusk. scripts/make-icon.mjs renders icon.png from it. -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#253556"/>
+      <stop offset="0.62" stop-color="#3e4f78"/>
+      <stop offset="1" stop-color="#d9875a"/>
+    </linearGradient>
+    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#d9553a"/>
+      <stop offset="1" stop-color="#a8331f"/>
+    </linearGradient>
+    <linearGradient id="roof" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5a2a22"/>
+      <stop offset="1" stop-color="#3b1a15"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ffe7a3"/>
+      <stop offset="1" stop-color="#f5b93f"/>
+    </radialGradient>
+    <clipPath id="tile"><rect x="100" y="100" width="824" height="824" rx="186"/></clipPath>
+  </defs>
+
+  <g clip-path="url(#tile)">
+    <rect x="100" y="100" width="824" height="824" fill="url(#sky)"/>
+    <!-- a few stars, and the last light behind the hills -->
+    <g fill="#fff" opacity="0.7">
+      <circle cx="220" cy="210" r="5"/><circle cx="330" cy="160" r="3.5"/><circle cx="700" cy="190" r="4"/>
+      <circle cx="820" cy="250" r="3"/><circle cx="560" cy="150" r="3"/>
+    </g>
+    <path d="M100 700 Q 300 640 520 690 T 924 670 L 924 924 L 100 924 Z" fill="#2c3b5c" opacity="0.9"/>
+    <!-- ground and track -->
+    <rect x="100" y="790" width="824" height="134" fill="#1d2740"/>
+    <g fill="#5b4636">
+      <rect x="130" y="792" width="44" height="16" rx="3"/><rect x="230" y="792" width="44" height="16" rx="3"/>
+      <rect x="330" y="792" width="44" height="16" rx="3"/><rect x="430" y="792" width="44" height="16" rx="3"/>
+      <rect x="530" y="792" width="44" height="16" rx="3"/><rect x="630" y="792" width="44" height="16" rx="3"/>
+      <rect x="730" y="792" width="44" height="16" rx="3"/><rect x="830" y="792" width="44" height="16" rx="3"/>
+    </g>
+    <rect x="100" y="784" width="824" height="10" fill="#aab3c4"/>
+  </g>
+
+  <!-- the caboose -->
+  <g>
+    <!-- frame and trucks -->
+    <rect x="190" y="676" width="644" height="28" rx="6" fill="#2a1a17"/>
+    <g fill="#2b2f38" stroke="#14171d" stroke-width="6">
+      <circle cx="300" cy="736" r="46"/><circle cx="404" cy="736" r="46"/>
+      <circle cx="620" cy="736" r="46"/><circle cx="724" cy="736" r="46"/>
+    </g>
+    <g fill="#8a93a5">
+      <circle cx="300" cy="736" r="14"/><circle cx="404" cy="736" r="14"/>
+      <circle cx="620" cy="736" r="14"/><circle cx="724" cy="736" r="14"/>
+    </g>
+    <rect x="276" y="700" width="152" height="18" rx="6" fill="#3a3f4b"/>
+    <rect x="596" y="700" width="152" height="18" rx="6" fill="#3a3f4b"/>
+
+    <!-- end platforms with railings -->
+    <g stroke="#e9e2d6" stroke-width="9" stroke-linecap="round" fill="none">
+      <path d="M150 676 V 586 H 214"/><path d="M178 676 V 586"/>
+      <path d="M874 676 V 586 H 810"/><path d="M846 676 V 586"/>
+    </g>
+    <rect x="140" y="668" width="80" height="16" rx="4" fill="#3b2420"/>
+    <rect x="804" y="668" width="80" height="16" rx="4" fill="#3b2420"/>
+
+    <!-- body -->
+    <rect x="214" y="470" width="596" height="210" rx="14" fill="url(#body)"/>
+    <rect x="214" y="636" width="596" height="44" fill="#8f2a19" opacity="0.55"/>
+    <g stroke="#7d2416" stroke-width="3" opacity="0.5">
+      <path d="M214 510 H 810"/><path d="M214 600 H 810"/>
+    </g>
+    <!-- windows, lit -->
+    <g fill="url(#glow)" stroke="#5a2a22" stroke-width="8">
+      <rect x="262" y="518" width="80" height="70" rx="8"/>
+      <rect x="682" y="518" width="80" height="70" rx="8"/>
+    </g>
+    <!-- door -->
+    <rect x="474" y="510" width="76" height="160" rx="8" fill="#9e3221" stroke="#5a2a22" stroke-width="8"/>
+    <circle cx="534" cy="596" r="6" fill="#f2d28b"/>
+    <!-- roof -->
+    <rect x="196" y="448" width="632" height="30" rx="10" fill="url(#roof)"/>
+
+    <!-- cupola -->
+    <rect x="404" y="350" width="216" height="104" rx="10" fill="url(#body)"/>
+    <g fill="url(#glow)" stroke="#5a2a22" stroke-width="7">
+      <rect x="428" y="374" width="70" height="54" rx="7"/>
+      <rect x="526" y="374" width="70" height="54" rx="7"/>
+    </g>
+    <rect x="388" y="330" width="248" height="28" rx="10" fill="url(#roof)"/>
+
+    <!-- stove pipe with a wisp of smoke -->
+    <rect x="300" y="404" width="22" height="48" rx="4" fill="#2a1a17"/>
+    <rect x="294" y="396" width="34" height="12" rx="4" fill="#2a1a17"/>
+    <path d="M312 388 C 290 360, 340 340, 316 310 C 300 290, 330 270, 322 250" stroke="#d8dbe4" stroke-width="12" stroke-linecap="round" fill="none" opacity="0.55"/>
+
+    <!-- marker lamp at the end of the train -->
+    <rect x="818" y="520" width="34" height="46" rx="8" fill="#2a1a17"/>
+    <circle cx="835" cy="543" r="13" fill="#ff4a3a"/>
+    <circle cx="835" cy="543" r="30" fill="#ff4a3a" opacity="0.25"/>
+  </g>
+</svg>
