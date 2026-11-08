@@ -765,6 +765,13 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      look only remembers what had already shipped). On the map a gold ring
      marks a feature that has reached its last stage everywhere. Jira is not
      touched: it follows the branch names.
+156. **Windows, from what CI found.** Closing terminals now waits for their
+     processes to end, and quitting waits up to 3 s for running ones: on
+     Windows a process that exits while a ConPTY is still closing can hang
+     in its exit. Tests run with `--test-force-exit` for the same reason.
+     Moniker paths that do not exist on the machine are compared resolved
+     (drive letters). Tests read git checkouts with CRLF in mind, since Git
+     for Windows converts line endings by default.
 
 ## Answered (2026-11-05)
 
