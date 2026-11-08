@@ -17,8 +17,8 @@ const terms = new Terminals({
   onData: (id, d) => data.set(id, (data.get(id) ?? "") + d),
   onChange: () => changes++,
 });
-after(() => {
-  terms.closeAll();
+after(async () => {
+  await terms.closeAll();
   // Windows: the console host can hold the folder a moment after its shell has gone.
   rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
 });
@@ -61,7 +61,7 @@ test("a shell takes input, and stop ends a long-running process", async () => {
   await until(() => terms.output(run.id).includes("tick"));
   terms.stop(run.id);
   await until(() => terms.list("w2").find((x) => x.id === run.id)?.exitCode !== undefined);
-  terms.closeFeature("w2");
+  await terms.closeFeature("w2");
   assert.equal(terms.list("w2").length, 0);
   assert.ok(changes > 0);
 });
@@ -81,5 +81,5 @@ test("Claude reads the run terminal by default, or one by title", async () => {
   assert.match(h.getTerminalOutput({}), /Terminal "run web" \(running[\s\S]*server listening/);
   assert.match(h.getTerminalOutput({ terminal: "web" }), /server listening/);
   assert.match(h.getTerminalOutput({ terminal: shell.id }), /from-shell/);
-  terms.closeFeature("w3");
+  await terms.closeFeature("w3");
 });

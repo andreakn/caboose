@@ -90,13 +90,14 @@ export class Terminals {
     return text.split("\n").slice(-lines).join("\n");
   }
 
-  /** Stops the process (if running) and forgets the terminal. */
-  close(id: string): void {
+  /** Stops the process (if running) and forgets the terminal; resolves once it has exited. */
+  close(id: string): Promise<void> {
     const t = this.entries.get(id);
-    if (!t) return;
+    if (!t) return Promise.resolve();
     this.entries.delete(id);
     if (t.exitCode === undefined) kill(t.pty);
     this.emitList();
+    return t.exited;
   }
 
   /**
@@ -117,12 +118,24 @@ export class Terminals {
     await Promise.race([t.exited, new Promise((r) => setTimeout(r, 2000))]);
   }
 
-  closeFeature(featureId: string): void {
-    for (const t of this.list(featureId)) this.close(t.id);
+  /** Closes a feature's terminals; resolves once their processes have exited. */
+  closeFeature(featureId: string): Promise<void> {
+    return Promise.all(this.list(featureId).map((t) => this.close(t.id))).then(() => {});
   }
 
-  closeAll(): void {
-    for (const id of [...this.entries.keys()]) this.close(id);
+  /** Whether any terminal still has a running process. */
+  anyRunning(): boolean {
+    return [...this.entries.values()].some((t) => t.exitCode === undefined);
+  }
+
+  /**
+   * Closes every terminal and waits (up to `ms`) for their processes to end.
+   * On Windows a process that exits while a ConPTY is still closing can hang
+   * in its exit, so Caboose (and the tests) wait for them.
+   */
+  async closeAll(ms = 3000): Promise<void> {
+    const exits = [...this.entries.keys()].map((id) => this.close(id));
+    await Promise.race([Promise.all(exits), new Promise((r) => setTimeout(r, ms))]);
   }
 
   private start(

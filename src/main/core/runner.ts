@@ -174,7 +174,7 @@ export class Runner {
   /** Ctrl-C, wait, hang up; then the terminal is closed (an exited one just closes). */
   async stop(terminalId: string, graceMs?: number): Promise<void> {
     await this.deps.terminals.stop(terminalId, graceMs);
-    this.deps.terminals.close(terminalId);
+    void this.deps.terminals.close(terminalId);
     this.cache = null;
   }
 

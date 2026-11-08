@@ -14,8 +14,8 @@ import type { Feature } from "../src/shared/types.ts";
 
 const dir = realpathSync(mkdtempSync(join(tmpdir(), "caboose-run-")));
 const terms = new Terminals({ onData: () => {}, onChange: () => {} });
-after(() => {
-  terms.closeAll();
+after(async () => {
+  await terms.closeAll();
   // Windows: the console host can hold the folder a moment after its shell has gone.
   rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
 });

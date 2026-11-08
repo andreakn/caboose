@@ -354,7 +354,7 @@ ipcMain.handle("feature:addRepo", (_e, featureId: string, repo: string) => featu
 ipcMain.handle("feature:archive", async (_e, id: string) => {
   chats.stopFeature(id);
   await runner.stopAll(id); // Ctrl-C first, so programs shut down cleanly
-  terminals.closeFeature(id);
+  void terminals.closeFeature(id);
   return features.archive(id);
 });
 ipcMain.handle("feature:retirePlan", (_e, id: string) =>
@@ -376,7 +376,7 @@ ipcMain.handle("feature:retire", (_e, id: string, mode: RetireMode) =>
       stop: async () => {
         chats.stopFeature(f.id);
         await runner.stopAll(f.id); // Ctrl-C first, so programs shut down cleanly
-        terminals.closeFeature(f.id);
+        void terminals.closeFeature(f.id);
       },
     });
     chats.forgetFeature(f.id);
@@ -649,7 +649,7 @@ ipcMain.handle("term:openShell", (_e, featureId: string, repo?: string) =>
   }),
 );
 ipcMain.handle("term:stop", (_e, id: string) => terminals.stop(id));
-ipcMain.handle("term:close", (_e, id: string) => terminals.close(id));
+ipcMain.handle("term:close", (_e, id: string) => void terminals.close(id));
 ipcMain.handle("term:buffer", (_e, id: string) => terminals.buffer(id));
 ipcMain.on("term:write", (_e, id: string, data: string) => terminals.write(id, data));
 ipcMain.on("term:resize", (_e, id: string, cols: number, rows: number) => terminals.resize(id, cols, rows));
@@ -676,10 +676,15 @@ app.whenReady().then(() => {
   });
 });
 
-app.on("before-quit", () => {
+let terminalsClosed = false;
+app.on("before-quit", (e) => {
   void copilot.stop();
   chats.stopAll();
-  terminals.closeAll();
+  if (terminalsClosed || !terminals.anyRunning()) return;
+  // Let the terminals' processes end first (a ConPTY closing during exit can hang it on Windows).
+  e.preventDefault();
+  terminalsClosed = true;
+  void terminals.closeAll().finally(() => app.quit());
 });
 
 app.on("window-all-closed", () => {
