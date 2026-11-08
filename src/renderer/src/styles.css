@@ -1022,3 +1022,24 @@ a.tab-pr.link { text-decoration: underline dotted; cursor: pointer; } a.tab-pr.l
 /* A PR GitHub would merge now: the Merge button stands out in green. */
 button.primary.merge-ready { background: var(--ok); border-color: var(--ok); color: var(--card); font-weight: 600; box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 25%, transparent); }
 button.primary.merge-ready:hover { background: color-mix(in srgb, var(--ok) 85%, black); }
+
+/* Archived features: read-only, and continued ones. */
+.ended-row { display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 8px; width: 100%; text-align: left; background: none; border: 0; border-radius: var(--radius); padding: 6px 10px; color: var(--text); cursor: pointer; }
+.ended-row:hover { background: color-mix(in srgb, var(--text) 6%, transparent); }
+.ended-row.active { background: var(--accent-soft); }
+.ended-row .hdot { grid-row: 1 / span 2; align-self: center; }
+.ended-name { font-weight: 600; }
+.ended-title { grid-column: 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hdot.h-archived { background: color-mix(in srgb, var(--merged) 50%, white); }
+.archived-view .archived-body { flex: 1; min-height: 0; overflow: auto; padding: 12px 16px; }
+.archived-messages { display: flex; flex-direction: column; gap: 10px; max-width: 980px; }
+.archived-docs section { margin-bottom: 18px; }
+.archived-docs h3 { margin: 0 0 6px; font-size: 13px; }
+.archived-repos { display: flex; flex-direction: column; gap: 10px; }
+.status-chip.st-archived { background: color-mix(in srgb, var(--merged) 22%, transparent); }
+.continued-marker { display: flex; align-items: center; gap: 10px; margin: 10px 0; color: var(--muted); font-size: 12.5px; }
+.continued-marker::before, .continued-marker::after { content: ""; flex: 1; border-top: 1px dashed var(--border); }
+.continued-marker span { max-width: 70%; text-align: center; }
+.continue-repos { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 10px 0; }
+.continue-repos label { display: inline-flex; gap: 5px; align-items: center; }
+.form-row { display: grid; grid-template-columns: 80px 1fr; gap: 10px; align-items: center; }

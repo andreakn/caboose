@@ -83,6 +83,24 @@ export type Feature = {
   line?: string;
   /** Per repo, the components (monikers) this feature touches: only those are shown and counted. Absent: all. */
   components?: Record<string, string[]>;
+  /** The archived feature this one continues (its chats' history is in history/). */
+  continuedFrom?: { name: string; folder: string; archivedAt: string };
+};
+
+/** An archived feature, read from its archive folder (feature.json, chats/, its files). */
+export type ArchivedFeature = {
+  id: string;
+  name: string;
+  title?: string;
+  line?: string;
+  folder: string;
+  archivedAt: string;
+  createdAt: string;
+  repos: { name: string; branch: string; baseRef: string }[];
+  /** `file`: its events, relative to the folder; `messages`: what was said in it (0: never used). */
+  chats: { id: string; title: string; repo?: string; agent: "claude" | "copilot"; file: string; messages: number }[];
+  /** The PRs that were closed (unmerged) when it was archived. */
+  closedPrs: number[];
 };
 
 export type Terminal = {
@@ -512,6 +530,13 @@ export type CabooseApi = {
   setFeatureDetails(featureId: string, details: FeatureDetails): Promise<Result<void>>;
   /** The configured repos this feature can add (its line's and those on no line), by name. */
   addableRepos(featureId: string): Promise<string[]>;
+  /** Archived features (from the archive folders), newest first. */
+  archivedFeatures(): Promise<ArchivedFeature[]>;
+  /** An archived chat's events, and the archived feature's own files. */
+  archivedChat(folder: string, chatId: string): Promise<ChatEvent[]>;
+  archivedDocs(folder: string): Promise<{ name: string; text: string }[]>;
+  /** A new feature that carries on where an archived one ended: its repos, files, Jira task and chats' history. */
+  continueFeature(folder: string, opts: { repos: string[]; title?: string }): Promise<Result<Feature>>;
   /** Which components (monikers) of a repo the feature touches; null: all of them. */
   setComponents(featureId: string, repo: string, components: string[] | null): Promise<Result<void>>;
   /** The repo's scripts: from the config, plus its own caboose.json. */

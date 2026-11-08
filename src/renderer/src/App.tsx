@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Chat } from "../../shared/chat.ts";
 import type { DiffComment } from "../../shared/diff.ts";
 import {
+  type ArchivedFeature,
   type ConfigInfo,
   EMPTY_SIDEBAR,
   type Feature,
@@ -32,6 +33,7 @@ import { PlanView, StatusChip, useDocs } from "./Plan.tsx";
 import { notificationsOn } from "./prefs.ts";
 import { FilesView } from "./Files.tsx";
 import { liveState, MapView } from "./Map.tsx";
+import { ArchivedView } from "./Archived.tsx";
 import { repoLabel, setRepoLabels } from "./labels.ts";
 import { notifySound } from "./sounds.ts";
 import { RetireDialog } from "./Retire.tsx";
@@ -45,7 +47,7 @@ import { stationLabel } from "../../shared/stations.ts";
 
 const api = window.caboose;
 
-type Screen = "feature" | "configure" | "board" | "map";
+type Screen = "feature" | "configure" | "board" | "map" | "archived";
 
 export function App() {
   const terminals = useTerminals();
@@ -64,6 +66,14 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [retiring, setRetiring] = useState<Feature | null>(null);
+  // Archived features, read from the archive folders; re-read when a feature ends or is continued.
+  const [ended, setEnded] = useState<ArchivedFeature[]>([]);
+  const [openEnded, setOpenEnded] = useState<string | null>(null);
+  useEffect(() => void api.archivedFeatures().then(setEnded), [state.visits.length, state.features.length]);
+  const showEnded = (folder: string) => {
+    setOpenEnded(folder);
+    setScreen("archived");
+  };
   const activityVersion = useActivityVersion();
 
   const loadConfig = () =>
@@ -207,11 +217,23 @@ export function App() {
               <FeatureRow f={f} activity={activity(f)} run={runSummary[f.id]} active={screen === "feature" && f.id === feature?.id} onClick={() => select(f.id)} />
             )}
           />
-          {archived.length > 0 && (
+          {archived.length + ended.length > 0 && (
             <details className="archived">
-              <summary>Archived ({archived.length})</summary>
+              <summary>Archived ({archived.length + ended.length})</summary>
               {archived.map((f) => (
                 <FeatureRow key={f.id} f={f} active={screen === "feature" && f.id === feature?.id} onClick={() => select(f.id)} />
+              ))}
+              {ended.map((a) => (
+                <button
+                  key={a.folder}
+                  className={`ended-row${screen === "archived" && openEnded === a.folder ? " active" : ""}`}
+                  onClick={() => showEnded(a.folder)}
+                  title={`Archived ${a.archivedAt.slice(0, 10)}: read-only; Continue… carries it on`}
+                >
+                  <span className="hdot h-archived" />
+                  <span className="ended-name">{stationLabel(a.name)}</span>
+                  <span className="muted small ended-title">{a.title ?? a.repos.map((r) => repoLabel(r.name)).join(" · ")}</span>
+                </button>
               ))}
             </details>
           )}
@@ -231,7 +253,25 @@ export function App() {
         {(busy || error) && <div className={busy ? "banner" : "banner error"}>{busy ?? error}</div>}
         {!busy && !error && notice && <div className="banner">{notice}</div>}
         {screen === "map" ? (
-          <MapView features={state.features} visits={state.visits} home={config.config.home} onHome={(h) => void api.setHome(h).then(loadConfig)} onOpen={select} />
+          <MapView
+            features={state.features}
+            visits={state.visits}
+            home={config.config.home}
+            onHome={(h) => void api.setHome(h).then(loadConfig)}
+            onOpen={select}
+            onOpenEnded={(id) => {
+              const a = ended.find((x) => x.id === id);
+              if (a) showEnded(a.folder);
+            }}
+          />
+        ) : screen === "archived" && ended.some((a) => a.folder === openEnded) ? (
+          <ArchivedView
+            key={openEnded}
+            a={ended.find((a) => a.folder === openEnded)!}
+            config={config.config}
+            continuedAs={state.features.find((f) => f.continuedFrom?.folder === openEnded)}
+            onContinued={(f) => select(f.id)}
+          />
         ) : screen === "board" ? (
           <Board features={state.features} chats={state.chats} onOpen={select} onNew={() => setCreating(true)} />
         ) : screen === "configure" ? (

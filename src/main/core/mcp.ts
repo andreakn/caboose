@@ -538,6 +538,11 @@ export function cabooseInstructions(f: Feature, agent: "claude" | "copilot" = "c
   const mine = chat?.repo ? f.repos.find((r) => r.name === chat.repo) : undefined;
   const common = [
     jira.task ? `The feature is Jira task ${jira.task} (see jira.txt in the feature folder); each repo's branch carries its own subtask key.` : "",
+    ...(f.continuedFrom
+      ? [
+          `This feature continues ${f.continuedFrom.name}, which was archived on ${f.continuedFrom.archivedAt.slice(0, 10)} (its branches were deleted; these are new ones). Its chats are in ${f.folder}/history/ (one markdown file per chat, the repo in its name): read the ones you need for what was decided and done before. The user sees that earlier conversation above yours.`,
+        ]
+      : []),
     `The feature's working files are plain markdown in ${f.folder}: brief.md (the goal), plan.md (a checklist the user follows; tick items as they are done), briefs/<repo>.md (each repo's part) and log.md (append-only; write to it with ${n("Log")} and ${n("ReportStatus")}, not by editing). Read them when they exist.`,
     `The user sees the changes in Caboose's Changes view. Use ${n("GetWorkspaceDiff")} to see the same diff, ${n("GetDiffComments")} to read the user's review comments, and ${n("DiffComment")} to point the user at specific lines.`,
     `Use ${n("GetTerminalOutput")} to read the user's terminals in Caboose, such as a dev server started by the Run button. Ports ${f.port}–${f.port + 99} are reserved for this feature; each repo's scripts and terminals get their own CABOOSE_PORT.`,

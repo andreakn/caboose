@@ -849,6 +849,23 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      and reviews done, no conflicts, up to date where that is required.
      Otherwise the button stays as it was, and its tooltip says what is
      missing (a review or check, the branch behind its base, a draft).
+166. **Archived features can be opened read-only, and continued.** They
+     are read from the archive folders (`feature.json`, `chats/NN-*.jsonl`,
+     brief/plan/briefs/log), not from the state, so older archives show up
+     too and moving an archive folder away is all it takes to hide one. They
+     are listed under "Archived" in the sidebar and open from the map. The
+     view shows each used chat as it ended (anything left open shown closed),
+     the files, and the repos with their deleted branches. **Continue…** makes
+     a new feature (a new station): the chosen repos still configured on that
+     line, on fresh branches from their base (the old ones were deleted), the
+     same line, title and Jira task with the repos' subtasks, the brief, plan
+     and briefs, the log with a note, and every chat's transcript in
+     `history/`. Its chats show the earlier conversation above a marker. The
+     agents start new sessions (Claude sessions are tied to the old folder,
+     and resuming them across folders is not something to rely on) and are
+     told the transcripts are in `history/`, so they read what they need.
+     The archive itself is left as it was; the feature records
+     `continuedFrom`, and the archived view says what it was continued as.
 
 ## Answered (2026-11-05)
 

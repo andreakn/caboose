@@ -3,7 +3,7 @@ import { query, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import { app, BrowserWindow, dialog, ipcMain, nativeImage, nativeTheme, safeStorage, screen, shell, systemPreferences } from "electron";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { rm } from "node:fs/promises";
-import { dirname, isAbsolute, join } from "node:path";
+import { basename, dirname, isAbsolute, join } from "node:path";
 import type { Agent, Chat, Effort, Mode, Model } from "../shared/chat.ts";
 import { checksSummary } from "../shared/github.ts";
 import { commentsMessage } from "../shared/diff.ts";
@@ -43,6 +43,7 @@ import { checkRepo, Features, scanRepos } from "./core/features.ts";
 import { GitHub } from "./core/github.ts";
 import { Jira } from "./core/jira.ts";
 import { RunningCache } from "./core/running.ts";
+import { archivedChatEvents, archivedDocs, listArchived } from "./core/archived.ts";
 import { DEFAULT_LOCAL_FILES, scanLocalFiles } from "./core/localfiles.ts";
 import { cabooseCopilotTools, cabooseInstructions, cabooseMcp } from "./core/mcp.ts";
 import { featureOverview } from "./core/overview.ts";
@@ -369,6 +370,41 @@ ipcMain.handle("feature:create", async (_e, input: NewFeature) => {
   }
   return r;
 });
+// --- archived features (read from the archive folders) and continuing them
+const archiveRoots = () => [localConfig.archiveRoot, ...Object.values(localConfig.lines).flatMap((l) => (l.archiveRoot ? [l.archiveRoot] : []))];
+/** An archive folder the window names, but only one of the archived features Caboose lists. */
+const archivedAt = (folder: string) => {
+  const a = listArchived(archiveRoots()).find((x) => x.folder === folder);
+  if (!a) throw new Error("That is not an archived feature (moved or deleted?).");
+  return a;
+};
+ipcMain.handle("archived:list", () => listArchived(archiveRoots()));
+ipcMain.handle("archived:chat", (_e, folder: string, chatId: string) => archivedChatEvents(archivedAt(folder), chatId));
+ipcMain.handle("archived:docs", (_e, folder: string) => archivedDocs(archivedAt(folder)));
+ipcMain.handle("archived:continue", (_e, folder: string, opts: { repos: string[]; title?: string }) =>
+  attempt(async () => {
+    const a = archivedAt(folder);
+    const r = await features.continueFrom(a, opts);
+    if (!r.ok) throw new Error(r.error);
+    const f = r.value;
+    // The central chat first (so it is the one that opens), then the repo chats whose repo came along.
+    // Chats that were never used are left behind.
+    const used = a.chats.filter((c) => c.messages > 0);
+    const ordered = [...used.filter((c) => !c.repo), ...used.filter((c) => c.repo)];
+    let central = false;
+    for (const c of ordered) {
+      if (c.repo && !f.repos.some((x) => x.name === c.repo)) continue;
+      const made = chats.create(f.id, c.agent, c.repo);
+      const chat = made.ok ? made : chats.create(f.id, undefined, c.repo); // that agent is not available here
+      if (!chat.ok) continue;
+      if (c.title && c.title !== "New chat" && c.title !== c.repo) chats.rename(chat.value.id, c.title);
+      chats.importHistory(chat.value.id, archivedChatEvents(a, c.id), { name: a.name, archivedAt: a.archivedAt, history: `history/${basename(c.file, ".jsonl")}.md` });
+      if (!c.repo) central = true;
+    }
+    if (!central) chats.create(f.id);
+    return featureById(f.id) ?? f;
+  }),
+);
 ipcMain.handle("feature:addRepo", (_e, featureId: string, repo: string) => features.addRepo(featureId, repo));
 ipcMain.handle("feature:archive", async (_e, id: string) => {
   chats.stopFeature(id);

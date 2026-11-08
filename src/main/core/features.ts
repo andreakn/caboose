@@ -2,9 +2,10 @@
 // (<features root>/<station>/<repo>). Optionally tied to a Jira task, with a
 // subtask per repo. Electron-free, tested with plain `node --test`.
 import { randomUUID } from "node:crypto";
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import type {
+  ArchivedFeature,
   Feature,
   FeatureDetails,
   FeatureJira,
@@ -55,7 +56,8 @@ export class Features {
     return this.store.get().features.find((f) => f.id === id);
   }
 
-  async create(input: NewFeature): Promise<Result<Feature>> {
+  /** `carry`: what a continued feature brings along (its Jira subtasks, where it came from). */
+  async create(input: NewFeature, carry: { subtasks?: Record<string, string>; continuedFrom?: Feature["continuedFrom"] } = {}): Promise<Result<Feature>> {
     try {
       const repos = (input.repos ?? []).map((name) => this.repoEntry(name));
       // No line chosen: the line of the first repo on one (so its folder and Jira are the line's from the start).
@@ -87,7 +89,7 @@ export class Features {
       const name = this.freeName();
       const folder = join(eff.featuresRoot, name);
       mkdirSync(join(folder, ".context"), { recursive: true });
-      if (task) writeFeatureJira(folder, { task, subtasks: {} });
+      if (task) writeFeatureJira(folder, { task, subtasks: carry.subtasks ?? {} });
       const feature: Feature = {
         id: randomUUID(),
         name,
@@ -99,6 +101,7 @@ export class Features {
         port: this.freePort(),
         repos: [],
         ...(line ? { line } : {}),
+        ...(carry.continuedFrom ? { continuedFrom: carry.continuedFrom } : {}),
       };
       this.store.update((s) => ({ ...s, features: [...s.features, feature] }));
       for (const repo of repos) {
@@ -339,6 +342,49 @@ export class Features {
       };
     });
     return ok(undefined);
+  }
+
+  /**
+   * A new feature carrying on an archived one: the chosen repos (fresh
+   * branches from their base: the old ones were deleted), the same line,
+   * title and Jira task (and the repos' subtasks), its brief, plan and
+   * per-repo briefs, its log with a note, and every chat's transcript in
+   * history/ for the agents to read. The chats themselves are carried over by
+   * the caller (Chats).
+   */
+  async continueFrom(a: ArchivedFeature, opts: { repos: string[]; title?: string }): Promise<Result<Feature>> {
+    const known = opts.repos.filter((r) => this.config.repos.some((x) => x.name === r));
+    const jira = readFeatureJira(a.folder);
+    const level = this.eff(a.line).jira.level;
+    const r = await this.create(
+      {
+        repos: known,
+        ...(a.line ? { line: a.line } : {}),
+        ...((opts.title ?? a.title) ? { title: opts.title ?? a.title } : {}),
+        ...(jira.task && level !== "off" ? { jira: { key: jira.task } } : {}),
+      },
+      {
+        subtasks: Object.fromEntries(Object.entries(jira.subtasks).filter(([repo]) => known.includes(repo))),
+        continuedFrom: { name: a.name, folder: a.folder, archivedAt: a.archivedAt },
+      },
+    );
+    if (!r.ok) return r;
+    const to = r.value.folder;
+    const copy = (rel: string) => {
+      const from = join(a.folder, rel);
+      if (existsSync(from) && !existsSync(join(to, rel))) cpSync(from, join(to, rel), { recursive: true });
+    };
+    for (const rel of ["brief.md", "plan.md", "briefs"]) copy(rel);
+    // Every chat's transcript, as the agents' way back into the conversation.
+    if (existsSync(join(a.folder, "chats"))) {
+      mkdirSync(join(to, "history"), { recursive: true });
+      for (const f of readdirSync(join(a.folder, "chats")).filter((n) => n.endsWith(".md"))) cpSync(join(a.folder, "chats", f), join(to, "history", f));
+    }
+    const old = existsSync(join(a.folder, "log.md")) ? readFileSync(join(a.folder, "log.md"), "utf8") : "";
+    const note = `\n- ${new Date().toISOString().slice(0, 16).replace("T", " ")} caboose: Continues ${a.name} (archived ${a.archivedAt.slice(0, 10)}, ${a.folder}). Its chats are in history/.\n`;
+    const current = existsSync(join(to, "log.md")) ? readFileSync(join(to, "log.md"), "utf8") : "";
+    writeFileSync(join(to, "log.md"), `${old.trimEnd()}${old ? "\n" : ""}${current}${note}`);
+    return ok(this.get(r.value.id)!);
   }
 
   /** Which components (monikers) of a repo the feature touches; null or [] = all of them. */

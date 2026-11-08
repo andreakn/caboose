@@ -1,7 +1,7 @@
 // Features against real git repos (and a fake Jira).
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
@@ -297,5 +297,40 @@ test("a feature remembers which components of a repo it touches", async () => {
   assert.ok(!features.setComponents(r.value.id, "web", ["x"]).ok, "web is not in it");
   assert.ok(features.setComponents(r.value.id, "api", null).ok);
   assert.equal(features.get(r.value.id)?.components, undefined, "all of them again");
+  await until(settled(store));
+});
+
+test("continuing an archived feature: its repos on fresh branches, line, title, Jira task and subtasks, files and chats' history", async () => {
+  const { readArchived } = await import("../src/main/core/archived.ts");
+  const store = new Store(join(tmp, "s12", "state.json"));
+  const features = new Features(store, config({ jira: { level: "optional" } }), join(tmp, "s12", "logs"));
+  // An archive folder as retire() writes it.
+  const dest = join(tmp, "archive12", "2026-11-01_10-00_oslo");
+  mkdirSync(join(dest, "chats"), { recursive: true });
+  mkdirSync(join(dest, "briefs"), { recursive: true });
+  const old = { id: "old1", name: "oslo", title: "Gift receipts", folder: "/gone", createdAt: "2026-10-30T09:00:00Z", archived: false, port: 41000, repos: [{ name: "web", source: web, path: "/gone/web", branch: "caboose/ABC-2-oslo", baseRef: "origin/main", setup: "done" }, { name: "legacy", source: "/x", path: "/gone/legacy", branch: "b", baseRef: "main", setup: "done" }] };
+  writeFileSync(join(dest, "feature.json"), JSON.stringify({ feature: old, archivedAt: "2026-11-01T10:00:00Z", chats: [{ id: "c1", featureId: "old1", title: "Gift receipts", agent: "claude" }], closedPrs: [] }));
+  writeFileSync(join(dest, "jira.txt"), "ABC-1\nweb: ABC-2\nlegacy: ABC-3\n");
+  writeFileSync(join(dest, "brief.md"), "# Gift receipts\n");
+  writeFileSync(join(dest, "plan.md"), "- [x] cart toggle\n- [ ] receipt PDF\n");
+  writeFileSync(join(dest, "briefs", "web.md"), "the toggle\n");
+  writeFileSync(join(dest, "log.md"), "- 2026-10-30 09:00 web: started\n");
+  writeFileSync(join(dest, "chats", "01-gift-receipts.md"), "# Gift receipts\n\n## You\n\nAdd a toggle\n");
+  writeFileSync(join(dest, "chats", "01-gift-receipts.jsonl"), `${JSON.stringify({ t: "user", id: "u1", text: "Add a toggle", at: "x" })}\n`);
+  const a = readArchived(dest)!;
+
+  const r = await features.continueFrom(a, { repos: ["web", "legacy"] });
+  assert.ok(r.ok, !r.ok ? r.error : "");
+  const f = r.value;
+  assert.notEqual(f.name, "oslo", "a new station");
+  assert.equal(f.title, "Gift receipts");
+  assert.deepEqual(f.continuedFrom, { name: "oslo", folder: dest, archivedAt: "2026-11-01T10:00:00Z" });
+  assert.deepEqual(f.repos.map((x) => x.name), ["web"], "legacy is not configured here");
+  assert.equal(f.repos[0].branch, `caboose/ABC-2-${f.name}`, "the subtask's key in a fresh branch");
+  assert.deepEqual(features.jiraOf(f.id), { task: "ABC-1", subtasks: { web: "ABC-2" } });
+  assert.equal(readFileSync(join(f.folder, "plan.md"), "utf8"), "- [x] cart toggle\n- [ ] receipt PDF\n");
+  assert.equal(readFileSync(join(f.folder, "briefs", "web.md"), "utf8"), "the toggle\n");
+  assert.equal(readFileSync(join(f.folder, "history", "01-gift-receipts.md"), "utf8"), "# Gift receipts\n\n## You\n\nAdd a toggle\n");
+  assert.match(readFileSync(join(f.folder, "log.md"), "utf8"), /web: started[\s\S]*caboose: Continues oslo \(archived 2026-11-01/);
   await until(settled(store));
 });

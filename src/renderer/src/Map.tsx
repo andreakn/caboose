@@ -207,7 +207,15 @@ export function MapCanvas(props: { home?: HomeArea; onPick?: (p: HomeArea) => vo
 }
 
 /** The Nordics as a metro map: lines always, a station's dot once a feature has been named after it. */
-export function MapView(props: { features: Feature[]; visits: StationVisit[]; home?: HomeArea; onHome: (h: HomeArea | null) => void; onOpen: (featureId: string) => void }) {
+export function MapView(props: {
+  features: Feature[];
+  visits: StationVisit[];
+  home?: HomeArea;
+  onHome: (h: HomeArea | null) => void;
+  onOpen: (featureId: string) => void;
+  /** Opens an ended feature that was archived (read-only). */
+  onOpenEnded?: (featureId: string) => void;
+}) {
   const [picking, setPicking] = useState(false);
   // Live features report their state from their own overview.
   const [live, setLive] = useState<Record<string, StationState>>({});
@@ -217,7 +225,7 @@ export function MapView(props: { features: Feature[]; visits: StationVisit[]; ho
   const reportShipped = (id: string, v: boolean) => setLiveShipped((m) => (m[id] === v ? m : { ...m, [id]: v }));
 
   // Per station: the newest live feature, else the newest ended one.
-  const byStation = new Map<string, { label: string; state?: StationState; title?: string; featureId?: string; uses: number; when: string; shipped?: boolean }>();
+  const byStation = new Map<string, { label: string; state?: StationState; title?: string; featureId?: string; endedId?: string; uses: number; when: string; shipped?: boolean }>();
   for (const v of props.visits) {
     const id = stationOf(v.station);
     if (!id) continue;
@@ -225,6 +233,7 @@ export function MapView(props: { features: Feature[]; visits: StationVisit[]; ho
     byStation.set(id, {
       label: stationLabel(v.station),
       state: visitState(v),
+      ...(v.ended === "archived" ? { endedId: v.featureId } : {}),
       title: v.title,
       uses: (prev?.uses ?? 0) + 1,
       when: `${visitState(v) === "aborted" ? "ended" : STATE_LABELS[visitState(v)]} ${v.endedAt.slice(0, 10)}`,
@@ -298,9 +307,10 @@ export function MapView(props: { features: Feature[]; visits: StationVisit[]; ho
             return (
               <g
                 key={id}
-                className={`map-station${s.featureId ? " live" : ""}`}
+                className={`map-station${s.featureId || (s.endedId && props.onOpenEnded) ? " live" : ""}`}
                 onClick={() => {
                   if (s.featureId) props.onOpen(s.featureId);
+                else if (s.endedId) props.onOpenEnded?.(s.endedId);
                 }}
               >
                 <title>

@@ -1,6 +1,7 @@
 // Archiving or deleting a feature: open PRs closed, branches deleted here and
 // on origin, the folder and chat logs moved to the archive (or deleted).
 import assert from "node:assert/strict";
+import { archivedChatEvents, archivedDocs, listArchived, readArchived } from "../src/main/core/archived.ts";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -143,6 +144,15 @@ test("archive: closes the open PR, deletes the branch here and on origin, moves 
   const record = JSON.parse(readFileSync(join(dest, "feature.json"), "utf8"));
   assert.equal(record.feature.name, "oslo");
   assert.deepEqual(record.closedPrs, [12]);
+
+  // What the read-only view and Continue read back.
+  const a = readArchived(dest)!;
+  assert.equal(a.name, "oslo");
+  assert.deepEqual(a.chats.map((c) => [c.title, c.file, c.messages]), [["Fix the thing", join("chats", "01-fix-the-thing.jsonl"), 2]]);
+  assert.deepEqual(archivedChatEvents(a, a.chats[0].id).map((e) => e.t), ["user", "tool", "tool_result", "text"]);
+  assert.deepEqual(archivedDocs(a).map((x) => x.name), ["brief.md"]);
+  assert.deepEqual(listArchived([join(tmp, `archive${n}`), join(tmp, "nowhere")]).map((x) => x.folder), [dest]);
+  assert.equal(readArchived(join(tmp, `archive${n}`)), null, "a folder without feature.json is not one");
 });
 
 test("delete: the same, but nothing is kept; merged PRs are left alone", async () => {

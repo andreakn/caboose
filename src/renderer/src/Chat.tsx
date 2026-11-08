@@ -18,6 +18,7 @@ import {
 } from "../../shared/chat.ts";
 import type { Feature } from "../../shared/types.ts";
 import { activityOf, setVisibleChat, useActivityVersion } from "./activity.ts";
+import { stationLabel } from "../../shared/stations.ts";
 import { useCommand } from "./commands.ts";
 import { askText } from "./Dialog.tsx";
 import { MenuButton } from "./Menu.tsx";
@@ -285,9 +286,24 @@ function ChatPanel({ chat, ws }: { chat: Chat; ws: Feature }) {
   );
 }
 
-function Item(props: { item: ChatItem; chatId: string; agent: string; rel: (p: string) => string }) {
+export function Item(props: { item: ChatItem; chatId: string; agent: string; rel: (p: string) => string }) {
   const { item, chatId, agent, rel } = props;
   switch (item.kind) {
+    case "continued":
+      return (
+        <div className="continued-marker">
+          <span>
+            Continued from <b>{stationLabel(item.from)}</b>, archived {item.archivedAt.slice(0, 10)}. Above: that conversation. {agent} starts a new
+            session here{item.history ? (
+              <>
+                {" "}
+                and can read it in <code>{item.history}</code>
+              </>
+            ) : null}
+            .
+          </span>
+        </div>
+      );
     case "user":
       return <div className="msg-user">{item.text}</div>;
     case "text":

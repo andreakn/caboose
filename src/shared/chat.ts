@@ -65,7 +65,9 @@ export type LastingEvent =
   | { t: "proposal"; id: string; repos: { name: string; reason: string }[] }
   | { t: "proposal_answer"; id: string; added: string[]; declined: string[]; failed?: string[] }
   | { t: "result"; id: string; ok: boolean; durationMs: number; turns: number; error?: string }
-  | { t: "error"; id: string; text: string };
+  | { t: "error"; id: string; text: string }
+  /** Above here: the conversation in the archived feature this one continues; the agent starts a new session. */
+  | { t: "continued"; id: string; from: string; archivedAt: string; history?: string; at?: string };
 
 /** Events that only matter while the app is open. */
 export type LiveEvent =
@@ -88,6 +90,7 @@ export type Question = {
 
 export type ChatItem =
   | { kind: "user"; id: string; text: string }
+  | { kind: "continued"; id: string; from: string; archivedAt: string; history?: string }
   | { kind: "text"; id: string; text: string }
   | { kind: "thinking"; id: string; text: string }
   | { kind: "tool"; id: string; name: string; input: unknown; result?: { content: string; isError: boolean } }
@@ -129,6 +132,8 @@ export function applyEvent(v: ChatView, e: ChatEvent): ChatView {
       };
     case "permission":
       return { ...v, items: upsert(v.items, { kind: "permission", id: e.id, tool: e.tool, input: e.input, ...(e.reason ? { reason: e.reason } : {}) }) };
+    case "continued":
+      return { ...v, items: [...v.items, { kind: "continued", id: e.id, from: e.from, archivedAt: e.archivedAt, ...(e.history ? { history: e.history } : {}) }] };
     case "permission_answer":
       return {
         ...v,
@@ -199,4 +204,24 @@ export function shellEffects(command: string): string[] {
     has(/\b(kubectl|helm)\s+(apply|delete|rollout|scale|patch|edit|set)\b/) && "changes a cluster",
     has(/\bcurl\b[^\n]*(-X\s*(POST|PUT|PATCH|DELETE)|\s-d\s|--data)/) && "sends data",
   ].filter((x): x is string => Boolean(x));
+}
+
+/**
+ * A finished conversation: permissions, questions and repo proposals still
+ * open when it ended are closed, so nothing in it looks answerable.
+ */
+export function closeOpen(events: LastingEvent[]): LastingEvent[] {
+  const answered = new Set(events.flatMap((e) => (e.t === "permission_answer" || e.t === "question_answer" || e.t === "proposal_answer" ? [e.id] : [])));
+  const closing = events.flatMap((e): LastingEvent[] =>
+    answered.has(e.id)
+      ? []
+      : e.t === "permission"
+        ? [{ t: "permission_answer", id: e.id, allowed: false }]
+        : e.t === "question"
+          ? [{ t: "question_answer", id: e.id, answers: null }]
+          : e.t === "proposal"
+            ? [{ t: "proposal_answer", id: e.id, added: [], declined: [] }]
+            : [],
+  );
+  return [...events, ...closing];
 }

@@ -290,3 +290,22 @@ test("a permission request says why it asks, and what a shell command does that 
   assert.deepEqual(shellEffects("git reset --hard origin/main; rm -rf build"), ["discards changes", "deletes files"]);
   assert.deepEqual(shellEffects("gh pr create --fill && kubectl rollout restart deploy/x"), ["changes a PR", "changes a cluster"]);
 });
+
+test("a continued chat shows the earlier conversation, with anything left open closed, above a marker", async () => {
+  const { store, chats, chatId } = setup();
+  chats.importHistory(
+    chatId,
+    [
+      { t: "user", id: "u1", text: "Add a toggle", at: "2026-10-30T09:00:00Z" },
+      { t: "text", id: "t1", text: "Done." },
+      { t: "permission", id: "p1", tool: "Bash", input: { command: "git push" } },
+    ],
+    { name: "oslo", archivedAt: "2026-11-01T10:00:00Z", history: "history/01-gift-receipts.md" },
+  );
+  const v = view(chats.events(chatId));
+  assert.deepEqual(v.items.map((i) => i.kind), ["user", "text", "permission", "continued"]);
+  assert.equal((v.items[2] as { answer?: boolean }).answer, false, "the open request is closed");
+  assert.deepEqual(v.items[3], { kind: "continued", id: (v.items[3] as { id: string }).id, from: "oslo", archivedAt: "2026-11-01T10:00:00Z", history: "history/01-gift-receipts.md" });
+  chats.rename(chatId, "Gift receipts");
+  assert.equal(store.get().chats.find((c) => c.id === chatId)?.title, "Gift receipts");
+});

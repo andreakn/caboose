@@ -4,7 +4,7 @@
 import { randomUUID } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { type Agent, applyEvent, type Chat, type ChatCommand, type ChatEvent, type Effort, emptyView, type LastingEvent, type Mode, type Model, type ModelOption } from "../../shared/chat.ts";
+import { type Agent, applyEvent, type Chat, closeOpen, type ChatCommand, type ChatEvent, type Effort, emptyView, type LastingEvent, type Mode, type Model, type ModelOption } from "../../shared/chat.ts";
 import type { Result } from "../../shared/types.ts";
 import { type AgentHost, type AgentProvider, type AgentSession, chatCwd, type PermissionAnswer, type QuestionAnswer } from "./agents/types.ts";
 import type { Store } from "./store.ts";
@@ -72,6 +72,24 @@ export class Chats {
     };
     this.store.update((s) => ({ ...s, chats: [...s.chats, chat] }));
     return { ok: true, value: chat };
+  }
+
+  /** Names a chat (a continued chat keeps the name it had). */
+  rename(chatId: string, title: string): void {
+    if (title.trim()) this.patch(chatId, { title: title.trim() });
+  }
+
+  /**
+   * Puts an archived chat's conversation into a new chat, above a marker: the
+   * user sees it all, and the agent (a new session) is pointed at the
+   * transcript file in history/ by its instructions.
+   */
+  importHistory(chatId: string, events: LastingEvent[], from: { name: string; archivedAt: string; history?: string }): void {
+    // Questions and permissions left open when it was archived are closed, so nothing looks answerable.
+    const lines = closeOpen(events).map((e) => JSON.stringify(e)).join("\n");
+    mkdirSync(this.dir, { recursive: true });
+    if (lines) appendFileSync(this.file(chatId), `${lines}\n`);
+    this.record(chatId, { t: "continued", id: randomUUID(), from: from.name, archivedAt: from.archivedAt, ...(from.history ? { history: from.history } : {}), at: new Date().toISOString() });
   }
 
   /** Shows the agent's repo suggestions as a card in the chat. */
