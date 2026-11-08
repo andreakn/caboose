@@ -16,6 +16,7 @@ import {
 import { MODES } from "../../shared/chat.ts";
 import { useApps } from "./Menu.tsx";
 import { applyTheme, getTheme, notificationsOn, setNotifications } from "./prefs.ts";
+import { homeLabel, MapCanvas } from "./Map.tsx";
 import {
   playSound,
   setSoundFor,
@@ -321,6 +322,25 @@ export function Configure({ onDone, onSaved }: { onDone: () => void; onSaved?: (
       {tab === "features" && (
         <>
           <section>
+            <h2>Home area</h2>
+            <p className="muted">
+              Click the map where you are. New features are named after the stations nearest it first, then further and further out,
+              so your map fills in from home. Zoom with scroll or double-click. You can move it later on the Map.
+            </p>
+            <div className="home-picker">
+              <MapCanvas home={form.home} onPick={(home) => setForm({ ...form, home })} />
+            </div>
+            <div className="row">
+              <span className="muted">{form.home ? `⌂ Home ${homeLabel(form.home)}` : "No home area: names come from all over the Nordics."}</span>
+              {form.home && (
+                <button className="link" onClick={() => setForm({ ...form, home: undefined })}>
+                  Clear
+                </button>
+              )}
+            </div>
+          </section>
+
+          <section>
             <h2>Features</h2>
             <p className="muted">
               A feature is a folder named after a railway station, with a git worktree for each repo you work on in it.
@@ -515,6 +535,11 @@ export function Configure({ onDone, onSaved }: { onDone: () => void; onSaved?: (
           {first ? "Save and start" : "Save"}
         </button>
         {message && <span className={message === "Saved." ? "muted" : "del"}>{message}</span>}
+        {first && !form.home && !message && (
+          <button className="link" onClick={() => setTab("features")} title="Features are named after stations near it">
+            Pick your home area (Features)
+          </button>
+        )}
         <span className="muted">App data (features, chats): {info.dataDir}</span>
       </div>
     </div>

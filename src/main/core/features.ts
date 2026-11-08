@@ -425,11 +425,13 @@ export class Features {
     return j;
   }
 
-  /** A station no feature has used and with no folder of that name. */
+  /** A station no feature has used (live or ended) and with no folder of that name. */
   private freeName(): string {
-    const taken = new Set(this.store.get().features.map((f) => f.name));
+    const s = this.store.get();
+    // Stations of ended features too: each feature gets a new dot on the map, and names keep spreading from home.
+    const taken = new Set([...s.features.map((f) => f.name), ...s.visits.map((v) => v.station)]);
     if (existsSync(this.config.featuresRoot)) for (const d of readdirSync(this.config.featuresRoot)) taken.add(d);
-    return pickStation(taken);
+    return pickStation(taken, this.config.home);
   }
 
   private async freeBranch(root: string, wanted: string): Promise<string> {

@@ -14,6 +14,19 @@ export type Station = { name: string; country: Country; lon: number; lat: number
 export const STATION_INFO: Record<string, Station> = OSM_STATIONS;
 export const STATIONS = Object.keys(STATION_INFO);
 
+/** Distance in degrees of latitude, longitude squeezed by the latitude's cosine (good enough at this scale). */
+export function distance(a: { lon: number; lat: number }, b: { lon: number; lat: number }): number {
+  const k = Math.cos((((a.lat + b.lat) / 2) * Math.PI) / 180);
+  return Math.hypot((a.lon - b.lon) * k, a.lat - b.lat);
+}
+
+/** The station nearest a point. */
+export function nearestStation(p: { lon: number; lat: number }): string {
+  let best = STATIONS[0];
+  for (const s of STATIONS) if (distance(p, STATION_INFO[s]) < distance(p, STATION_INFO[best])) best = s;
+  return best;
+}
+
 /** Track between neighbouring stations. */
 export const EDGES: [string, string][] = OSM_EDGES;
 

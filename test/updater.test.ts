@@ -105,3 +105,9 @@ test("a checkout that moved on since the app started: the commits are listed, an
   assert.ok(log.includes("$ npm run build"));
   assert.equal((await checkForUpdate(clone, false, sh(clone, "rev-parse", "HEAD"))).newer.length, 0);
 });
+
+test("a home area is kept only as a point in the Nordics", () => {
+  assert.deepEqual(applyConfigInput({}, { home: { lon: 10.39512, lat: 63.43049 } }, plainCodec).home, { lon: 10.395, lat: 63.43 });
+  assert.equal("home" in applyConfigInput({}, { home: { lon: -70, lat: 40 } }, plainCodec), false);
+  assert.equal("home" in applyConfigInput({}, { home: { lon: Number.NaN, lat: 60 } } as never, plainCodec), false);
+});

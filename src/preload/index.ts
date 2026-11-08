@@ -23,6 +23,7 @@ const api: CabooseApi = {
 
   config: invoke("config:get"),
   saveConfig: invoke("config:save"),
+  setHome: invoke("config:setHome"),
   pickFolder: invoke("config:pickFolder"),
   checkRepo: invoke("config:checkRepo"),
   scanRepos: invoke("config:scanRepos"),

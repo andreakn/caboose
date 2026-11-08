@@ -8,7 +8,7 @@ import type { Agent, Chat, Effort, Mode, Model } from "../shared/chat.ts";
 import { checksSummary } from "../shared/github.ts";
 import { commentsMessage } from "../shared/diff.ts";
 import type { MergeMethod } from "../shared/github.ts";
-import type { AppId, ConfigInput, Feature, FeatureStatus, NewFeature, RetireMode, Sidebar, State, Theme } from "../shared/types.ts";
+import type { AppId, ConfigInput, Feature, HomeArea, FeatureStatus, NewFeature, RetireMode, Sidebar, State, Theme } from "../shared/types.ts";
 import { CopilotClient } from "@github/copilot-sdk";
 import { ClaudeProvider, Inbox } from "./core/agents/claude.ts";
 import { copilotEnv, CopilotProvider } from "./core/agents/copilot.ts";
@@ -23,6 +23,7 @@ import {
   configView,
   defaultArchiveRoot,
   defaultFeaturesRoot,
+  homeArea,
   jiraToken,
   loadLocalConfig,
   loadRepoConfig,
@@ -280,6 +281,16 @@ ipcMain.handle("config:save", (_e, input: ConfigInput) =>
     localConfig = loadLocalConfig(configDir);
     features.setConfig(localConfig);
     terminals.setPaths(localConfig.bashPath, localConfig.shellPath);
+  }),
+);
+ipcMain.handle("config:setHome", (_e, home: HomeArea | null) =>
+  attempt(() => {
+    const stored = readLocalConfig(configDir);
+    const { home: _old, ...rest } = stored;
+    const next = homeArea(home);
+    saveLocalConfig(configDir, next ? { ...rest, home: next } : rest);
+    localConfig = loadLocalConfig(configDir);
+    features.setConfig(localConfig);
   }),
 );
 ipcMain.handle("config:pickFolder", async (_e, title: string) => {

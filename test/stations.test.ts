@@ -1,7 +1,7 @@
 // Station names and the map's data hold together.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { pickStation } from "../src/main/core/stations.ts";
+import { distance, NEAR_CHOICES, pickStation } from "../src/main/core/stations.ts";
 import { STATION_INFO as CURATED } from "../src/shared/stations-curated.ts";
 import { COUNTRIES, EDGES, LANDMARKS, STATION_INFO, STATIONS, stationLabel, stationOf } from "../src/shared/stations.ts";
 
@@ -32,5 +32,22 @@ test("every edge joins two known stations, every place is in the Nordics", () =>
 test("picking a name never repeats one in use", () => {
   const taken = new Set(STATIONS.slice(1));
   assert.equal(pickStation(taken), STATIONS[0]);
-  assert.match(pickStation(new Set(STATIONS), () => 0), new RegExp(`^${STATIONS[0]}-2$`));
+  assert.match(pickStation(new Set(STATIONS), undefined, () => 0), new RegExp(`^${STATIONS[0]}-2$`));
+});
+
+test("with a home area, names spread outwards from it as features are made", () => {
+  const home = { lon: 10.4, lat: 63.43 }; // Trondheim
+  const taken = new Set<string>();
+  const order: number[] = [];
+  for (let i = 0; i < 30; i++) {
+    const s = pickStation(taken, home, () => 0);
+    order.push(distance(home, STATION_INFO[s]));
+    taken.add(s);
+  }
+  assert.ok(order[0] < 0.05, "the first is at home");
+  for (let i = 1; i < order.length; i++) assert.ok(order[i] >= order[i - 1], "each next one is no closer");
+  // A little variety: any of the few nearest free ones.
+  const nearest = [...STATIONS].sort((a, b) => distance(home, STATION_INFO[a]) - distance(home, STATION_INFO[b])).slice(0, NEAR_CHOICES);
+  assert.equal(pickStation(new Set(), home, () => 0.999), nearest.at(-1));
+  assert.ok(nearest.includes(pickStation(new Set(), home)));
 });

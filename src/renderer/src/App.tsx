@@ -228,7 +228,7 @@ export function App() {
         {(busy || error) && <div className={busy ? "banner" : "banner error"}>{busy ?? error}</div>}
         {!busy && !error && notice && <div className="banner">{notice}</div>}
         {screen === "map" ? (
-          <MapView features={state.features} visits={state.visits} onOpen={select} />
+          <MapView features={state.features} visits={state.visits} home={config.config.home} onHome={(h) => void api.setHome(h).then(loadConfig)} onOpen={select} />
         ) : screen === "board" ? (
           <Board features={state.features} chats={state.chats} onOpen={select} onNew={() => setCreating(true)} />
         ) : screen === "configure" ? (

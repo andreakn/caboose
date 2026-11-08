@@ -3,7 +3,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { ConfigInput, ConfigView, JiraConfig, LocalConfig, RepoConfig, RepoEntry, Secret } from "../../shared/types.ts";
+import type { ConfigInput, ConfigView, HomeArea, JiraConfig, LocalConfig, RepoConfig, RepoEntry, Secret } from "../../shared/types.ts";
 
 /** Encrypts secrets for the config file (Electron's safeStorage in the app). */
 export type SecretCodec = { canEncrypt: boolean; encrypt(s: string): string; decrypt(s: string): string };
@@ -35,6 +35,7 @@ export type ResolvedLocalConfig = {
   openWith?: LocalConfig["openWith"];
   defaultAgent: "claude" | "copilot";
   defaultMode: NonNullable<LocalConfig["defaultMode"]>;
+  home?: HomeArea;
 };
 
 export const configFile = (cabooseDir: string) => join(cabooseDir, FILE);
@@ -71,7 +72,16 @@ export function loadLocalConfig(cabooseDir: string): ResolvedLocalConfig {
     defaultAgent: c.defaultAgent ?? "claude",
     defaultMode: c.defaultMode ?? "bypassPermissions",
     openWith: c.openWith,
+    home: homeArea(c.home),
   };
+}
+
+/** A home area that is a real point in the Nordics, or nothing. */
+export function homeArea(h: unknown): HomeArea | undefined {
+  const { lon, lat } = (h ?? {}) as Partial<HomeArea>;
+  if (typeof lon !== "number" || typeof lat !== "number" || !Number.isFinite(lon) || !Number.isFinite(lat)) return undefined;
+  if (lon < 0 || lon > 35 || lat < 53 || lat > 72) return undefined;
+  return { lon: Math.round(lon * 1000) / 1000, lat: Math.round(lat * 1000) / 1000 };
 }
 
 /** What the window may see: never the token itself. */
@@ -90,6 +100,11 @@ export function applyConfigInput(stored: LocalConfig, input: ConfigInput, codec:
     const { token, ...j } = jira;
     const kept = token === undefined ? stored.jira?.token : token === null || token.trim() === "" ? undefined : seal(token.trim(), codec);
     out.jira = { ...cleanStrings(j), level: j.level, ...(kept ? { token: kept } : {}) };
+  }
+  if ("home" in out) {
+    const home = homeArea(out.home);
+    if (home) out.home = home;
+    else delete out.home;
   }
   if (out.repos) {
     out.repos = out.repos

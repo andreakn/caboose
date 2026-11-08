@@ -278,7 +278,12 @@ export type LocalConfig = {
   prInstructions?: string;
   /** Commands to open a folder in an app, overriding detection; "{path}" is replaced. */
   openWith?: Partial<Record<AppId, string>>;
+  /** Where new features' stations are picked from first, spreading outwards (picked on the map). */
+  home?: HomeArea;
 };
+
+/** A point on the map (degrees), around which feature names are picked. */
+export type HomeArea = { lon: number; lat: number };
 
 /** Apps a folder can be opened in. */
 export type AppId = "vscode" | "rider" | "visualStudio" | "terminal" | "files";
@@ -427,6 +432,8 @@ export type CabooseApi = {
 
   config(): Promise<ConfigInfo>;
   saveConfig(config: ConfigInput): Promise<Result<void>>;
+  /** Sets (or with null, clears) the home area alone, from the map. */
+  setHome(home: HomeArea | null): Promise<Result<void>>;
   pickFolder(title: string): Promise<string | null>;
   /** A repo's top folder and name, if `path` is inside a git repo. */
   checkRepo(path: string): Promise<Result<RepoEntry>>;

@@ -772,6 +772,14 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      Moniker paths that do not exist on the machine are compared resolved
      (drive letters). Tests read git checkouts with CRLF in mind, since Git
      for Windows converts line endings by default.
+157. **A home area, and names that spread from it.** The home area is a
+     point picked on the map (first-run setup, Features tab, or the Map page
+     later), saved as `home` in `caboose.local.json` since it is the
+     person's, not the repo's. A new feature is named after one of the 4
+     nearest free stations, so the map fills in outwards from home with a
+     little variety. Stations of ended features (visits) now count as taken
+     too, so every feature is a new dot; names only repeat ("-2") once all
+     1,757 are used. Without a home area, names come from anywhere, as before.
 
 ## Answered (2026-11-05)
 
