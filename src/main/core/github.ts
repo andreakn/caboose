@@ -24,8 +24,8 @@ export class GitHub {
     return { available: true, branch: branchStatus, pr: await this.pr(wsPath, branchStatus.head ?? branch) };
   }
 
-  async branchStatus(wsPath: string, baseRef: string): Promise<BranchStatus> {
-    await this.fetchSometimes(wsPath);
+  async branchStatus(wsPath: string, baseRef: string, fetch = true): Promise<BranchStatus> {
+    if (fetch) await this.fetchSometimes(wsPath);
     const out = await git(wsPath, "status", "--porcelain=v2", "--branch");
     const lines = out.split("\n");
     const upstream = lines.find((l) => l.startsWith("# branch.upstream "))?.slice(18);

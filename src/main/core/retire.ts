@@ -3,8 +3,10 @@
 // moves the feature folder (brief, plan, log, jira.txt) and its chat logs to
 // <archive>/<yyyy-mm-dd_hh-mm>_<station>/; deleting deletes them. Either way
 // Caboose forgets the feature.
+import { randomUUID } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { rm } from "node:fs/promises";
+import { basename, dirname, join } from "node:path";
 import { applyEvent, type Chat, type ChatEvent, type ChatItem, emptyView } from "../../shared/chat.ts";
 import type { Feature, FeatureRepo, RetireMode, RetireOutcome, RetirePlan, RetireRepo } from "../../shared/types.ts";
 import { removeWorktree } from "./git.ts";
@@ -61,7 +63,8 @@ export async function retirePlan(f: Feature, d: Pick<RetireDeps, "github" | "arc
     f.repos.map(async (r): Promise<RetireRepo> => {
       const live = existsSync(r.path);
       const cwd = live ? r.path : r.source;
-      const status = live ? await d.github.branchStatus(r.path, r.baseRef).catch(() => null) : null;
+      // Local facts only: a fetch per repo would make the dialog (and deleting) wait on the network.
+      const status = live ? await d.github.branchStatus(r.path, r.baseRef, false).catch(() => null) : null;
       let pr: RetireRepo["pr"];
       let prError: string | undefined;
       try {
@@ -98,42 +101,44 @@ export async function retire(f: Feature, mode: RetireMode, d: RetireDeps): Promi
   const merged = plan.repos.length > 0 && plan.repos.every((r) => r.pr?.state === "MERGED");
   const out: RetireOutcome = { closedPrs: [], deletedBranches: [], warnings: [], merged };
 
-  for (const p of plan.repos) {
-    if (!p.pr || (p.pr.state !== "OPEN" && p.pr.state !== "DRAFT")) continue;
-    const r = f.repos.find((x) => x.name === p.repo)!;
-    try {
-      await d.github.closePr(existsSync(r.path) ? r.path : r.source, p.pr.number);
-      out.closedPrs.push(p.pr.number);
-    } catch (e) {
-      throw new Error(`Could not close ${p.repo}'s PR #${p.pr.number}, so nothing was changed: ${(e as Error).message}`);
-    }
+  // Open PRs are closed first, all at once; if any cannot be, the rest of the feature is left as it is.
+  const open = plan.repos.filter((p) => p.pr && (p.pr.state === "OPEN" || p.pr.state === "DRAFT"));
+  const closing = await Promise.allSettled(
+    open.map((p) => {
+      const r = f.repos.find((x) => x.name === p.repo)!;
+      return d.github.closePr(existsSync(r.path) ? r.path : r.source, p.pr!.number);
+    }),
+  );
+  closing.forEach((c, i) => c.status === "fulfilled" && out.closedPrs.push(open[i].pr!.number));
+  const failed = closing.flatMap((c, i) => (c.status === "rejected" ? [`${open[i].repo}'s PR #${open[i].pr!.number}: ${(c.reason as Error).message}`] : []));
+  if (failed.length) {
+    const closed = out.closedPrs.length ? ` (closed: ${out.closedPrs.map((n) => `#${n}`).join(", ")})` : "";
+    throw new Error(`Could not close ${failed.join("; ")}. Nothing else was changed${closed}.`);
   }
 
   await d.stop();
 
-  for (const r of f.repos) {
-    const warn = (what: string, e: unknown) => out.warnings.push(`${r.name}: ${what}: ${(e as Error).message.split("\n")[0]}`);
-    if (existsSync(r.path)) {
-      await d.archiveScript(r).catch((e) => warn("archive script", e));
-      await removeWorktree(r.source, r.path).catch((e) => warn("removing the worktree", e));
-      if (existsSync(r.path)) rmSync(r.path, { recursive: true, force: true });
-    }
-    if (keepReason(r)) continue;
-    const local = await git(r.source, "rev-parse", "--verify", "--quiet", `refs/heads/${r.branch}`).then(() => true, () => false);
-    if (local) {
+  // Every repo at once: each only waits for its own archive script and network round-trip.
+  const trash = trashDir(f);
+  await Promise.all(
+    f.repos.map(async (r) => {
+      const warn = (what: string, e: unknown) => out.warnings.push(`${r.name}: ${what}: ${(e as Error).message.split("\n")[0]}`);
+      if (existsSync(r.path)) {
+        await d.archiveScript(r).catch((e) => warn("archive script", e));
+        await discardWorktree(r, trash).catch((e) => warn("removing the worktree", e));
+      }
+      if (keepReason(r)) return;
       await git(r.source, "branch", "-D", r.branch).then(
         () => out.deletedBranches.push(`${r.name}: ${r.branch}`),
-        (e) => warn(`deleting branch ${r.branch}`, e),
+        (e) => /not found/.test((e as Error).message) || warn(`deleting branch ${r.branch}`, e),
       );
-    }
-    const remote = await git(r.source, "ls-remote", "--exit-code", "--heads", "origin", r.branch).then((s) => s.length > 0, () => false);
-    if (remote) {
+      // One round-trip: a branch that is not on origin (never pushed, or deleted on merge) is fine.
       await git(r.source, "push", "origin", "--delete", r.branch).then(
         () => out.deletedBranches.push(`${r.name}: origin/${r.branch}`),
-        (e) => warn(`deleting origin/${r.branch}`, e),
+        (e) => /remote ref does not exist|unable to delete|does not appear to be a git repository|No such remote/.test((e as Error).message) || warn(`deleting origin/${r.branch}`, e),
       );
-    }
-  }
+    }),
+  );
 
   if (mode === "archive") {
     const dest = plan.archiveTo;
@@ -156,9 +161,39 @@ export async function retire(f: Feature, mode: RetireMode, d: RetireDeps): Promi
     writeFileSync(join(dest, "feature.json"), `${JSON.stringify(record, null, 2)}\n`);
     out.archivedTo = dest;
   } else if (existsSync(f.folder)) {
-    rmSync(f.folder, { recursive: true, force: true });
+    throwAway(f.folder, trash);
   }
   return out;
+}
+
+/** A trash folder beside the features (same disk, so moving into it is instant). */
+export const trashDir = (f: Feature) => join(dirname(f.folder), ".caboose-trash");
+
+/** Moves a folder into the trash at once and deletes it in the background. */
+function throwAway(path: string, trash: string): void {
+  mkdirSync(trash, { recursive: true });
+  const gone = join(trash, `${basename(path)}-${randomUUID().slice(0, 8)}`);
+  try {
+    renameSync(path, gone);
+  } catch {
+    rmSync(path, { recursive: true, force: true }); // another disk: the slow way
+    return;
+  }
+  void rm(gone, { recursive: true, force: true }).catch(() => {});
+}
+
+/**
+ * A worktree gone in an instant: its folder (node_modules, bin, obj: often
+ * tens of thousands of files) is moved to the trash, git forgets the worktree,
+ * and the files are deleted in the background.
+ */
+async function discardWorktree(r: FeatureRepo, trash: string): Promise<void> {
+  try {
+    throwAway(r.path, trash);
+  } catch {
+    return removeWorktree(r.source, r.path);
+  }
+  await git(r.source, "worktree", "prune");
 }
 
 /** rename, or copy + delete across disks. */

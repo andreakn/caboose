@@ -161,7 +161,7 @@ test("delete: the same, but nothing is kept; merged PRs are left alone", async (
 test("a PR that cannot be closed stops everything before anything is changed", async () => {
   const { f, source, folder, path } = setup();
   const { d, stopped } = deps({ prState: "OPEN", closeFails: true });
-  await assert.rejects(retire(f, "archive", d), /Could not close web's PR #12, so nothing was changed: gh: not logged in/);
+  await assert.rejects(retire(f, "archive", d), /Could not close web's PR #12: gh: not logged in\. Nothing else was changed\./);
   assert.equal(stopped(), 0);
   assert.ok(existsSync(path) && existsSync(folder));
   assert.ok(branches(source).includes("caboose/oslo"));

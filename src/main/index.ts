@@ -2,6 +2,7 @@
 import { query, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import { app, BrowserWindow, dialog, ipcMain, nativeImage, nativeTheme, safeStorage, screen, shell, systemPreferences } from "electron";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { rm } from "node:fs/promises";
 import { dirname, isAbsolute, join } from "node:path";
 import type { Agent, Chat, Effort, Mode, Model } from "../shared/chat.ts";
 import { checksSummary } from "../shared/github.ts";
@@ -95,6 +96,8 @@ const needJira = () => {
 };
 
 const features = new Features(store, localConfig, join(dataDir, "logs"), jira);
+// Worktrees and features thrown away while Caboose was quitting: finish deleting them.
+void rm(join(localConfig.featuresRoot, ".caboose-trash"), { recursive: true, force: true }).catch(() => {});
 const featureById = (id: string) => store.get().features.find((f) => f.id === id);
 
 let win: BrowserWindow | null = null;

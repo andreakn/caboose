@@ -734,6 +734,16 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      streams in above), and a "↓ Latest" button appears when you are scrolled
      well up, jumping to the end.
 
+152. **Archiving or deleting is quick**: open PRs are closed all at once,
+     then every repo is handled at the same time; a worktree is moved into
+     `.caboose-trash` beside the features (same disk, so instant), git
+     forgets it (`worktree prune`) and the files are deleted in the
+     background (leftovers are cleared when Caboose starts); the remote
+     branch is deleted in one push (a missing one is fine) instead of a
+     check and a delete; the plan uses local git facts without fetching. A
+     7-repo feature with 20,000 files per worktree went from 5.6 s (local
+     remotes, more with GitHub's round-trips) to under 0.1 s.
+
 ## Answered (2026-11-05)
 
 - Private GitHub repo `andreakn/caboose`: yes.
