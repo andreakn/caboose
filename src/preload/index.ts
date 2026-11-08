@@ -70,6 +70,7 @@ const api: CabooseApi = {
   featureStatus: invoke("docs:status"),
   overview: invoke("feature:overview"),
   models: invoke("chat:models"),
+  commands: invoke("chat:commands"),
   removeChat: invoke("chat:remove"),
   chatEvents: invoke("chat:events"),
   send: invoke("chat:send"),

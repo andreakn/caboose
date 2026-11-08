@@ -11,6 +11,9 @@ export const AGENTS: { value: Agent; label: string }[] = [
 
 /** "default", or a model id/alias the chat's agent understands. */
 export type Model = string;
+/** A slash command a chat's agent offers (a skill, a project command, one of Claude Code's own). */
+export type ChatCommand = { name: string; description: string; argumentHint?: string };
+
 export type ModelOption = { value: Model; label: string; efforts?: Effort[] };
 export type Effort = "low" | "medium" | "high" | "xhigh" | "max";
 export type Mode = "default" | "acceptEdits" | "plan" | "bypassPermissions";

@@ -4,9 +4,9 @@
 import { randomUUID } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { type Agent, applyEvent, type Chat, type ChatEvent, type Effort, emptyView, type LastingEvent, type Mode, type Model, type ModelOption } from "../../shared/chat.ts";
+import { type Agent, applyEvent, type Chat, type ChatCommand, type ChatEvent, type Effort, emptyView, type LastingEvent, type Mode, type Model, type ModelOption } from "../../shared/chat.ts";
 import type { Result } from "../../shared/types.ts";
-import type { AgentHost, AgentProvider, AgentSession, PermissionAnswer, QuestionAnswer } from "./agents/types.ts";
+import { type AgentHost, type AgentProvider, type AgentSession, chatCwd, type PermissionAnswer, type QuestionAnswer } from "./agents/types.ts";
 import type { Store } from "./store.ts";
 
 type Live = {
@@ -119,6 +119,16 @@ export class Chats {
 
   models(agent: Agent): Promise<ModelOption[]> {
     return this.providers[agent]?.models() ?? Promise.resolve([]);
+  }
+
+  /** The slash commands the chat's agent offers where it works (none for agents that cannot list them). */
+  async commands(chatId: string): Promise<ChatCommand[]> {
+    const s = this.store.get();
+    const chat = s.chats.find((c) => c.id === chatId);
+    const feature = chat && s.features.find((f) => f.id === chat.featureId);
+    const provider = chat && this.providers[agentOf(chat)];
+    if (!chat || !feature || !provider?.commands) return [];
+    return provider.commands(chatCwd(chat, feature)).catch(() => []);
   }
 
   /** The saved transcript plus the live state, for (re)opening a chat. */

@@ -4,6 +4,7 @@ import remarkGfm from "remark-gfm";
 import {
   applyEvent,
   type Chat,
+  type ChatCommand,
   type ChatItem,
   type ChatView,
   EFFORTS,
@@ -560,6 +561,92 @@ export function toolSummary(input: unknown, rel: (p: string) => string): string 
   return s.length > 120 ? `${s.slice(0, 119)}…` : s;
 }
 
+/** Each chat's commands, fetched the first time "/" is typed in it. */
+const commandLists = new Map<string, Promise<ChatCommand[]>>();
+
+/**
+ * Completion for slash commands (skills, project commands, Claude Code's own)
+ * while the message is just "/something": ↑/↓ to choose, Tab or Enter to take
+ * one, Esc to type on without it.
+ */
+function useSlashCommands(chat: Chat, text: string, setText: (t: string) => void) {
+  const [list, setList] = useState<ChatCommand[]>([]);
+  const [pick, setPick] = useState(0);
+  const [dismissed, setDismissed] = useState<string | null>(null);
+  const typing = /^\/\S*$/.test(text);
+  useEffect(() => {
+    if (!typing) return;
+    let promise = commandLists.get(chat.id);
+    if (!promise) {
+      promise = api.commands(chat.id);
+      commandLists.set(chat.id, promise);
+      // Asked again next time: skills can be added while Caboose runs.
+      setTimeout(() => commandLists.delete(chat.id), 60_000);
+    }
+    let live = true;
+    void promise.then((l) => live && setList(l));
+    return () => {
+      live = false;
+    };
+  }, [chat.id, typing]);
+
+  const query = typing ? text.slice(1).toLowerCase() : "";
+  const matches = !typing || dismissed === text
+    ? []
+    : [
+        ...list.filter((c) => c.name.toLowerCase().startsWith(query)),
+        ...list.filter((c) => !c.name.toLowerCase().startsWith(query) && c.name.toLowerCase().includes(query)),
+      ];
+  const open = matches.length > 0;
+  const current = Math.min(pick, Math.max(0, matches.length - 1));
+  useEffect(() => setPick(0), [query]);
+  const take = (c: ChatCommand) => setText(`/${c.name} `);
+
+  const onKey = (e: KeyboardEvent<HTMLTextAreaElement>): boolean => {
+    if (!open || e.nativeEvent.isComposing) return false;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      setPick((current + (e.key === "ArrowDown" ? 1 : matches.length - 1)) % matches.length);
+      return true;
+    }
+    if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey)) {
+      e.preventDefault();
+      take(matches[current]);
+      return true;
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      setDismissed(text);
+      return true;
+    }
+    return false;
+  };
+
+  const menu = open ? (
+    <div className="command-menu" role="listbox">
+      {matches.slice(0, 60).map((c, i) => (
+        <div
+          key={c.name}
+          role="option"
+          aria-selected={i === current}
+          className={`command-item${i === current ? " active" : ""}`}
+          ref={i === current ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined}
+          onMouseEnter={() => setPick(i)}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            take(c);
+          }}
+        >
+          <span className="command-name">/{c.name}</span>
+          {c.argumentHint && <span className="command-args">{c.argumentHint}</span>}
+          <span className="command-desc">{c.description}</span>
+        </div>
+      ))}
+    </div>
+  ) : null;
+  return { menu, onKey };
+}
+
 function Composer(props: { chat: Chat; running: boolean; asking: boolean; disabled: boolean }) {
   const { chat, running, disabled } = props;
   const models = useModels(agentOf(chat));
@@ -568,6 +655,13 @@ function Composer(props: { chat: Chat; running: boolean; asking: boolean; disabl
   const efforts = supported?.length ? [...new Set([...supported, chat.effort])] : undefined;
   const [text, setText] = useState("");
   const input = useRef<HTMLTextAreaElement>(null);
+  const slash = useSlashCommands(chat, text, (t) => {
+    setText(t);
+    requestAnimationFrame(() => {
+      const el = input.current;
+      if (el) (el.focus(), el.setSelectionRange(t.length, t.length));
+    });
+  });
   // One line to start with; grows with what is typed (wrapped lines too), up to about ten lines.
   useLayoutEffect(() => {
     const el = input.current;
@@ -590,6 +684,7 @@ function Composer(props: { chat: Chat; running: boolean; asking: boolean; disabl
   }
 
   function onKey(e: KeyboardEvent<HTMLTextAreaElement>) {
+    if (slash.onKey(e)) return;
     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       void send();
@@ -601,6 +696,7 @@ function Composer(props: { chat: Chat; running: boolean; asking: boolean; disabl
 
   return (
     <div className="composer">
+      {slash.menu}
       <textarea
         ref={input}
         value={text}

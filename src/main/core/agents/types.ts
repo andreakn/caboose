@@ -1,7 +1,7 @@
 // The seam between Caboose's chat engine and a coding agent (Claude Code,
 // GitHub Copilot). The engine owns transcripts, queueing, approvals and
 // questions; an agent adapter only translates its SDK to these calls.
-import type { Chat, Effort, Mode, Model, ModelOption, Question } from "../../../shared/chat.ts";
+import type { Chat, ChatCommand, Effort, Mode, Model, ModelOption, Question } from "../../../shared/chat.ts";
 import type { Feature } from "../../../shared/types.ts";
 
 export type PermissionAnswer = "allow" | "always" | "deny";
@@ -38,6 +38,8 @@ export interface AgentSession {
 export interface AgentProvider {
   start(chat: Chat, feature: Feature, host: AgentHost): AgentSession;
   models(): Promise<ModelOption[]>;
+  /** The slash commands a session working in `cwd` offers (none where the agent cannot list them). */
+  commands?(cwd: string): Promise<ChatCommand[]>;
 }
 
 /** Where a chat's agent works: its repo's worktree, or the feature folder for the central chat. */

@@ -828,6 +828,14 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      root tidy: `config.json` (else `caboose.json`), `run.sh`,
      `run_<moniker>.sh` (run from the repo root; the root's wins on a clash)
      and `running.sh`.
+163. **Slash-command completion in the message box** (like Conductor's).
+     Typing "/" lists what the chat's Claude session offers: skills (the
+     user's, the project's, plugins'), project commands and Claude Code's own,
+     from the SDK's `supportedCommands()` (minus internal, removed and renamed
+     ones). Without a live session in that folder, one is started only to ask
+     (no message, so no tokens; about 0.2 s) and closed; the list is cached
+     per folder for 5 minutes and refreshed for free by live sessions.
+     Copilot chats get none: its SDK has no way to list the user's skills.
 
 ## Answered (2026-11-05)
 

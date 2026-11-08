@@ -8,8 +8,9 @@ import type {
   PermissionResult,
   SDKMessage,
   SDKUserMessage,
+  SlashCommand,
 } from "@anthropic-ai/claude-agent-sdk";
-import { CLAUDE_MODELS, type Chat, type Effort, type Question } from "../../../shared/chat.ts";
+import { CLAUDE_MODELS, type Chat, type ChatCommand, type Effort, type Question } from "../../../shared/chat.ts";
 import type { Feature } from "../../../shared/types.ts";
 import { type AgentHost, type AgentProvider, type AgentSession, chatCwd, clip, errorText } from "./types.ts";
 
@@ -19,15 +20,31 @@ export type QueryLike = AsyncIterable<SDKMessage> & {
   setModel(model?: string): Promise<void>;
   setPermissionMode(mode: PermissionMode): Promise<void>;
   applyFlagSettings(settings: { effortLevel?: Effort | null }): Promise<void>;
+  /** The session's slash commands (skills, project commands, Claude Code's own); known once it has started. */
+  supportedCommands?(): Promise<SlashCommand[]>;
   close(): void;
 };
 export type QueryFn = (args: { prompt: AsyncIterable<SDKUserMessage>; options: Options }) => QueryLike;
 /** Extra query options per chat: Caboose's MCP tools and system prompt. */
 export type ExtraOptions = (chat: Chat, feature: Feature) => Partial<Options>;
 
+/** How long a folder's command list is trusted (skills added on disk show up after this, or with a new session). */
+const COMMANDS_TTL_MS = 5 * 60_000;
+
+/** The commands worth offering: not internal ones, nor removed or renamed ones. */
+export function chatCommands(list: SlashCommand[]): ChatCommand[] {
+  const seen = new Set<string>();
+  return list.flatMap((c) => {
+    if (c.name.startsWith("_") || seen.has(c.name) || /^\((removed|deprecated)\)|^Renamed to /i.test(c.description)) return [];
+    seen.add(c.name);
+    return [{ name: c.name, description: c.description, ...(c.argumentHint ? { argumentHint: c.argumentHint } : {}) }];
+  });
+}
+
 export class ClaudeProvider implements AgentProvider {
   private query: QueryFn;
   private extras: ExtraOptions;
+  private commandCache = new Map<string, { at: number; value: Promise<ChatCommand[]> }>();
 
   constructor(query: QueryFn, extras: ExtraOptions = () => ({})) {
     this.query = query;
@@ -36,6 +53,31 @@ export class ClaudeProvider implements AgentProvider {
 
   async models() {
     return CLAUDE_MODELS;
+  }
+
+  /**
+   * The slash commands for a folder. Without a running session there, a
+   * session is started only to ask (no message is sent, so nothing is spent)
+   * and closed again; it takes a fraction of a second.
+   */
+  commands(cwd: string): Promise<ChatCommand[]> {
+    const hit = this.commandCache.get(cwd);
+    if (hit && Date.now() - hit.at < COMMANDS_TTL_MS) return hit.value;
+    const value = (async () => {
+      const inbox = new Inbox<SDKUserMessage>();
+      const q = this.query({ prompt: inbox, options: { cwd } });
+      try {
+        if (!q.supportedCommands) return [];
+        const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timed out")), 15_000));
+        return chatCommands(await Promise.race([q.supportedCommands(), timeout]));
+      } finally {
+        inbox.end();
+        q.close();
+      }
+    })();
+    this.commandCache.set(cwd, { at: Date.now(), value });
+    value.catch(() => this.commandCache.delete(cwd));
+    return value;
   }
 
   start(chat: Chat, feature: Feature, host: AgentHost): AgentSession {
@@ -57,6 +99,12 @@ export class ClaudeProvider implements AgentProvider {
         canUseTool: canUseTool(host),
       },
     });
+    // A live session knows its commands: keep the folder's list fresh for free.
+    const cwd = chatCwd(chat, feature);
+    void q
+      .supportedCommands?.()
+      .then((list) => this.commandCache.set(cwd, { at: Date.now(), value: Promise.resolve(chatCommands(list)) }))
+      .catch(() => {});
     let closed = false;
     void consume(q, host).then((error) => {
       if (!closed) host.ended(error);

@@ -1,5 +1,5 @@
 // Shapes shared by the main process, the preload bridge and the renderer.
-import type { Agent, Chat, ChatEvent, Effort, Mode, Model, ModelOption } from "./chat.ts";
+import type { Agent, Chat, ChatCommand, ChatEvent, Effort, Mode, Model, ModelOption } from "./chat.ts";
 import type { DiffComment, WorkspaceChanges } from "./diff.ts";
 import type { GitHubStatus, MergeMethod, MergeOutcome, PrDetails } from "./github.ts";
 
@@ -556,6 +556,8 @@ export type CabooseApi = {
   /** Overview of a feature (cached 60 s for GitHub and Jira; fresh bypasses it). */
   overview(featureId: string, fresh?: boolean): Promise<FeatureOverview>;
   models(agent: Agent): Promise<Result<ModelOption[]>>;
+  /** The slash commands the chat's agent offers (skills, project commands, Claude Code's own); none for Copilot. */
+  commands(chatId: string): Promise<ChatCommand[]>;
   removeChat(chatId: string): Promise<void>;
   chatEvents(chatId: string): Promise<ChatEvent[]>;
   send(chatId: string, text: string): Promise<Result<void>>;

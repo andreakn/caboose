@@ -497,6 +497,7 @@ const releaseWatch = new ReleaseWatch({
 });
 releaseWatch.start();
 ipcMain.handle("chat:models", (_e, agent: Agent) => attempt(() => chats.models(agent)));
+ipcMain.handle("chat:commands", (_e, chatId: string) => chats.commands(chatId));
 ipcMain.handle("chat:remove", (_e, chatId: string) => chats.remove(chatId));
 // Synchronous on purpose: chat events sent after this reply are newer than the file it read.
 ipcMain.handle("chat:events", (_e, chatId: string) => chats.events(chatId));

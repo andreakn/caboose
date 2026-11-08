@@ -236,3 +236,45 @@ test("extra options reach the query", () => {
   assert.deepEqual(fake.calls.options.allowedTools, ["x-finse"]);
   chats.stopAll();
 });
+
+test("slash commands: asked of a session that is closed again, cached per folder, Copilot has none", async () => {
+  const { chatCommands } = await import("../src/main/core/agents/claude.ts");
+  let started = 0;
+  let closed = 0;
+  const cwds: string[] = [];
+  const fn = ({ options }: { prompt: AsyncIterable<SDKUserMessage>; options: Options }): QueryLike =>
+    Object.assign((async function* () {})(), {
+      interrupt: async () => {},
+      setModel: async () => {},
+      setPermissionMode: async () => {},
+      applyFlagSettings: async () => {},
+      supportedCommands: async () => (
+        started++,
+        cwds.push(String(options.cwd)),
+        [
+          { name: "copilot-review", description: "Read GitHub Copilot's PR review", argumentHint: "[pr]" },
+          { name: "__internal", description: "x", argumentHint: "" },
+          { name: "agents", description: "(removed) Ask Claude to manage subagents", argumentHint: "" },
+          { name: "compact", description: "Free up context", argumentHint: "" },
+          { name: "compact", description: "a project command of the same name", argumentHint: "" },
+        ]
+      ),
+      close: () => void closed++,
+    });
+  const store = new Store(join(tmp, `${Math.random()}`, "state.json"));
+  store.update((s) => ({ ...s, features: [{ id: "w1", name: "finse", folder: tmp, createdAt: "", archived: false, port: 41000, repos: [] }] }));
+  const chats = new Chats(store, join(tmp, `${Math.random()}`), { claude: new ClaudeProvider(fn) }, () => {});
+  const chat = chats.create("w1");
+  assert.ok(chat.ok);
+  const list = await chats.commands(chat.value.id);
+  assert.deepEqual(list, [
+    { name: "copilot-review", description: "Read GitHub Copilot's PR review", argumentHint: "[pr]" },
+    { name: "compact", description: "Free up context" },
+  ]);
+  assert.deepEqual(cwds, [tmp], "asked where the chat works");
+  assert.equal(closed, 1, "the session started only to ask is closed");
+  await chats.commands(chat.value.id);
+  assert.equal(started, 1, "the folder's list is cached");
+  assert.deepEqual(await chats.commands("nope"), []);
+  assert.deepEqual(chatCommands([]), []);
+});
