@@ -109,7 +109,7 @@ export function RunView(props: {
       )}
       <div className="plan-section">
         {ov.repos.map((r) => (
-          <RepoRun key={r.repo} f={f} r={r} disabled={!!busy || !!f.archived} act={act} onShow={props.onShow} />
+          <RepoRun key={r.repo} f={f} r={r} disabled={!!busy || !!f.archived} act={act} onShow={props.onShow} inRepoTab={Boolean(only)} />
         ))}
       </div>
     </div>
@@ -118,31 +118,38 @@ export function RunView(props: {
 
 type Act = (label: string, fn: () => Promise<{ ok: boolean; error?: string } | void>) => Promise<void>;
 
-function RepoRun({ f, r, disabled, act, onShow }: { f: Feature; r: RunRepo; disabled: boolean; act: Act; onShow: (id: string) => void }) {
+function RepoRun(props: { f: Feature; r: RunRepo; disabled: boolean; act: Act; onShow: (id: string) => void; inRepoTab: boolean }) {
+  const { f, r, disabled, act, onShow } = props;
   const idle = r.scripts.filter((s) => s.state !== "running");
   const running = r.scripts.some((s) => s.state === "running");
+  // Say each name once: no moniker chip when it is the repo's name, and a script named after the repo is just "run".
+  const same = (a?: string) => Boolean(a) && [r.repo, repoLabel(r.repo), r.moniker].some((n) => n?.toLowerCase() === a!.toLowerCase());
+  const showMoniker = r.moniker && !same2(r.moniker, [r.repo, repoLabel(r.repo)]);
   return (
     <div className="run-repo">
-      <div className="run-repo-line">
-        <span className={`dot${running ? " run-running" : ""}`} />
-        {r.moniker && (
-          <span className="moniker" title={r.description}>
-            {r.moniker}
-          </span>
-        )}
-        <b className="repo-name-cell" title={r.path}>
-          {repoLabel(r.repo)}
-        </b>
-        {r.scripts.length > 1 && idle.length > 0 && (
-          <button className="small-btn" disabled={disabled} onClick={() => act("Starting", () => api.runStartAll(f.id, r.repo))} title={`Start every program of ${r.repo}`}>
-            ▶ all
-          </button>
-        )}
-      </div>
+      {/* In the repo's own tab the tab names it; the toolbar has "Run all". */}
+      {!props.inRepoTab && (
+        <div className="run-repo-line">
+          <span className={`dot${running ? " run-running" : ""}`} />
+          {showMoniker && (
+            <span className="moniker" title={r.description}>
+              {r.moniker}
+            </span>
+          )}
+          <b className="repo-name-cell" title={r.path}>
+            {repoLabel(r.repo)}
+          </b>
+          {r.scripts.length > 1 && idle.length > 0 && (
+            <button className="small-btn" disabled={disabled} onClick={() => act("Starting", () => api.runStartAll(f.id, r.repo))} title={`Start every program of ${r.repo}`}>
+              ▶ all
+            </button>
+          )}
+        </div>
+      )}
       <div className="run-scripts">
         {r.scripts.length === 0 && <span className="muted small">No run.sh or run_*.sh, and no run script in Configure.</span>}
         {r.scripts.map((s) => (
-          <ScriptChip key={s.id} f={f} repo={r.repo} s={s} strays={r.strays} disabled={disabled} act={act} onShow={onShow} />
+          <ScriptChip key={s.id} f={f} repo={r.repo} s={same(s.label) ? { ...s, label: "run" } : s} strays={r.strays} disabled={disabled} act={act} onShow={onShow} />
         ))}
       </div>
       {r.strays.length > 0 && (
@@ -155,6 +162,8 @@ function RepoRun({ f, r, disabled, act, onShow }: { f: Feature; r: RunRepo; disa
     </div>
   );
 }
+
+const same2 = (a: string, names: string[]) => names.some((n) => n.toLowerCase() === a.toLowerCase());
 
 function ScriptChip(props: { f: Feature; repo: string; s: RunScript; strays: PortHolder[]; disabled: boolean; act: Act; onShow: (id: string) => void }) {
   const { f, repo, s, disabled, act } = props;
