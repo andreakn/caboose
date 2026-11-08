@@ -86,6 +86,7 @@ export async function featureOverview(f: Feature, d: OverviewDeps, fresh = false
   return {
     id: f.id,
     progress: docs.progress,
+    todosOpen: docs.todos.filter((t) => !t.done).length,
     task: jiraFor(links.task),
     repos: f.repos.map((r, i) => {
       const b = locals[i];

@@ -413,6 +413,8 @@ export type RepoOverview = {
 export type FeatureOverview = {
   id: string;
   progress: { done: number; total: number };
+  /** Open steps on the user's to-do list. */
+  todosOpen: number;
   task?: JiraStatus | { key: string };
   repos: RepoOverview[];
   errors: string[];
@@ -425,6 +427,8 @@ export type RepoStatus = "queued" | "working" | "blocked" | "needs-input" | "rea
 export const REPO_STATUSES: RepoStatus[] = ["queued", "working", "blocked", "needs-input", "ready", "in-review", "done"];
 
 export type PlanTask = { line: number; done: boolean; text: string; depth: number };
+/** A step only the user can do (todo.md): `repo` it is about, `from` the chat that asked ("feature": the central one). */
+export type TodoItem = { line: number; done: boolean; title: string; repo?: string; from?: string; details?: string };
 export type LogEntry = { at: string; from: string; to?: string; status?: RepoStatus; text: string };
 
 /** The feature's working documents (plain files in its folder). */
@@ -435,6 +439,8 @@ export type FeatureDocs = {
   progress: { done: number; total: number };
   repoBriefs: Record<string, string>;
   log: LogEntry[];
+  /** The user's to-do list (todo.md). */
+  todos: TodoItem[];
 };
 
 /** What linking Jira changed: subtasks created and branches renamed to carry their keys. */
@@ -575,6 +581,9 @@ export type CabooseApi = {
   writeDoc(featureId: string, doc: "brief" | "plan", text: string): Promise<Result<void>>;
   writeRepoBrief(featureId: string, repo: string, text: string): Promise<Result<void>>;
   tickPlan(featureId: string, line: number, done: boolean): Promise<Result<void>>;
+  /** Ticks a to-do (logged for the agents), or adds one of the user's own. */
+  tickTodo(featureId: string, line: number, done: boolean): Promise<Result<void>>;
+  addTodo(featureId: string, todo: { title: string; details?: string; repo?: string }): Promise<Result<void>>;
   /** Logs a note from the user and sends it to the chats it is for ("all"/absent: every chat). */
   note(featureId: string, to: string | undefined, text: string): Promise<Result<string[]>>;
   featureStatus(featureId: string): Promise<string>;

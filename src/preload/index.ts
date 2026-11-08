@@ -70,6 +70,8 @@ const api: CabooseApi = {
   writeDoc: invoke("docs:write"),
   writeRepoBrief: invoke("docs:writeRepoBrief"),
   tickPlan: invoke("docs:tick"),
+  tickTodo: invoke("docs:todo"),
+  addTodo: invoke("docs:addTodo"),
   note: invoke("docs:note"),
   featureStatus: invoke("docs:status"),
   overview: invoke("feature:overview"),

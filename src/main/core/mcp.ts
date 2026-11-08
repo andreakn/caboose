@@ -14,6 +14,7 @@ import { type Feature, type FeatureRepo, REPO_STATUSES, type RepoEntry, type Rep
 import type { Comments } from "./comments.ts";
 import type { Coordinator } from "./coordination.ts";
 import { changes, fullPatch } from "./diff.ts";
+import { addTodo, readDocs } from "./docs.ts";
 import { readFeatureJira } from "./jira.ts";
 import { RUNNING_SCRIPT } from "./running.ts";
 import { runnables } from "./runscripts.ts";
@@ -251,6 +252,19 @@ export function cabooseHandlers(feature: () => Feature, comments: Comments, term
       return r.ok ? "Logged." : r.error;
     },
 
+    addTodo(args: { title: string; details?: string; repo?: string }): string {
+      const f = feature();
+      const repo = args.repo ?? chat()?.repo;
+      if (repo && !f.repos.some((r) => r.name === repo)) return `No repo "${repo}" in this feature. Its repos: ${f.repos.map((r) => r.name).join(", ")}.`;
+      try {
+        const t = addTodo(f.folder, { title: args.title, ...(args.details ? { details: args.details } : {}), ...(repo ? { repo } : {}), from: chat()?.repo ?? "feature" });
+        const open = readDocs(f.folder, []).todos.filter((x) => !x.done).length;
+        return `Added to the user's to-do list (${open} open): ${t.title}. They see it in Caboose's To do tab and tick it when done; you will hear about it when they tell you.`;
+      } catch (e) {
+        return (e as Error).message;
+      }
+    },
+
     async featureStatus(): Promise<string> {
       return coord ? coord.status(feature().id) : noCoord;
     },
@@ -427,6 +441,18 @@ const TOOLS: ToolDef[] = [
     run: (h, a: { text: string }) => h.log(a),
   },
   {
+    claude: "AddTodo",
+    copilot: "caboose_add_todo",
+    description:
+      "Adds a step to the user's to-do list, for things only they can do: run a migration or a script in an environment you cannot reach, set a secret or a config value, grant access, click something in a console, ask someone. Shown in Caboose's To do tab, where the user ticks it. Say exactly what to do, where, and how to check it worked; put commands in fenced code blocks so they can be copied. One step per to-do.",
+    shape: {
+      title: z.string().describe("The step, as an instruction: \"Run the orders migration on test\""),
+      details: z.string().optional().describe("Markdown: why, the exact commands (in ``` blocks), values, links, how to check"),
+      repo: repoArg.optional(),
+    },
+    run: (h, a: { title: string; details?: string; repo?: string }) => h.addTodo(a),
+  },
+  {
     claude: "GetFeatureStatus",
     copilot: "caboose_feature_status",
     description:
@@ -543,6 +569,7 @@ export function cabooseInstructions(f: Feature, agent: "claude" | "copilot" = "c
           `This feature continues ${f.continuedFrom.name}, which was archived on ${f.continuedFrom.archivedAt.slice(0, 10)} (its branches were deleted; these are new ones). Its chats are in ${f.folder}/history/ (one markdown file per chat, the repo in its name): read the ones you need for what was decided and done before. The user sees that earlier conversation above yours.`,
         ]
       : []),
+    `When the user has to do something by hand (run a migration in an environment, set a secret, change a setting in a console), add it to their to-do list with ${n("AddTodo")}, with the exact steps, instead of only mentioning it in your reply. Open to-dos are listed in todo.md and by ${n("GetFeatureStatus")}.`,
     `The feature's working files are plain markdown in ${f.folder}: brief.md (the goal), plan.md (a checklist the user follows; tick items as they are done), briefs/<repo>.md (each repo's part) and log.md (append-only; write to it with ${n("Log")} and ${n("ReportStatus")}, not by editing). Read them when they exist.`,
     `The user sees the changes in Caboose's Changes view. Use ${n("GetWorkspaceDiff")} to see the same diff, ${n("GetDiffComments")} to read the user's review comments, and ${n("DiffComment")} to point the user at specific lines.`,
     `Use ${n("GetTerminalOutput")} to read the user's terminals in Caboose, such as a dev server started by the Run button. Ports ${f.port}–${f.port + 99} are reserved for this feature; each repo's scripts and terminals get their own CABOOSE_PORT.`,

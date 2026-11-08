@@ -27,7 +27,7 @@ test("stages reached are announced once, the first look only remembers, ended fe
     releases: [{ repo: "shop", source: tmp, mergeCommit: merge, stages: ["release", "prod"], release: [] }],
   };
   store.update((s) => ({ ...s, features: [live], visits: [visit] }));
-  let liveOv: FeatureOverview = { id: "live", progress: { done: 0, total: 0 }, repos: [{ name: "reports", branch: "b", stages: ["release", "prod"], release: [{ stage: "release", tags: ["orders_v1"] }, { stage: "prod", tags: [] }] }], errors: [] };
+  let liveOv: FeatureOverview = { id: "live", progress: { done: 0, total: 0 }, todosOpen: 0, repos: [{ name: "reports", branch: "b", stages: ["release", "prod"], release: [{ stage: "release", tags: ["orders_v1"] }, { stage: "prod", tags: [] }] }], errors: [] };
   const news: ReleaseNews[] = [];
   const w = new ReleaseWatch({ store, overview: async () => liveOv, stagesFor: () => STAGES, announce: (n) => news.push(n) });
 

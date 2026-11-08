@@ -206,6 +206,11 @@ export class Coordinator {
       ].filter(Boolean);
       lines.push(`- ${r.name} (${r.branch}): ${parts.join(" · ")}`);
     }
+    const open = docs.todos.filter((t) => !t.done);
+    if (open.length) {
+      lines.push("", `Waiting on the user (todo.md, ${open.length} open):`);
+      for (const t of open) lines.push(`- ${t.repo ? `[${t.repo}] ` : ""}${t.title}`);
+    }
     const recent = docs.log.slice(-8);
     if (recent.length) {
       lines.push("", "Recent log:");

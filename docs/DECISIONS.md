@@ -881,6 +881,17 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      icon changes; then it starts that. Other OSes start Electron as before.
      The new identity means macOS may ask once to let Caboose read its
      keychain item (the sealed Jira tokens): Always Allow.
+169. **The user's to-do list** (`todo.md`, the To do tab): steps only the
+     user can do (run a migration in an environment, set a secret, change a
+     setting in a console). Agents add them with `AddTodo` (title, markdown
+     details with the exact commands, the repo; the asking chat is recorded),
+     and are told to do so instead of only mentioning such steps in a reply.
+     Plain markdown like the plan, so agents and the user can also edit it.
+     The tab shows open steps first, code blocks with a copy button; ticking
+     one is logged (so agents see it in the log and in GetFeatureStatus,
+     which lists open to-dos), and "Tell … it is done" messages the chat that
+     asked. The tab and the sidebar show how many are open. Separate from
+     plan.md, which is the work's checklist, not the user's chores.
 
 ## Answered (2026-11-05)
 

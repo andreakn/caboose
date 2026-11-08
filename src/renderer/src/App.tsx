@@ -34,6 +34,7 @@ import { notificationsOn } from "./prefs.ts";
 import { FilesView } from "./Files.tsx";
 import { liveState, MapView } from "./Map.tsx";
 import { ArchivedView } from "./Archived.tsx";
+import { TodoView } from "./Todos.tsx";
 import { repoLabel, setRepoLabels } from "./labels.ts";
 import { notifySound } from "./sounds.ts";
 import { RetireDialog } from "./Retire.tsx";
@@ -373,6 +374,11 @@ function FeatureRow(props: { f: Feature; activity?: Activity; run?: RunSummary; 
             ▶ {props.run.running}/{props.run.total}
           </span>
         )}
+        {ov && ov.todosOpen > 0 && (
+          <span className="todo-ind" title={`${ov.todosOpen} step${ov.todosOpen === 1 ? "" : "s"} waiting for you (the To do tab)`}>
+            ☐ {ov.todosOpen}
+          </span>
+        )}
       </span>
       <span className="ws-branch" title={f.repos.map((r) => repoLabel(r.name)).join(" · ")}>
         {f.title || f.repos.map((r) => repoLabel(r.name)).join(" · ") || "no repos"}
@@ -417,7 +423,7 @@ function DeployBars({ repos }: { repos: RepoOverview[] }) {
   );
 }
 
-type FeatureTab = "chat" | "plan" | "run" | "prs" | "activity";
+type FeatureTab = "chat" | "plan" | "todo" | "run" | "prs" | "activity";
 type RepoTab = "files" | "changes" | "chat" | "run";
 
 function FeatureView(props: {
@@ -797,6 +803,10 @@ function FeatureView(props: {
                   </span>
                 )}
               </button>
+              <button className={tab === "todo" ? "active" : ""} onClick={() => setTab("todo")} title="Steps for you to do by hand (migrations, secrets, settings)">
+                To do
+                {docs && docs.todos.some((t) => !t.done) && <span className="badge todo-badge">{docs.todos.filter((t) => !t.done).length}</span>}
+              </button>
               <button className={tab === "run" ? "active" : ""} onClick={() => setTab("run")}>
                 Run{running > 0 && <span className="badge ok">{running}</span>}
               </button>
@@ -815,6 +825,9 @@ function FeatureView(props: {
             <div className="view-panel">
               <ChatArea ws={f} chats={props.chats} hidden={tab !== "chat"} />
               {tab === "plan" && <PlanView f={f} docs={docs} reload={() => void reloadDocs()} />}
+              {tab === "todo" && (
+                <TodoView f={f} docs={docs} chats={props.chats} reload={() => void reloadDocs()} onTold={(c) => (c.repo ? showChat(c.repo) : openChat(c.id))} />
+              )}
               {tab === "run" && <RunView f={f} ov={runs.ov} reload={runs.reload} onShow={showTerminal} />}
               {tab === "prs" && (
                 <div className="plan-view">

@@ -15,7 +15,7 @@ import { ClaudeProvider, Inbox } from "./core/agents/claude.ts";
 import { copilotEnv, CopilotProvider } from "./core/agents/copilot.ts";
 import { Chats } from "./core/chats.ts";
 import { Coordinator } from "./core/coordination.ts";
-import { readDocs, setTask, writeDoc, writeRepoBrief } from "./core/docs.ts";
+import { addTodo, appendLog, readDocs, setTask, setTodo, writeDoc, writeRepoBrief } from "./core/docs.ts";
 import { Comments } from "./core/comments.ts";
 import {
   applyConfigInput,
@@ -500,6 +500,17 @@ ipcMain.handle("docs:writeRepoBrief", (_e, featureId: string, repo: string, text
 );
 ipcMain.handle("docs:tick", (_e, featureId: string, line: number, done: boolean) =>
   attempt(() => setTask(featureOrThrow(featureId).folder, line, done)),
+);
+// The user's to-do list: ticking one is logged, so the agents see it in the log and in GetFeatureStatus.
+ipcMain.handle("docs:todo", (_e, featureId: string, line: number, done: boolean) =>
+  attempt(() => {
+    const f = featureOrThrow(featureId);
+    const t = setTodo(f.folder, line, done);
+    appendLog(f.folder, { from: "user", text: `${done ? "Done" : "Not done after all"}: ${t.repo ? `[${t.repo}] ` : ""}${t.title}` });
+  }),
+);
+ipcMain.handle("docs:addTodo", (_e, featureId: string, t: { title: string; details?: string; repo?: string }) =>
+  attempt(() => void addTodo(featureOrThrow(featureId).folder, { ...t, from: "user" })),
 );
 ipcMain.handle("docs:note", (_e, featureId: string, to: string | undefined, text: string) =>
   coordinator.noteFromUser(featureId, to, text),

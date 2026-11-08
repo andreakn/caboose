@@ -4,9 +4,11 @@
 //   plan.md             a checklist ("- [ ] …"); progress is the share ticked
 //   briefs/<repo>.md    what one repo has to do
 //   log.md              append-only: notes, decisions and status reports
+//   todo.md             steps only the user can do (see shared/todos.ts)
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { FeatureDocs, LogEntry, PlanTask, RepoStatus } from "../../shared/types.ts";
+import { formatTodo, parseTodos } from "../../shared/todos.ts";
+import type { FeatureDocs, LogEntry, PlanTask, RepoStatus, TodoItem } from "../../shared/types.ts";
 import { REPO_STATUSES } from "../../shared/types.ts";
 
 const read = (file: string) => (existsSync(file) ? readFileSync(file, "utf8") : "");
@@ -24,7 +26,32 @@ export function readDocs(folder: string, repos: string[]): FeatureDocs {
     progress: { done: tasks.filter((t) => t.done).length, total: tasks.length },
     repoBriefs: Object.fromEntries(repos.map((r) => [r, read(repoBriefPath(folder, r))])),
     log: readLog(folder),
+    todos: parseTodos(read(todoPath(folder))),
   };
+}
+
+// ---- the user's to-do list -------------------------------------------------
+
+export const todoPath = (folder: string) => join(folder, "todo.md");
+
+/** Adds a step for the user; returns it as read back. */
+export function addTodo(folder: string, t: { title: string; details?: string; repo?: string; from?: string }): TodoItem {
+  if (!t.title.trim()) throw new Error("A to-do needs a title.");
+  const file = todoPath(folder);
+  const now = read(file);
+  const head = now.trim() ? (now.endsWith("\n") ? now : `${now}\n`) : "# To do\n\nSteps for you to do by hand. Tick them in Caboose when done.\n\n";
+  writeFileSync(file, head + formatTodo(t));
+  return parseTodos(read(file)).at(-1)!;
+}
+
+/** Ticks or unticks the to-do on a line (of the file as it is now); returns it. */
+export function setTodo(folder: string, line: number, done: boolean): TodoItem {
+  const file = todoPath(folder);
+  const lines = read(file).split("\n");
+  if (!/^[-*] \[( |x|X)\] /.test(lines[line] ?? "")) throw new Error(`Line ${line + 1} of todo.md is not a to-do.`);
+  lines[line] = lines[line].replace(/\[( |x|X)\]/, done ? "[x]" : "[ ]");
+  writeFileSync(file, lines.join("\n"));
+  return parseTodos(lines.join("\n")).find((x) => x.line === line)!;
 }
 
 export function writeDoc(folder: string, doc: "brief" | "plan", text: string): void {
