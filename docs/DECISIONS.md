@@ -791,8 +791,20 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      of the first repo on one that joins it. Adding a repo from another line
      is refused (create, add, the agents' proposals), and agents are only
      told about the repos their feature can have. Named "line" (a railway
-     line) rather than "universe". Per-line settings (Jira site, features
-     folder, PR style) would fit here later; not built yet.
+     line) rather than "universe". Lines have settings of their own (159).
+159. **A line's own settings.** `lines.<name>` in `caboose.local.json` can
+     set the features folder, archive folder, branch prefix, PR instructions,
+     release tags and Jira; anything absent is the general setting
+     (`forLine` in config.ts, `lineConfig` for the window). Jira is taken as
+     a whole: a line with its own Jira has its own site, account, token and
+     project (or "off"), because mixing one customer's site with another's
+     token is never right. Tokens are sealed like the general one and follow
+     a rename (`renamedFrom`). A feature with no line chosen takes its first
+     repo's line at creation, so its folder and Jira are the line's from the
+     start. Release tags: a repo's own, else its line's, else the general
+     ones. Configure shows a Lines tab only while some repo is on a line.
+     The codebase stays generic: no customer's names, keys or services in
+     code, tests or docs (examples use Acme, ABC, shop).
 
 ## Answered (2026-11-05)
 

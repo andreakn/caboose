@@ -254,6 +254,23 @@ export type JiraConfig = {
   project?: string;
 };
 
+/**
+ * A line's own settings (a customer's Jira, folders, branch prefix…). Each
+ * one that is absent is the general setting. Jira is taken as a whole: a
+ * line with its own Jira has its own site, account, token and project, or
+ * level "off" for none.
+ */
+export type LineSettings = {
+  jira?: JiraConfig;
+  featuresRoot?: string;
+  archiveRoot?: string;
+  branchPrefix?: string;
+  prInstructions?: string;
+  releaseStages?: ReleaseStage[];
+};
+/** The settings a line can have of its own, in the order Configure shows them. */
+export const LINE_SETTINGS = ["jira", "featuresRoot", "archiveRoot", "branchPrefix", "prInstructions", "releaseStages"] as const;
+
 /** This machine's settings, in `caboose.local.json` in the Caboose checkout (gitignored). */
 export type LocalConfig = {
   /** Where feature folders go. Default: ~/caboose/features */
@@ -284,6 +301,8 @@ export type LocalConfig = {
   openWith?: Partial<Record<AppId, string>>;
   /** Where new features' stations are picked from first, spreading outwards (picked on the map). */
   home?: HomeArea;
+  /** Settings of a line of its own, by line name (see RepoEntry.line). */
+  lines?: Record<string, LineSettings>;
 };
 
 /** A point on the map (degrees), around which feature names are picked. */
@@ -309,9 +328,15 @@ export type ConductorImport = {
 };
 
 /** The config as the window sees it: the token is never sent, only whether there is one. */
-export type ConfigView = Omit<LocalConfig, "jira"> & { jira?: Omit<JiraConfig, "token"> & { hasToken: boolean } };
-/** What the window saves: `token` is a new token to store, null to remove it, absent to keep it. */
-export type ConfigInput = Omit<LocalConfig, "jira"> & { jira?: Omit<JiraConfig, "token"> & { token?: string | null } };
+/** Jira as the window sees it: never the token, only whether there is one. */
+export type JiraView = Omit<JiraConfig, "token"> & { hasToken: boolean };
+/** Jira as the window saves it: `token` is a new token to store, null to remove it, absent to keep it. */
+export type JiraInput = Omit<JiraConfig, "token"> & { token?: string | null; hasToken?: boolean };
+export type LineView = Omit<LineSettings, "jira"> & { jira?: JiraView };
+/** `renamedFrom`: the line's name when it was loaded, so its saved token follows a rename. */
+export type LineInput = Omit<LineSettings, "jira"> & { jira?: JiraInput; renamedFrom?: string };
+export type ConfigView = Omit<LocalConfig, "jira" | "lines"> & { jira?: JiraView; lines?: Record<string, LineView> };
+export type ConfigInput = Omit<LocalConfig, "jira" | "lines"> & { jira?: JiraInput; lines?: Record<string, LineInput> };
 
 export type ConfigInfo = {
   config: ConfigView;
@@ -449,9 +474,10 @@ export type CabooseApi = {
   /** Git repos directly inside a folder (e.g. ~/code). */
   scanRepos(folder: string): Promise<RepoEntry[]>;
 
-  jiraTest(): Promise<Result<string>>;
-  jiraIssue(key: string): Promise<Result<JiraIssue>>;
-  jiraMyIssues(): Promise<Result<JiraIssue[]>>;
+  /** `line`: that line's Jira (its own, or the general one). */
+  jiraTest(line?: string): Promise<Result<string>>;
+  jiraIssue(key: string, line?: string): Promise<Result<JiraIssue>>;
+  jiraMyIssues(line?: string): Promise<Result<JiraIssue[]>>;
   featureJira(featureId: string): Promise<FeatureJira>;
   /** Links (or unlinks) the feature's task; linking adds subtasks and puts their keys in unpushed branches. */
   setFeatureTask(featureId: string, key: string | null): Promise<Result<JiraAlignment>>;

@@ -11,7 +11,8 @@ import { type PrDetailsCache, slugOf } from "./prdetails.ts";
 export type OverviewDeps = {
   github: GitHub;
   prs: PrDetailsCache;
-  jira: () => Jira | null;
+  /** The Jira client of a line (its own, or the general one). */
+  jira: (line?: string) => Jira | null;
   jiraOf: (featureId: string) => FeatureJira;
   /** Called when a worktree is on another branch than the one recorded (switched by an agent or by hand). */
   onBranch?: (featureId: string, repo: string, branch: string) => void;
@@ -21,8 +22,9 @@ export type OverviewDeps = {
 
 const jiraCache = new Map<string, { at: number; value: Promise<Record<string, JiraStatus>> }>();
 
-function jiraStatuses(j: Jira, keys: string[], fresh: boolean): Promise<Record<string, JiraStatus>> {
-  const key = [...keys].sort().join(",");
+function jiraStatuses(j: Jira, keys: string[], fresh: boolean, line = ""): Promise<Record<string, JiraStatus>> {
+  // Per line too: two lines' Jira sites can have the same keys.
+  const key = `${line}:${[...keys].sort().join(",")}`;
   const hit = jiraCache.get(key);
   if (hit && !fresh && Date.now() - hit.at < 60_000) return hit.value;
   const value = j.statuses(keys);
@@ -52,8 +54,8 @@ export async function featureOverview(f: Feature, d: OverviewDeps, fresh = false
   const links = d.jiraOf(f.id);
   const keys = [links.task, ...Object.values(links.subtasks)].filter(Boolean) as string[];
   let statuses: Record<string, JiraStatus> = {};
-  const j = keys.length ? d.jira() : null;
-  if (j) statuses = await jiraStatuses(j, keys, fresh).catch((e: Error) => (errors.push(e.message), {}));
+  const j = keys.length ? d.jira(f.line) : null;
+  if (j) statuses = await jiraStatuses(j, keys, fresh, f.line).catch((e: Error) => (errors.push(e.message), {}));
   const jiraFor = (key?: string) => (key ? (statuses[key] ?? { key }) : undefined);
 
   // Merged PRs: the lowest release tags carrying the merge commit (read from the main checkout's tags).

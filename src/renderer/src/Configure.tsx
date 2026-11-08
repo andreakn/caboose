@@ -18,6 +18,7 @@ import { useApps } from "./Menu.tsx";
 import { applyTheme, getTheme, notificationsOn, setNotifications } from "./prefs.ts";
 import { homeLabel, MapCanvas } from "./Map.tsx";
 import { linesOf } from "../../shared/lines.ts";
+import { LinesTab } from "./Lines.tsx";
 import {
   playSound,
   setSoundFor,
@@ -46,10 +47,12 @@ const TERMINAL_FIELDS: { key: "shellPath" | "bashPath" | "terminalFont" | "monik
   },
 ];
 
-type ConfigTab = "agents" | "repos" | "features" | "tools" | "look" | "system";
+type ConfigTab = "agents" | "repos" | "lines" | "features" | "tools" | "look" | "system";
 const CONFIG_TABS: { key: ConfigTab; label: string }[] = [
   { key: "agents", label: "Agents" },
   { key: "repos", label: "Repositories" },
+  // Only once a repo is on a line.
+  { key: "lines", label: "Lines" },
   { key: "features", label: "Features & Jira" },
   { key: "tools", label: "Apps" },
   { key: "look", label: "Look & sound" },
@@ -115,6 +118,11 @@ export function Configure({ onDone, onSaved }: { onDone: () => void; onSaved?: (
       setMessage("Jira needs a site and an email (or set Jira to Off).");
       return false;
     }
+    const lineWithout = Object.entries(form.lines ?? {}).find(([, l]) => l.jira && l.jira.level !== "off" && (!l.jira.site || !l.jira.email));
+    if (lineWithout) {
+      setMessage(`The ${lineWithout[0]} line's own Jira needs a site and an email (or choose "As in general" or "No Jira").`);
+      return false;
+    }
     const r = await api.saveConfig({ ...form, jira: { ...jira, ...(token !== undefined ? { token } : {}) } });
     if (!r.ok) {
       setMessage(r.error);
@@ -127,6 +135,8 @@ export function Configure({ onDone, onSaved }: { onDone: () => void; onSaved?: (
   }
 
   const first = info.firstRun;
+  // The Lines tab goes away with the last line.
+  const shownTab: ConfigTab = tab === "lines" && !lines.length ? "repos" : tab;
   const setTab = (t: ConfigTab) => {
     setTabRaw(t);
     localStorage.setItem("caboose-config-tab", t);
@@ -147,14 +157,14 @@ export function Configure({ onDone, onSaved }: { onDone: () => void; onSaved?: (
       </header>
 
       <div className="config-tabs">
-        {CONFIG_TABS.filter((t) => !(first && t.key === "system")).map((t) => (
-          <button key={t.key} className={tab === t.key ? "active" : ""} onClick={() => setTab(t.key)}>
+        {CONFIG_TABS.filter((t) => !(first && t.key === "system") && !(t.key === "lines" && !lines.length)).map((t) => (
+          <button key={t.key} className={shownTab === t.key ? "active" : ""} onClick={() => setTab(t.key)}>
             {t.label}
           </button>
         ))}
       </div>
 
-      {tab === "agents" && (
+      {shownTab === "agents" && (
         <>
           <section>
             <h2>Main agent</h2>
@@ -213,7 +223,7 @@ export function Configure({ onDone, onSaved }: { onDone: () => void; onSaved?: (
         </>
       )}
 
-      {tab === "repos" && (
+      {shownTab === "repos" && (
         <>
           <section>
             <h2>Repositories</h2>
@@ -231,7 +241,16 @@ export function Configure({ onDone, onSaved }: { onDone: () => void; onSaved?: (
             {repos.length === 0 && <p className="del">No repositories yet.</p>}
             {repoGroups.map((group) => (
               <div key={group.line ?? ""} className="repo-group">
-                {savedLines.length > 0 && <h3 className="repo-group-title">{group.line ? `${group.line} line` : "On every line"}</h3>}
+                {savedLines.length > 0 && (
+                  <h3 className="repo-group-title">
+                    {group.line ? `${group.line} line` : "On every line"}
+                    {group.line && (
+                      <button className="link" onClick={() => setTab("lines")} title="This line's own Jira, folders, branch prefix…">
+                        settings
+                      </button>
+                    )}
+                  </h3>
+                )}
                 <ul className="repo-list">
                   {group.repos.map((r) => (
                     <RepoItem
@@ -345,7 +364,9 @@ export function Configure({ onDone, onSaved }: { onDone: () => void; onSaved?: (
         </>
       )}
 
-      {tab === "features" && (
+      {shownTab === "lines" && <LinesTab lines={lines} form={form} setForm={setForm} info={info} save={save} />}
+
+      {shownTab === "features" && (
         <>
           <section>
             <h2>Home area</h2>
@@ -423,6 +444,7 @@ export function Configure({ onDone, onSaved }: { onDone: () => void; onSaved?: (
 
           <section>
             <h2>Jira</h2>
+            {lines.length > 0 && <p className="muted">A line can have its own Jira (a customer's), set under Lines; this is the one for the rest.</p>}
             <div className="levels">
               {JIRA_LEVELS.map((l) => (
                 <label key={l.value} className={`level${jira.level === l.value ? " active" : ""}`}>
@@ -480,7 +502,7 @@ export function Configure({ onDone, onSaved }: { onDone: () => void; onSaved?: (
         </>
       )}
 
-      {tab === "tools" && (
+      {shownTab === "tools" && (
         <>
           <section>
             <h2>Open in</h2>
@@ -505,7 +527,7 @@ export function Configure({ onDone, onSaved }: { onDone: () => void; onSaved?: (
         </>
       )}
 
-      {tab === "look" && (
+      {shownTab === "look" && (
         <>
           <section>
             <h2>Appearance</h2>
@@ -540,7 +562,7 @@ export function Configure({ onDone, onSaved }: { onDone: () => void; onSaved?: (
         </>
       )}
 
-      {tab === "system" && (
+      {shownTab === "system" && (
         <>
           <Doctor />
 
@@ -836,7 +858,7 @@ function Doctor() {
 }
 
 /** Release stages as "name = pattern" lines. */
-function StagesEditor({ value, onChange }: { value?: ReleaseStage[]; onChange: (stages: ReleaseStage[] | undefined) => void }) {
+export function StagesEditor({ value, onChange }: { value?: ReleaseStage[]; onChange: (stages: ReleaseStage[] | undefined) => void }) {
   const [text, setText] = useState(formatStages(value));
   return (
     <div className="stages-editor">

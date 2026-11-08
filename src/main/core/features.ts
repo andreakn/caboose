@@ -16,7 +16,7 @@ import type {
   RepoScripts,
   Result,
 } from "../../shared/types.ts";
-import { loadRepoConfig, type ResolvedLocalConfig } from "./config.ts";
+import { type Effective, featureRoots, forLine, loadRepoConfig, type ResolvedLocalConfig } from "./config.ts";
 import * as g from "./git.ts";
 import { type Jira, parseKey, readFeatureJira, writeFeatureJira } from "./jira.ts";
 import { copyLocalFiles, DEFAULT_LOCAL_FILES, findLocalFiles } from "./localfiles.ts";
@@ -37,9 +37,10 @@ export class Features {
   private config: ResolvedLocalConfig;
   private logDir: string;
   /** A Jira client when Jira is configured with a token, else null. */
-  private jira: () => Jira | null;
+  /** A Jira client for a line (its own Jira, or the general one); null when that is off or not set up. */
+  private jira: (line?: string) => Jira | null;
 
-  constructor(store: Store, config: ResolvedLocalConfig, logDir: string, jira: () => Jira | null = () => null) {
+  constructor(store: Store, config: ResolvedLocalConfig, logDir: string, jira: (line?: string) => Jira | null = () => null) {
     this.store = store;
     this.config = config;
     this.logDir = logDir;
@@ -57,10 +58,12 @@ export class Features {
   async create(input: NewFeature): Promise<Result<Feature>> {
     try {
       const repos = (input.repos ?? []).map((name) => this.repoEntry(name));
-      const line = input.line?.trim() || undefined;
+      // No line chosen: the line of the first repo on one (so its folder and Jira are the line's from the start).
+      const line = input.line?.trim() || repos.find((r) => r.line)?.line;
+      const eff = this.eff(line);
       const off = repos.filter((r) => !servesLine(r, line));
       if (off.length) return fail(`${off.map((r) => `${r.name} is on the ${r.line} line`).join(", ")}; this feature is on ${line}.`);
-      const level = this.config.jira.level;
+      const level = eff.jira.level;
       if (level === "required" && !input.jira) return fail("Jira is required: link a task or create one.");
 
       // The task first: a failed Jira call should not leave a half-made feature.
@@ -70,19 +73,19 @@ export class Features {
         if ("key" in input.jira) {
           task = parseKey(input.jira.key) ?? undefined;
           if (!task) return fail(`"${input.jira.key}" is not a Jira key.`);
-          const j = this.jira();
+          const j = this.jira(line);
           if (j) taskSummary = (await j.issue(task)).summary;
         } else {
-          const j = this.requireJira();
-          if (!this.config.jira.project) return fail("Set the Jira project in Configure to create tasks.");
+          const j = this.requireJira(line);
+          if (!eff.jira.project) return fail(`Set the Jira project in Configure${line ? ` (the ${line} line)` : ""} to create tasks.`);
           taskSummary = input.jira.create.trim();
           if (!taskSummary) return fail("Give the new Jira task a summary.");
-          task = await j.createTask(this.config.jira.project, taskSummary);
+          task = await j.createTask(eff.jira.project, taskSummary);
         }
       }
 
       const name = this.freeName();
-      const folder = join(this.config.featuresRoot, name);
+      const folder = join(eff.featuresRoot, name);
       mkdirSync(join(folder, ".context"), { recursive: true });
       if (task) writeFeatureJira(folder, { task, subtasks: {} });
       const feature: Feature = {
@@ -121,8 +124,10 @@ export class Features {
 
       // With a Jira task, every repo gets its own subtask, and its key goes in the branch.
       const jira = readFeatureJira(f.folder);
-      if (jira.task && !jira.subtasks[repo.name] && this.config.jira.level !== "off") {
-        const j = this.config.jira.level === "required" ? this.requireJira() : this.jira();
+      const line = f.line ?? repo.line;
+      const level = this.eff(line).jira.level;
+      if (jira.task && !jira.subtasks[repo.name] && level !== "off") {
+        const j = level === "required" ? this.requireJira(line) : this.jira(line);
         if (j) {
           const summary = taskSummary || (await j.issue(jira.task)).summary;
           jira.subtasks[repo.name] = await j.createSubtask(jira.task, `${repo.name}: ${summary}`);
@@ -287,7 +292,7 @@ export class Features {
     try {
       const jira = readFeatureJira(f.folder);
       if (!jira.task) return fail("Link the feature to a Jira task first.");
-      const j = this.jira();
+      const j = this.jira(f.line);
       const repos = f.repos.filter((r) => !only || r.name === only);
       if (j) {
         let summary: string | undefined;
@@ -338,7 +343,7 @@ export class Features {
 
   /** `<prefix>/<KEY>-<station>` with a Jira key, else `<prefix>/<station>`. */
   private branchName(f: Feature, key?: string): string {
-    return `${this.config.branchPrefix}/${key ? `${key}-` : ""}${f.name}`;
+    return `${this.eff(f.line).branchPrefix}/${key ? `${key}-` : ""}${f.name}`;
   }
 
   /** A repo's scripts: the config's, plus what its caboose.json adds (setup/archive only where the config has none). */
@@ -376,7 +381,7 @@ export class Features {
   /** Creates the repo's subtask and puts its key in the repo's branch (if not pushed yet). */
   async createSubtask(featureId: string, repo: string): Promise<Result<JiraAlignment>> {
     try {
-      this.requireJira();
+      this.requireJira(this.get(featureId)?.line);
     } catch (e) {
       return fail(e);
     }
@@ -436,10 +441,15 @@ export class Features {
     return repo;
   }
 
-  private requireJira(): Jira {
-    const j = this.jira();
-    if (!j) throw new Error("Jira is not set up: add the site, email and API token in Configure.");
+  private requireJira(line?: string): Jira {
+    const j = this.jira(line);
+    if (!j) throw new Error(`Jira is not set up${line && this.config.lines[line]?.jira ? ` for the ${line} line` : ""}: add the site, email and API token in Configure.`);
     return j;
+  }
+
+  /** The settings a feature on `line` works with. */
+  private eff(line?: string): Effective {
+    return forLine(this.config, line);
   }
 
   /** A station no feature has used (live or ended) and with no folder of that name. */
@@ -447,7 +457,7 @@ export class Features {
     const s = this.store.get();
     // Stations of ended features too: each feature gets a new dot on the map, and names keep spreading from home.
     const taken = new Set([...s.features.map((f) => f.name), ...s.visits.map((v) => v.station)]);
-    if (existsSync(this.config.featuresRoot)) for (const d of readdirSync(this.config.featuresRoot)) taken.add(d);
+    for (const root of featureRoots(this.config)) if (existsSync(root)) for (const d of readdirSync(root)) taken.add(d);
     return pickStation(taken, this.config.home);
   }
 

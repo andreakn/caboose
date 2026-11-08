@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { AGENTS, type Agent } from "../../shared/chat.ts";
-import { linesOf } from "../../shared/lines.ts";
+import { lineConfig, linesOf } from "../../shared/lines.ts";
 import type { ConfigView, Feature, JiraIssue } from "../../shared/types.ts";
 
 const api = window.caboose;
@@ -12,8 +12,6 @@ const LAST_LINE = "caboose-new-feature-line";
  * starts on it and proposes the repos to add.
  */
 export function NewFeature({ config, onCreated, onCancel }: { config: ConfigView; onCreated: (f: Feature) => void; onCancel: () => void }) {
-  const level = config.jira?.level ?? "off";
-  const jiraReady = level !== "off" && Boolean(config.jira?.site && config.jira?.email && config.jira?.hasToken);
   const [text, setText] = useState("");
   const [agent, setAgent] = useState<Agent>(config.defaultAgent ?? "claude");
   // Lines appear here once a repo is on one; the last one used is picked again.
@@ -22,16 +20,21 @@ export function NewFeature({ config, onCreated, onCancel }: { config: ConfigView
     const last = localStorage.getItem(LAST_LINE) ?? "";
     return lines.includes(last) ? last : "";
   });
+  // The chosen line's Jira (its own, or the general one).
+  const jira = lineConfig(config, line || undefined).jira;
+  const level = jira?.level ?? "off";
+  const jiraReady = level !== "off" && Boolean(jira?.site && jira?.email && jira?.hasToken);
   const [key, setKey] = useState("");
   const [mine, setMine] = useState<JiraIssue[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const input = useRef<HTMLTextAreaElement>(null);
 
+  useEffect(() => input.current?.focus(), []);
   useEffect(() => {
-    input.current?.focus();
-    if (jiraReady) void api.jiraMyIssues().then((r) => r.ok && setMine(r.value));
-  }, [jiraReady]);
+    setMine([]);
+    if (jiraReady) void api.jiraMyIssues(line || undefined).then((r) => r.ok && setMine(r.value));
+  }, [jiraReady, line]);
 
   async function create() {
     if (busy) return;

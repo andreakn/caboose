@@ -3,7 +3,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { ConfigInput, ConfigView, HomeArea, JiraConfig, LocalConfig, RepoConfig, RepoEntry, Secret } from "../../shared/types.ts";
+import type { ConfigInput, ConfigView, HomeArea, JiraConfig, JiraInput, JiraView, LineSettings, LocalConfig, RepoConfig, RepoEntry, Secret } from "../../shared/types.ts";
 
 /** Encrypts secrets for the config file (Electron's safeStorage in the app). */
 export type SecretCodec = { canEncrypt: boolean; encrypt(s: string): string; decrypt(s: string): string };
@@ -36,7 +36,27 @@ export type ResolvedLocalConfig = {
   defaultAgent: "claude" | "copilot";
   defaultMode: NonNullable<LocalConfig["defaultMode"]>;
   home?: HomeArea;
+  /** Lines' own settings, paths expanded. */
+  lines: Record<string, LineSettings>;
 };
+
+/** The settings a feature on `line` works with: the line's own where it has them, else the general ones. */
+export type Effective = Pick<ResolvedLocalConfig, "jira" | "featuresRoot" | "archiveRoot" | "branchPrefix" | "prInstructions" | "releaseStages">;
+
+export function forLine(c: ResolvedLocalConfig, line?: string): Effective {
+  const own = (line && c.lines[line]) || {};
+  return {
+    jira: own.jira ?? c.jira,
+    featuresRoot: own.featuresRoot ?? c.featuresRoot,
+    archiveRoot: own.archiveRoot ?? c.archiveRoot,
+    branchPrefix: own.branchPrefix ?? c.branchPrefix,
+    prInstructions: own.prInstructions ?? c.prInstructions,
+    releaseStages: own.releaseStages ?? c.releaseStages,
+  };
+}
+
+/** Every folder features can be in (the general one and the lines'). */
+export const featureRoots = (c: ResolvedLocalConfig) => [...new Set([c.featuresRoot, ...Object.values(c.lines).flatMap((l) => (l.featuresRoot ? [l.featuresRoot] : []))])];
 
 export const configFile = (cabooseDir: string) => join(cabooseDir, FILE);
 export const configExists = (cabooseDir: string) => existsSync(configFile(cabooseDir));
@@ -73,6 +93,17 @@ export function loadLocalConfig(cabooseDir: string): ResolvedLocalConfig {
     defaultMode: c.defaultMode ?? "bypassPermissions",
     openWith: c.openWith,
     home: homeArea(c.home),
+    lines: Object.fromEntries(
+      Object.entries(c.lines ?? {}).map(([name, l]) => [
+        name,
+        {
+          ...l,
+          ...(l.featuresRoot ? { featuresRoot: expandHome(l.featuresRoot) } : {}),
+          ...(l.archiveRoot ? { archiveRoot: expandHome(l.archiveRoot) } : {}),
+          ...(l.jira ? { jira: { ...l.jira, level: l.jira.level ?? "off" } } : {}),
+        },
+      ]),
+    ),
   };
 }
 
@@ -86,20 +117,45 @@ export function homeArea(h: unknown): HomeArea | undefined {
 
 /** What the window may see: never the token itself. */
 export function configView(c: LocalConfig): ConfigView {
-  const { jira, ...rest } = c;
-  if (!jira) return rest;
-  const { token, ...j } = jira;
-  return { ...rest, jira: { ...j, hasToken: Boolean(token) } };
+  const { jira, lines, ...rest } = c;
+  const view = (j: JiraConfig): JiraView => {
+    const { token, ...v } = j;
+    return { ...v, hasToken: Boolean(token) };
+  };
+  return {
+    ...rest,
+    ...(jira ? { jira: view(jira) } : {}),
+    ...(lines ? { lines: Object.fromEntries(Object.entries(lines).map(([n, l]) => [n, l.jira ? { ...l, jira: view(l.jira) } : (l as Omit<LineSettings, "jira">)])) } : {}),
+  };
+}
+
+/** A Jira setup as saved: a new token sealed, no token kept as it was, null or "" removes it. */
+function jiraOf(input: JiraInput, stored: JiraConfig | undefined, codec: SecretCodec): JiraConfig {
+  const { token, hasToken: _h, ...j } = input;
+  const kept = token === undefined ? stored?.token : token === null || token.trim() === "" ? undefined : seal(token.trim(), codec);
+  return { ...cleanStrings(j), level: j.level, ...(kept ? { token: kept } : {}) };
 }
 
 /** Merges what the window saved into the stored config, encrypting a new token. */
 export function applyConfigInput(stored: LocalConfig, input: ConfigInput, codec: SecretCodec): LocalConfig {
-  const { jira, ...rest } = input;
+  const { jira, lines, ...rest } = input;
   const out: LocalConfig = cleanStrings(rest);
-  if (jira) {
-    const { token, ...j } = jira;
-    const kept = token === undefined ? stored.jira?.token : token === null || token.trim() === "" ? undefined : seal(token.trim(), codec);
-    out.jira = { ...cleanStrings(j), level: j.level, ...(kept ? { token: kept } : {}) };
+  if (jira) out.jira = jiraOf(jira, stored.jira, codec);
+  if (lines) {
+    const saved: Record<string, LineSettings> = {};
+    for (const [rawName, l] of Object.entries(lines)) {
+      const name = rawName.trim();
+      if (!name) continue;
+      const { jira: lj, renamedFrom, releaseStages, ...plain } = l;
+      const settings: LineSettings = {
+        ...cleanStrings(plain),
+        ...(releaseStages ? { releaseStages } : {}),
+        ...(lj ? { jira: jiraOf(lj, stored.lines?.[renamedFrom ?? rawName]?.jira, codec) } : {}),
+      };
+      if (Object.keys(settings).length) saved[name] = settings;
+    }
+    if (Object.keys(saved).length) out.lines = saved;
+    else delete out.lines;
   }
   if ("home" in out) {
     const home = homeArea(out.home);

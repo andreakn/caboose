@@ -48,6 +48,7 @@ function config(over: Partial<ResolvedLocalConfig> = {}): ResolvedLocalConfig {
     jira: { level: "off" },
     defaultAgent: "claude",
     defaultMode: "bypassPermissions",
+    lines: {},
     ...over,
   };
 }
@@ -265,5 +266,23 @@ test("lines: a feature never mixes them; repos on no line go anywhere; a feature
   assert.ok(!features.setDetails(a.value.id, { line: "Personal" }).ok, "web is in it, and on Acme");
   assert.ok(features.setDetails(c.value.id, { line: null }).ok);
   assert.equal(features.get(c.value.id)?.line, undefined);
+  await until(settled(store));
+});
+
+test("a feature on a line with its own folder and branch prefix uses them", async () => {
+  const store = new Store(join(tmp, "s10", "state.json"));
+  const lineRoot = join(tmp, "acme-features");
+  const features = new Features(
+    store,
+    config({ repos: [{ name: "web", path: web, line: "Acme" }, { name: "api", path: api }], lines: { Acme: { featuresRoot: lineRoot, branchPrefix: "feature" } } }),
+    join(tmp, "s10", "logs"),
+  );
+  const r = await features.create({ repos: ["web"] });
+  assert.ok(r.ok, !r.ok ? r.error : "");
+  assert.equal(r.value.line, "Acme", "no line chosen: the first repo's");
+  assert.equal(r.value.folder, join(lineRoot, r.value.name));
+  assert.match(r.value.repos[0].branch, /^feature\//);
+  const plain = await features.create({ repos: ["api"] });
+  assert.ok(plain.ok && plain.value.folder.startsWith(join(tmp, "features")) && plain.value.repos[0].branch.startsWith("caboose/"));
   await until(settled(store));
 });

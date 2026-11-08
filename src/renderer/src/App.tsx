@@ -40,7 +40,7 @@ import { deployProgress } from "../../shared/stages.ts";
 import { FeatureTree } from "./Sidebar.tsx";
 import { RunView, useRunOverview } from "./Run.tsx";
 import { TerminalPanel, useTerminals } from "./Terminals.tsx";
-import { linesOf, reposFor } from "../../shared/lines.ts";
+import { lineConfig, linesOf, reposFor } from "../../shared/lines.ts";
 import { stationLabel } from "../../shared/stations.ts";
 
 const api = window.caboose;
@@ -429,8 +429,9 @@ function FeatureView(props: {
   for (const e of docs?.log ?? []) if (e.status) reported[e.from] = e;
   const diff = useFeatureChanges(f);
   const unsent = props.comments.filter((c) => c.author === "user" && !c.sentAt && !c.resolved).length;
-  const level = config.config.jira?.level ?? "off";
-  const site = config.config.jira?.site;
+  const own = lineConfig(config.config, f.line);
+  const level = own.jira?.level ?? "off";
+  const site = own.jira?.site;
 
   const [jira, setJira] = useState<FeatureJira>({ subtasks: {} });
   const loadJira = () => api.featureJira(f.id).then(setJira);
@@ -504,7 +505,7 @@ function FeatureView(props: {
       subtask={jira.subtasks[r.name]}
       hasTask={Boolean(jira.task)}
       jiraSite={site}
-      prInstructions={config.config.prInstructions}
+      prInstructions={own.prInstructions}
       ov={overview.ov?.repos.find((x) => x.name === r.name)}
       onChanged={() => void overview.reload()}
       hasChat={props.chats.some((c) => c.repo === r.name)}

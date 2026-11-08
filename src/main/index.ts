@@ -24,6 +24,8 @@ import {
   configView,
   defaultArchiveRoot,
   defaultFeaturesRoot,
+  featureRoots,
+  forLine,
   homeArea,
   jiraToken,
   loadLocalConfig,
@@ -85,22 +87,22 @@ const codec: SecretCodec = {
   encrypt: (s) => safeStorage.encryptString(s).toString("base64"),
   decrypt: (s) => safeStorage.decryptString(Buffer.from(s, "base64")),
 };
-/** A Jira client when Jira is on and has site, email and token. */
-function jira(): Jira | null {
-  const j = localConfig.jira;
+/** A Jira client for a line (its own Jira, or the general one) when that is on and has site, email and token. */
+function jira(line?: string): Jira | null {
+  const j = forLine(localConfig, line).jira;
   if (j.level === "off" || !j.site || !j.email) return null;
   const token = jiraToken(j, codec);
   return token ? new Jira({ site: j.site, email: j.email, token }) : null;
 }
-const needJira = () => {
-  const j = jira();
+const needJira = (line?: string) => {
+  const j = jira(line);
   if (!j) throw new Error("Jira is not set up: add the site, email and API token in Configure.");
   return j;
 };
 
 const features = new Features(store, localConfig, join(dataDir, "logs"), jira);
 // Worktrees and features thrown away while Caboose was quitting: finish deleting them.
-void rm(join(localConfig.featuresRoot, ".caboose-trash"), { recursive: true, force: true }).catch(() => {});
+for (const root of featureRoots(localConfig)) void rm(join(root, ".caboose-trash"), { recursive: true, force: true }).catch(() => {});
 const featureById = (id: string) => store.get().features.find((f) => f.id === id);
 
 let win: BrowserWindow | null = null;
@@ -308,9 +310,10 @@ ipcMain.handle("config:previewLocalFiles", (_e, repoPath: string, patterns: stri
 ipcMain.handle("config:terminalFont", () => localConfig.terminalFont);
 
 // --- jira
-ipcMain.handle("jira:test", () => attempt(() => needJira().myself()));
-ipcMain.handle("jira:issue", (_e, key: string) => attempt(() => needJira().issue(key)));
-ipcMain.handle("jira:mine", () => attempt(() => needJira().myIssues()));
+// `line`: that line's Jira (its own, or the general one); none: the general one.
+ipcMain.handle("jira:test", (_e, line?: string) => attempt(() => needJira(line).myself()));
+ipcMain.handle("jira:issue", (_e, key: string, line?: string) => attempt(() => needJira(line).issue(key)));
+ipcMain.handle("jira:mine", (_e, line?: string) => attempt(() => needJira(line).myIssues()));
 ipcMain.handle("jira:feature", (_e, featureId: string) => features.jiraOf(featureId));
 ipcMain.handle("jira:setTask", (_e, featureId: string, key: string | null) => features.setTask(featureId, key));
 ipcMain.handle("feature:details", (_e, featureId: string, details: FeatureDetails) => features.setDetails(featureId, details));
@@ -371,7 +374,7 @@ ipcMain.handle("feature:archive", async (_e, id: string) => {
   return features.archive(id);
 });
 ipcMain.handle("feature:retirePlan", (_e, id: string) =>
-  attempt(() => retirePlan(featureOrThrow(id), { github, archiveRoot: localConfig.archiveRoot })),
+  attempt(() => retirePlan(featureOrThrow(id), { github, archiveRoot: forLine(localConfig, featureById(id)?.line).archiveRoot })),
 );
 ipcMain.handle("feature:retire", (_e, id: string, mode: RetireMode) =>
   attempt(async () => {
@@ -381,7 +384,7 @@ ipcMain.handle("feature:retire", (_e, id: string, mode: RetireMode) =>
     const releases = ov ? visitReleases(ov, Object.fromEntries(f.repos.map((r) => [r.name, r.source])), stagesFor) : [];
     const out = await retire(f, mode, {
       github,
-      archiveRoot: localConfig.archiveRoot,
+      archiveRoot: forLine(localConfig, f.line).archiveRoot,
       chats: store.get().chats,
       transcript: (chatId) => chats.events(chatId).filter((e) => e.t !== "status"),
       logs: features.logs(f.id),
@@ -460,7 +463,11 @@ ipcMain.handle("docs:note", (_e, featureId: string, to: string | undefined, text
 );
 ipcMain.handle("docs:status", (_e, featureId: string) => coordinator.status(featureId));
 const prDetails = new PrDetailsCache();
-const stagesFor = (repo: string) => localConfig.repos.find((r) => r.name === repo)?.releaseStages ?? localConfig.releaseStages ?? [];
+/** A repo's release stages: its own, else its line's, else everyone's. */
+const stagesFor = (repo: string) => {
+  const r = localConfig.repos.find((x) => x.name === repo);
+  return r?.releaseStages ?? forLine(localConfig, r?.line).releaseStages ?? [];
+};
 const overviewOf = (featureId: string, fresh = false) =>
   featureOverview(
     featureOrThrow(featureId),
