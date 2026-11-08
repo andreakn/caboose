@@ -201,6 +201,8 @@ function ChatPanel({ chat, ws }: { chat: Chat; ws: Feature }) {
   const [view, setView] = useState<ChatView>(emptyView);
   const scroller = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
+  // Scrolled up: offer a way back down (a wheel fighting streaming output is not the only way).
+  const [awayFromLatest, setAwayFromLatest] = useState(false);
 
   useEffect(() => {
     // Events that arrive before the saved transcript are already in it; drop them.
@@ -231,6 +233,8 @@ function ChatPanel({ chat, ws }: { chat: Chat; ws: Feature }) {
         onScroll={(e) => {
           const el = e.currentTarget;
           pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+          const away = el.scrollHeight - el.scrollTop - el.clientHeight > 300;
+          if (away !== awayFromLatest) setAwayFromLatest(away);
         }}
       >
         {view.items.length === 0 && !view.draft && (
@@ -255,6 +259,19 @@ function ChatPanel({ chat, ws }: { chat: Chat; ws: Feature }) {
             {q}
           </div>
         ))}
+        {awayFromLatest && (
+          <button
+            className="to-latest"
+            onClick={() => {
+              const el = scroller.current;
+              if (el) el.scrollTop = el.scrollHeight;
+              pinned.current = true;
+              setAwayFromLatest(false);
+            }}
+          >
+            ↓ Latest
+          </button>
+        )}
       </div>
       <Composer
         chat={chat}
@@ -404,7 +421,7 @@ function ProposalCard({ item, chatId, agent }: { item: Extract<ChatItem, { kind:
       </div>
       <div className="permission-actions">
         <button className="primary" disabled={busy || !chosen.length} onClick={() => answer(chosen)}>
-          {busy ? "Adding…" : `Add ${chosen.length ? chosen.join(", ") : "them"}`}
+          {busy ? "Adding…" : chosen.length === 1 ? `Add ${chosen[0]}` : `Add selected (${chosen.length})`}
         </button>
         <button disabled={busy} onClick={() => answer([])}>
           None of these

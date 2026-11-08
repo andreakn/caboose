@@ -728,6 +728,12 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      a "⚠ running in Korsør" tag beside it; hovering explains, clicking goes
      to that feature.
 
+151. **Long chats stay reachable**: the repo proposal's button says "Add
+     selected (n)" instead of naming every repo; the chat turns off the
+     browser's scroll anchoring (it could fight the wheel while output
+     streams in above), and a "↓ Latest" button appears when you are scrolled
+     well up, jumping to the end.
+
 ## Answered (2026-11-05)
 
 - Private GitHub repo `andreakn/caboose`: yes.
