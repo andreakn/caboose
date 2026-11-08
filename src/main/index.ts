@@ -135,6 +135,7 @@ const toolContext = (chat: Chat, f: Feature) => ({
   comments,
   terminals,
   coord: coordinator,
+  runner,
 });
 const claude = new ClaudeProvider(query, (chat, f) => ({
   mcpServers: { caboose: cabooseMcp(toolContext(chat, f)) },

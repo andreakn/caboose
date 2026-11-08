@@ -8,7 +8,7 @@ import { createSdkMcpServer, tool } from "@anthropic-ai/claude-agent-sdk";
 import { defineTool, type Tool } from "@github/copilot-sdk";
 import { z } from "zod";
 import { type Agent, type Chat } from "../../shared/chat.ts";
-import { type Feature, type FeatureRepo, REPO_STATUSES, type RepoEntry, type RepoStatus, type Terminal } from "../../shared/types.ts";
+import { type Feature, type FeatureRepo, REPO_STATUSES, type RepoEntry, type RepoStatus, type RunOverview, type RunRepo, type RunScript, type Terminal } from "../../shared/types.ts";
 import type { Comments } from "./comments.ts";
 import type { Coordinator } from "./coordination.ts";
 import { changes, fullPatch } from "./diff.ts";
@@ -20,6 +20,13 @@ const text = (t: string) => ({ content: [{ type: "text" as const, text: t }] });
 /** What GetTerminalOutput needs from the terminal manager. */
 export type TerminalSource = { list(featureId: string): Terminal[]; output(id: string, lines?: number): string };
 
+/** What the program tools need from the Run tab's runner. */
+export type ProgramRunner = {
+  overview(featureId: string): Promise<RunOverview>;
+  start(featureId: string, repo: string, id?: string): Promise<Terminal>;
+  stop(terminalId: string): Promise<void>;
+};
+
 /** What the tools work on: the feature, the chat that calls them, and the app's services. */
 export type ToolContext = {
   feature: () => Feature;
@@ -27,6 +34,7 @@ export type ToolContext = {
   comments: Comments;
   terminals?: TerminalSource;
   coord?: Coordinator;
+  runner?: ProgramRunner;
 };
 
 /** The tool handlers, separate from the MCP wrapper so they can be tested directly. */
@@ -42,7 +50,117 @@ export function cabooseHandlers(feature: () => Feature, comments: Comments, term
     return r ? [r] : `No repo "${repo}" in this feature. Its repos: ${all.map((x) => x.name).join(", ")}.`;
   };
 
+  const runner = ctx.runner;
+  const noRunner = "Programs cannot be run from here.";
+  /** The repo a program tool is about: as named, else the repo chat's own, else the only one. */
+  const programRepo = (repo?: string): string | { error: string } => {
+    const names = feature().repos.map((r) => r.name);
+    const pick = repo ?? chat()?.repo ?? (names.length === 1 ? names[0] : undefined);
+    if (!pick) return { error: `Say which repo: ${names.join(", ")}.` };
+    return names.includes(pick) ? pick : { error: `No repo "${pick}" in this feature. Its repos: ${names.join(", ")}.` };
+  };
+  /** A repo's program by its name (run_<name>.sh, "run", or a configured name), or its only one. */
+  const findProgram = (r: RunRepo, program?: string): RunScript | string => {
+    if (!r.scripts.length) return `${r.repo} has no programs (no run.sh or run_*.sh, and none in Configure).`;
+    if (!program) return r.scripts.length === 1 || !r.scripts.some((s) => s.state === "running") ? r.scripts[0] : r.scripts.find((s) => s.state === "running")!;
+    const p = program.toLowerCase();
+    return (
+      r.scripts.find((s) => s.id.toLowerCase() === p || s.label.toLowerCase() === p || s.id.toLowerCase() === `run_${p}.sh` || s.id === `config:${program}`) ??
+      `${r.repo} has no program "${program}". It has: ${r.scripts.map((s) => s.label).join(", ")}.`
+    );
+  };
+  const describeProgram = (s: RunScript) =>
+    [
+      `${s.label} (${s.id.startsWith("config:") ? s.command : s.id}): ${s.state === "exited" ? `exited with code ${s.exitCode}` : s.state}`,
+      s.urls.length ? `urls ${s.urls.map((u) => u.url).join(" ")}` : "",
+      ...(s.busy ?? []).map((h) => `⚠ port ${h.ports.join(",")} is taken by ${h.name}${h.where ? ` (${h.where})` : ""}`),
+      ...(s.elsewhere ?? []).map((e) => `⚠ also running in feature ${e.feature} (probably holding its port)`),
+    ]
+      .filter(Boolean)
+      .join("; ");
+
   return {
+    async listPrograms(args: { repo?: string }): Promise<string> {
+      if (!runner) return noRunner;
+      const ov = await runner.overview(feature().id);
+      const repos = ov.repos.filter((r) => !args.repo || r.repo === args.repo);
+      if (!repos.length) return args.repo ? `No repo "${args.repo}" in this feature.` : "This feature has no repos yet.";
+      return repos
+        .map((r) => `${r.repo}:\n${r.scripts.length ? r.scripts.map((s) => `- ${describeProgram(s)}`).join("\n") : "- no programs"}${r.strays.map((h) => `\n- ⚠ running outside the Run tab: ${h.name} on port ${h.ports.join(",")} (pid ${h.pid})`).join("")}`)
+        .join("\n\n");
+    },
+
+    async startProgram(args: { repo?: string; program?: string; wait?: number }): Promise<string> {
+      if (!runner) return noRunner;
+      const repo = programRepo(args.repo);
+      if (typeof repo !== "string") return repo.error;
+      const r = (await runner.overview(feature().id)).repos.find((x) => x.repo === repo)!;
+      const s = findProgram(r, args.program);
+      if (typeof s === "string") return s;
+      const warnings = [...(s.busy ?? []).map((h) => `port ${h.ports.join(",")} was already taken by ${h.name}${h.where ? ` (${h.where})` : ""}`), ...(s.elsewhere ?? []).map((e) => `it was already running in feature ${e.feature}`)];
+      const t = await runner.start(feature().id, repo, s.id);
+      // Wait until it answers on its first URL, exits, or the time is up.
+      const url = s.urls[0]?.url;
+      // With no URL to check, a few seconds tell whether it starts or falls over at once.
+      const waitMs = Math.min(Math.max(args.wait ?? 30, 0), 180) * 1000;
+      const deadline = Date.now() + (url ? waitMs : Math.min(waitMs, 5000));
+      let answered = "";
+      while (Date.now() < deadline) {
+        const now = terminals?.list(feature().id).find((x) => x.id === t.id);
+        if (now?.exitCode !== undefined) {
+          return `${s.label} exited with code ${now.exitCode}.${warnings.length ? ` Before starting: ${warnings.join("; ")}.` : ""}\n\n${terminals?.output(t.id, 60) ?? ""}`;
+        }
+        if (url) {
+          const res = await fetch(url, { signal: AbortSignal.timeout(2000) }).catch(() => null);
+          if (res) {
+            answered = `${url} answers ${res.status}.`;
+            break;
+          }
+        }
+        await new Promise((ok) => setTimeout(ok, url ? 1000 : 500));
+      }
+      const status = answered || (url ? `${url} did not answer yet.` : "It has no URL declared to check.");
+      return `${s.label} is running in the user's Run tab (terminal "${t.title}"). ${status}${warnings.length ? `\n⚠ Before starting: ${warnings.join("; ")}.` : ""}\n\nLast output:\n${terminals?.output(t.id, 40) ?? ""}`;
+    },
+
+    async stopProgram(args: { repo?: string; program?: string }): Promise<string> {
+      if (!runner) return noRunner;
+      const repo = programRepo(args.repo);
+      if (typeof repo !== "string") return repo.error;
+      const r = (await runner.overview(feature().id)).repos.find((x) => x.repo === repo)!;
+      const s = findProgram(r, args.program);
+      if (typeof s === "string") return s;
+      if (!s.terminalId) return `${s.label} is not running.`;
+      await runner.stop(s.terminalId);
+      return `Stopped ${s.label} (Ctrl-C, then closed).`;
+    },
+
+    async fetchLocal(args: { url: string; method?: string; body?: string; headers?: Record<string, string> }): Promise<string> {
+      let u: URL;
+      try {
+        u = new URL(args.url);
+      } catch {
+        return `Not a URL: ${args.url}`;
+      }
+      if (!["localhost", "127.0.0.1", "[::1]"].includes(u.hostname) || !/^https?:$/.test(u.protocol)) {
+        return "FetchLocal only reaches programs on this machine (http://localhost:…).";
+      }
+      try {
+        const res = await fetch(u, {
+          method: args.method ?? "GET",
+          headers: args.headers,
+          body: args.body,
+          signal: AbortSignal.timeout(15_000),
+          redirect: "manual",
+        });
+        const body = await res.text();
+        const type = res.headers.get("content-type") ?? "";
+        return `${res.status} ${res.statusText}${type ? ` (${type})` : ""}\n\n${body.length > 6000 ? `${body.slice(0, 6000)}\n… (${body.length} characters in all)` : body}`;
+      } catch (e) {
+        return `No answer from ${u.href}: ${(e as Error).message}`;
+      }
+    },
+
     getTerminalOutput(args: { terminal?: string; lines?: number }): string {
       const list = terminals?.list(feature().id) ?? [];
       if (!list.length) return "No terminals are open in this feature. The user starts them in Caboose (Run, or a terminal tab).";
@@ -230,6 +348,49 @@ const TOOLS: ToolDef[] = [
     run: (h, a: { terminal?: string; lines?: number }) => h.getTerminalOutput(a),
   },
   {
+    claude: "ListPrograms",
+    copilot: "caboose_list_programs",
+    description:
+      "Lists the programs each repo can run (run.sh / run_<name>.sh and configured run scripts), whether they run, their URLs, and port conflicts. These are the programs in the user's Run tab in Caboose.",
+    shape: { repo: z.string().optional().describe("Only this repo") },
+    run: (h, a: { repo?: string }) => h.listPrograms(a),
+  },
+  {
+    claude: "StartProgram",
+    copilot: "caboose_start_program",
+    description:
+      "Starts a repo's program in the user's Run tab (visible to them, its port managed by Caboose) and waits until its URL answers, it exits, or `wait` seconds pass; returns which, with its recent output. Use this rather than starting servers in a shell, which leaves programs holding ports. Read more output with GetTerminalOutput.",
+    shape: {
+      repo: z.string().optional().describe("The repo (a repo chat's own by default)"),
+      program: z.string().optional().describe("Which program: its name (e.g. cda for run_cda.sh), \"run\", or a configured name; default the repo's first"),
+      wait: z.number().int().min(0).max(180).optional().describe("Seconds to wait for it to answer (default 30)"),
+    },
+    run: (h, a: { repo?: string; program?: string; wait?: number }) => h.startProgram(a),
+  },
+  {
+    claude: "StopProgram",
+    copilot: "caboose_stop_program",
+    description: "Stops a program running in the user's Run tab (Ctrl-C first, as the user's Stop button does).",
+    shape: {
+      repo: z.string().optional().describe("The repo (a repo chat's own by default)"),
+      program: z.string().optional().describe("Which program; default the one running"),
+    },
+    run: (h, a: { repo?: string; program?: string }) => h.stopProgram(a),
+  },
+  {
+    claude: "FetchLocal",
+    copilot: "caboose_fetch_local",
+    description:
+      "Sends an HTTP request to a program running on this machine (http://localhost:… only) and returns the status and body: to check that what you built answers, e.g. a health endpoint or an API call.",
+    shape: {
+      url: z.string().describe("http://localhost:<port>/<path>"),
+      method: z.string().optional().describe("GET (default), POST, …"),
+      body: z.string().optional(),
+      headers: z.record(z.string(), z.string()).optional(),
+    },
+    run: (h, a: { url: string; method?: string; body?: string; headers?: Record<string, string> }) => h.fetchLocal(a),
+  },
+  {
     claude: "ReportStatus",
     copilot: "caboose_report_status",
     description: `Reports where a repo's work stands, to the feature's log the user watches in Caboose: ${REPO_STATUSES.join(", ")}. A repo chat reports for its own repo; the central chat says which repo.`,
@@ -352,6 +513,7 @@ export function cabooseInstructions(f: Feature, agent: "claude" | "copilot" = "c
     `The user sees the changes in Caboose's Changes view. Use ${n("GetWorkspaceDiff")} to see the same diff, ${n("GetDiffComments")} to read the user's review comments, and ${n("DiffComment")} to point the user at specific lines.`,
     `Use ${n("GetTerminalOutput")} to read the user's terminals in Caboose, such as a dev server started by the Run button. Ports ${f.port}–${f.port + 99} are reserved for this feature; each repo's scripts and terminals get their own CABOOSE_PORT.`,
     `${n("GetFeatureStatus")} shows every repo's reported status, chat, git state and PR at a glance.`,
+    `To check that your work runs, use ${n("ListPrograms")}, ${n("StartProgram")} (it waits until the program answers on its URL and tells you if it crashed) and ${n("FetchLocal")} to call its endpoints; ${n("StopProgram")} when done, unless the user wants it running. These run in the user's Run tab, where they can see them. Do not start servers yourself in a shell: they keep holding their ports after you are done.`,
   ];
   if (mine) {
     return [

@@ -744,6 +744,18 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      7-repo feature with 20,000 files per worktree went from 5.6 s (local
      remotes, more with GitHub's round-trips) to under 0.1 s.
 
+153. **CI on macOS, Windows and Linux** (`.github/workflows/ci.yml`):
+     typecheck, the tests and a build at every push, with real git; the
+     Electron binary is not downloaded (nothing needs it to test or build).
+154. **Agents can run what they build** (ListPrograms, StartProgram,
+     StopProgram, FetchLocal; for Claude and Copilot). Programs start in the
+     user's Run tab, where they see them and Caboose manages the ports;
+     StartProgram waits until the program's declared URL answers, it exits,
+     or the wait is up, and returns which, with its recent output and any
+     port conflict. FetchLocal only reaches http://localhost. The
+     instructions tell agents to use these instead of starting servers in a
+     shell, which leaves programs holding ports.
+
 ## Answered (2026-11-05)
 
 - Private GitHub repo `andreakn/caboose`: yes.
