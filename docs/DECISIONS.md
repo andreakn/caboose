@@ -506,7 +506,7 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
 
 122. **Caboose follows the branch a worktree is on now**, not only the one it
      made: an agent (or you) may switch to a branch named after the Jira
-     task (`NWP-8241_FixViaStartupMapping`). PRs are looked up by the
+     task (`ABC-8241_FixStartupMapping`). PRs are looked up by the
      checked-out branch, and the recorded branch is updated, so push, merge
      and renames use it too. A detached HEAD keeps the recorded one.
 
@@ -696,10 +696,10 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      each repo can use its own or switch it off). Once a repo's PR is
      merged, its merge commit (from GitHub) is looked up with
      `git tag --contains`, and per stage the lowest version tag is shown
-     next to the PR: `🏷 via_v1.114 · test ✓ · prod –`. A tag matching
+     next to the PR: `🏷 shop_v1.114 · test ✓ · prod –`. A tag matching
      several patterns counts for the last one, so `*_v*` does not also claim
-     `via_TEST_v1.114`. Repos that tag several services (`cdsws_v1.335`,
-     `cbsws_v1.004`) get the lowest tag per prefix. Off until stages are set.
+     `shop_TEST_v1.114`. Repos that tag several services (`orderws_v1.335`,
+     `stockws_v1.004`) get the lowest tag per prefix. Off until stages are set.
 
 147. **The sidebar shows how deployed a feature is**: per release stage
      (environment) a small bar with a segment per repo that has tag rules,

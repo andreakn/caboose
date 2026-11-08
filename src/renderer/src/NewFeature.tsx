@@ -90,7 +90,7 @@ export function NewFeature({ config, onCreated, onCancel }: { config: ConfigView
         {level !== "off" && (
           <label className="jira-line">
             <span className="muted">Jira task{level === "required" ? "" : " (optional)"}</span>
-            <input list="my-issues" value={key} placeholder="key or URL, e.g. NWP-1234" onChange={(e) => setKey(e.target.value)} />
+            <input list="my-issues" value={key} placeholder="key or URL, e.g. ABC-1234" onChange={(e) => setKey(e.target.value)} />
             <datalist id="my-issues">
               {mine.map((i) => (
                 <option key={i.key} value={i.key}>

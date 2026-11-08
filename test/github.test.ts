@@ -79,11 +79,11 @@ test("PRs and their checks are read from gh, checks from both GitHub APIs", asyn
 });
 
 test("the create-PR message names the branch and the base", () => {
-  const m = createPrMessage("web", "caboose/finse", "origin/main", true, "NWP-9");
+  const m = createPrMessage("web", "caboose/finse", "origin/main", true, "ABC-9");
   assert.match(m, /the web\/ folder/);
   assert.match(m, /git push -u origin caboose\/finse/);
   assert.match(m, /gh pr create --base main --draft/);
-  assert.match(m, /Jira issue NWP-9/);
+  assert.match(m, /Jira issue ABC-9/);
   assert.doesNotMatch(m, /start the title/);
   assert.doesNotMatch(createPrMessage("web", "b", "origin/main", false), /Jira/);
 });

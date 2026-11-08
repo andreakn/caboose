@@ -42,7 +42,7 @@ const TERMINAL_FIELDS: { key: "shellPath" | "bashPath" | "terminalFont" | "monik
   {
     key: "monikersFile",
     label: "Moniker file",
-    hint: "Optional, e.g. ~/home/varner/monikers.txt: \"moniker path description\" per line. Names repos and describes their run_<moniker>.sh in the Run tab.",
+    hint: "Optional, e.g. ~/code/monikers.txt: \"moniker path description\" per line. Names repos and describes their run_<moniker>.sh in the Run tab.",
   },
 ];
 
@@ -459,7 +459,7 @@ export function Configure({ onDone, onSaved }: { onDone: () => void; onSaved?: (
                 </label>
                 <label>
                   <span>Project for new tasks</span>
-                  <input value={jira.project ?? ""} placeholder="e.g. NWP" onChange={(e) => setJira({ project: e.target.value.toUpperCase() })} />
+                  <input value={jira.project ?? ""} placeholder="e.g. ABC" onChange={(e) => setJira({ project: e.target.value.toUpperCase() })} />
                 </label>
                 <div className="row">
                   <button

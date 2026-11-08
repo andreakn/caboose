@@ -74,10 +74,10 @@ test("update pulls, reinstalls when package.json changed, and builds", async () 
 test("a repo's friendly name is kept trimmed, and dropped when empty", () => {
   const stored = applyConfigInput(
     {},
-    { repos: [{ name: "cust-customer-data-api", path: "/c/cda", label: "  CDA " }, { name: "via", path: "/c/via", label: "  " }] },
+    { repos: [{ name: "order-service", path: "/c/orders", label: "  Orders " }, { name: "shop", path: "/c/shop", label: "  " }] },
     { canEncrypt: false, encrypt: (s) => s, decrypt: (s) => s },
   );
-  assert.deepEqual(stored.repos, [{ name: "cust-customer-data-api", path: "/c/cda", label: "CDA" }, { name: "via", path: "/c/via" }]);
+  assert.deepEqual(stored.repos, [{ name: "order-service", path: "/c/orders", label: "Orders" }, { name: "shop", path: "/c/shop" }]);
 });
 
 test("a checkout that moved on since the app started: the commits are listed, and update rebuilds without pulling", async () => {

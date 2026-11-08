@@ -48,8 +48,8 @@ for (const r of ["web", "api"]) mkdirSync(join(folder, r), { recursive: true });
 const feature: Feature = {
   id: "f1", name: "finse", title: "Checkout v2", folder, createdAt: "", archived: false, port: 41000,
   repos: [
-    { name: "web", source: "/src/web", path: join(folder, "web"), branch: "caboose/NWP-2-finse", baseRef: "origin/main", setup: "none" },
-    { name: "api", source: "/src/api", path: join(folder, "api"), branch: "caboose/NWP-3-finse", baseRef: "origin/main", setup: "none" },
+    { name: "web", source: "/src/web", path: join(folder, "web"), branch: "caboose/ABC-2-finse", baseRef: "origin/main", setup: "none" },
+    { name: "api", source: "/src/api", path: join(folder, "api"), branch: "caboose/ABC-3-finse", baseRef: "origin/main", setup: "none" },
   ],
 };
 
@@ -60,7 +60,7 @@ function setup() {
   const chats = new Chats(store, join(tmp, `${Math.random()}`), { claude: new ClaudeProvider(agent.fn) }, () => {});
   const added: string[] = [];
   const coord = new Coordinator({
-    store, chats, jiraOf: () => ({ task: "NWP-1", subtasks: { web: "NWP-2", api: "NWP-3" } }),
+    store, chats, jiraOf: () => ({ task: "ABC-1", subtasks: { web: "ABC-2", api: "ABC-3" } }),
     repos: () => [{ name: "web", path: "/src/web" }, { name: "api", path: "/src/api" }, { name: "cms", path: "/src/cms" }, { name: "bff", path: "/src/bff" }],
     addRepo: async (_f, name) => (name === "bff" ? { ok: false, error: "no access" } : (added.push(name), { ok: true, value: undefined })),
     setTitle: () => ({ ok: true, value: undefined }),
@@ -149,9 +149,9 @@ test("status reports come from repo chats (or name the repo), and the overview s
   assert.equal(readLog(folder).at(-1)!.from, "coordinator");
 
   const status = await inCentral.featureStatus();
-  assert.match(status, /Feature finse — Checkout v2 \[active\] · Jira NWP-1/);
-  assert.match(status, /- web \(caboose\/NWP-2-finse\): reported needs-input \([^)]*: Which currency\?\) · chat idle · 2 uncommitted, 1 commit\(s\) ahead, not pushed · no PR · Jira NWP-2/);
-  assert.match(status, /- api \(caboose\/NWP-3-finse\): reported working/);
+  assert.match(status, /Feature finse — Checkout v2 \[active\] · Jira ABC-1/);
+  assert.match(status, /- web \(caboose\/ABC-2-finse\): reported needs-input \([^)]*: Which currency\?\) · chat idle · 2 uncommitted, 1 commit\(s\) ahead, not pushed · no PR · Jira ABC-2/);
+  assert.match(status, /- api \(caboose\/ABC-3-finse\): reported working/);
   assert.match(status, /Recent log:[\s\S]*coordinator: Contract: amount in øre\./);
 });
 
@@ -161,7 +161,7 @@ test("the central chat and repo chats get their own system notes", () => {
   assert.match(central, /caboose_start_repo_chat/);
   const repo = cabooseInstructions(feature, "claude", { id: "c", featureId: "f1", repo: "api", title: "api", model: "default", effort: "high", mode: "acceptEdits", createdAt: "" });
   assert.match(repo, /agent for the api repo/);
-  assert.match(repo, /You work in .*[\\/]api, a git worktree on branch caboose\/NWP-3-finse/);
+  assert.match(repo, /You work in .*[\\/]api, a git worktree on branch caboose\/ABC-3-finse/);
   assert.doesNotMatch(repo, /central chat/);
 });
 

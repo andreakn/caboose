@@ -80,7 +80,7 @@ export type Terminal = {
   /** The repo it was opened in; none = the feature folder. */
   repo?: string;
   kind: "shell" | "run";
-  /** Which run script it runs: the file name (run_cda.sh), or config:<name>. */
+  /** Which run script it runs: the file name (run_orders.sh), or config:<name>. */
   script?: string;
   title: string;
   startedAt: string;
@@ -143,9 +143,9 @@ export type PortHolder = {
 };
 
 export type RunScript = {
-  /** The file name (run_cda.sh), or config:<name>. */
+  /** The file name (run_orders.sh), or config:<name>. */
   id: string;
-  /** The moniker (cda), "run" for run.sh, or the configured name. */
+  /** The moniker (orders), "run" for run.sh, or the configured name. */
   label: string;
   /** From the moniker file. */
   description?: string;
@@ -250,7 +250,7 @@ export type JiraConfig = {
   site?: string;
   email?: string;
   token?: Secret;
-  /** Project key for new tasks, e.g. NWP. */
+  /** Project key for new tasks, e.g. ABC. */
   project?: string;
 };
 

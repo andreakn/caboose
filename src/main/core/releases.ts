@@ -2,8 +2,8 @@
 // that contains the PR's merge commit. Stages are named tag patterns from the
 // config, e.g. release = *_v*, test = *_TEST_v*, prod = *_PROD_v* (a tag
 // matching several patterns counts for the last one, so `*_v*` does not also
-// claim cda_TEST_v1.436). Repos with several services tag them with
-// different prefixes (cdsws_v1.335, cbsws_v1.004): each prefix is reported.
+// claim orders_TEST_v1.436). Repos with several services tag them with
+// different prefixes (orderws_v1.335, stockws_v1.004): each prefix is reported.
 import type { ReleaseStage, StageRelease } from "../../shared/types.ts";
 import { git } from "./run.ts";
 
@@ -19,7 +19,7 @@ export function stageOf(tag: string, stages: ReleaseStage[]): string | undefined
   return undefined;
 }
 
-/** "cda_v1.437" → "cda_", "v2.1.0" → "": the part before the version. */
+/** "orders_v1.437" → "orders_", "v2.1.0" → "": the part before the version. */
 export const prefixOf = (tag: string) => tag.replace(/v?\d+(?:[._-]\d+)*$/i, "");
 
 /** From tags already sorted lowest version first: per stage (in stage order), the first tag of each prefix. */

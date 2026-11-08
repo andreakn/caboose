@@ -24,18 +24,18 @@ test("the overview joins reports, git, PRs and Jira per repo", async () => {
   const f: Feature = {
     id: "f", name: "finse", folder, createdAt: "", archived: false, port: 41000,
     repos: [
-      { name: "web", source: src, path: src, branch: "caboose/NWP-2-finse", baseRef: "main", setup: "none" },
-      { name: "api", source: plain, path: plain, branch: "caboose/NWP-3-finse", baseRef: "main", setup: "none" },
+      { name: "web", source: src, path: src, branch: "caboose/ABC-2-finse", baseRef: "main", setup: "none" },
+      { name: "api", source: plain, path: plain, branch: "caboose/ABC-3-finse", baseRef: "main", setup: "none" },
     ],
   };
   const asked: unknown[] = [];
   const ov = await featureOverview(f, {
     github: { branchStatus: async (p: string) => ({ uncommitted: p === src ? 1 : 0, ahead: 2, behind: 0, behindBase: 3, upstream: "origin/x" }) } as never,
     prs: { get: async (qs: unknown) => (asked.push(qs), { prs: { web: { number: 7 } } }) } as never,
-    jira: () => ({ statuses: async (keys: string[]) => ({ "NWP-1": { key: "NWP-1", status: "In Progress", category: "indeterminate" }, ...(keys.includes("NWP-2") ? { "NWP-2": { key: "NWP-2", status: "Done", category: "done" } } : {}) }) }) as never,
-    jiraOf: () => ({ task: "NWP-1", subtasks: { web: "NWP-2", api: "NWP-3" } }),
+    jira: () => ({ statuses: async (keys: string[]) => ({ "ABC-1": { key: "ABC-1", status: "In Progress", category: "indeterminate" }, ...(keys.includes("ABC-2") ? { "ABC-2": { key: "ABC-2", status: "Done", category: "done" } } : {}) }) }) as never,
+    jiraOf: () => ({ task: "ABC-1", subtasks: { web: "ABC-2", api: "ABC-3" } }),
   });
-  assert.deepEqual(asked, [[{ repo: "web", slug: "o/web", branch: "caboose/NWP-2-finse" }]], "only repos on GitHub are asked about");
+  assert.deepEqual(asked, [[{ repo: "web", slug: "o/web", branch: "caboose/ABC-2-finse" }]], "only repos on GitHub are asked about");
   assert.deepEqual(ov.progress, { done: 1, total: 2 });
   assert.equal((ov.task as { status: string }).status, "In Progress");
   const [web, api] = ov.repos;
@@ -44,28 +44,28 @@ test("the overview joins reports, git, PRs and Jira per repo", async () => {
   assert.equal(web.pr?.number, 7);
   assert.equal(api.pr, undefined, "not on GitHub: unknown, not 'no PR'");
   assert.equal((web.jira as { status: string }).status, "Done");
-  assert.deepEqual(api.jira, { key: "NWP-3" }, "unknown to Jira: just the key");
+  assert.deepEqual(api.jira, { key: "ABC-3" }, "unknown to Jira: just the key");
 });
 
 test("PRs are looked up by the branch the worktree is on now, and the switch is recorded", async () => {
-  const src = join(tmp, "src-via");
+  const src = join(tmp, "src-shop");
   execFileSync("git", ["init", "-q", src]);
-  execFileSync("git", ["remote", "add", "origin", "git@github.com:o/via.git"], { cwd: src });
+  execFileSync("git", ["remote", "add", "origin", "git@github.com:o/shop.git"], { cwd: src });
   const f: Feature = {
     id: "g", name: "tinglev", folder: join(tmp, "tinglev"), createdAt: "", archived: false, port: 41000,
-    repos: [{ name: "via", source: src, path: src, branch: "caboose/tinglev", baseRef: "main", setup: "none" }],
+    repos: [{ name: "shop", source: src, path: src, branch: "caboose/tinglev", baseRef: "main", setup: "none" }],
   };
   const asked: unknown[] = [];
   const switched: string[] = [];
   const ov = await featureOverview(f, {
-    github: { branchStatus: async () => ({ head: "NWP-8241_FixViaStartupMapping", uncommitted: 0, ahead: 0, behind: 0, behindBase: 0 }) } as never,
-    prs: { get: async (qs: unknown) => (asked.push(qs), { prs: { via: { number: 546, state: "MERGED" } } }) } as never,
+    github: { branchStatus: async () => ({ head: "ABC-8241_FixStartupMapping", uncommitted: 0, ahead: 0, behind: 0, behindBase: 0 }) } as never,
+    prs: { get: async (qs: unknown) => (asked.push(qs), { prs: { shop: { number: 546, state: "MERGED" } } }) } as never,
     jira: () => null,
     jiraOf: () => ({ subtasks: {} }),
     onBranch: (id, repo, branch) => switched.push(`${id}/${repo}:${branch}`),
   });
-  assert.deepEqual(asked, [[{ repo: "via", slug: "o/via", branch: "NWP-8241_FixViaStartupMapping" }]]);
-  assert.equal(ov.repos[0].branch, "NWP-8241_FixViaStartupMapping");
+  assert.deepEqual(asked, [[{ repo: "shop", slug: "o/shop", branch: "ABC-8241_FixStartupMapping" }]]);
+  assert.equal(ov.repos[0].branch, "ABC-8241_FixStartupMapping");
   assert.equal(ov.repos[0].pr?.number, 546);
-  assert.deepEqual(switched, ["g/via:NWP-8241_FixViaStartupMapping"]);
+  assert.deepEqual(switched, ["g/shop:ABC-8241_FixStartupMapping"]);
 });

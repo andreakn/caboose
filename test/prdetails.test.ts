@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { buildQuery, githubSlug, PrDetailsCache } from "../src/main/core/prdetails.ts";
 
 test("slugs from GitHub remotes", () => {
-  assert.equal(githubSlug("git@github.com:Varner-AS/ecom-app-bff.git"), "Varner-AS/ecom-app-bff");
+  assert.equal(githubSlug("git@github.com:acme/shop-api.git"), "acme/shop-api");
   assert.equal(githubSlug("https://github.com/andreakn/caboose"), "andreakn/caboose");
   assert.equal(githubSlug("https://gitlab.com/x/y.git"), null);
 });
@@ -13,7 +13,7 @@ test("one query for every repo; PRs shaped with threads, checks and reviews; cac
   const pr = {
     number: 714, title: "Batch sync", url: "https://github.com/o/web/pull/714", state: "OPEN", isDraft: false,
     reviewDecision: "CHANGES_REQUESTED", mergeable: "MERGEABLE", mergeStateStatus: "BLOCKED", additions: 10, deletions: 2, changedFiles: 3,
-    headRefName: "caboose/NWP-2-finse", baseRefName: "main", updatedAt: "2026-11-06T10:00:00Z", author: { login: "me" },
+    headRefName: "caboose/ABC-2-finse", baseRefName: "main", updatedAt: "2026-11-06T10:00:00Z", author: { login: "me" },
     reviewThreads: { nodes: [
       { isResolved: false, isOutdated: false, path: "src/a.ts", line: 4, comments: { totalCount: 3, nodes: [{ author: { login: "copilot" }, body: "Null check?", url: "u1" }] } },
       { isResolved: true, path: "src/b.ts", line: 1, comments: { totalCount: 1, nodes: [] } },
@@ -29,12 +29,12 @@ test("one query for every repo; PRs shaped with threads, checks and reviews; cac
   const cache = new PrDetailsCache(async (file, args) => {
     calls++;
     assert.equal(file, "gh");
-    assert.match(args[3], /r0: repository\(owner: "o", name: "web"\)[\s\S]*headRefName: "caboose\/NWP-2-finse"[\s\S]*r1: repository/);
+    assert.match(args[3], /r0: repository\(owner: "o", name: "web"\)[\s\S]*headRefName: "caboose\/ABC-2-finse"[\s\S]*r1: repository/);
     return JSON.stringify({ data: { r0: { pullRequests: { nodes: [pr] } }, r1: { pullRequests: { nodes: [] } } } });
   });
   const qs = [
-    { repo: "web", slug: "o/web", branch: "caboose/NWP-2-finse" },
-    { repo: "api", slug: "o/api", branch: "caboose/NWP-3-finse" },
+    { repo: "web", slug: "o/web", branch: "caboose/ABC-2-finse" },
+    { repo: "api", slug: "o/api", branch: "caboose/ABC-3-finse" },
   ];
   const r = await cache.get(qs);
   assert.equal(r.prs.api, null);

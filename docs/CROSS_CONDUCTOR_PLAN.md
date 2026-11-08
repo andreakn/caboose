@@ -1,6 +1,6 @@
 # Making Caboose feature-complete with cross_conductor
 
-`~/home/varner/cross_conductor` (xc) is how Andreas runs cross-repo work today:
+cross_conductor (xc), a set of cross-repo scripts, is how cross-repo work was run before Caboose:
 a coordinator agent writes a plan and one brief per repo, dispatches a subagent
 per repo into git worktrees, and a local dashboard shows how it is going.
 Caboose now has features (one worktree per repo), agents, Jira and PRs, so most

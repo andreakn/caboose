@@ -116,23 +116,23 @@ test("required Jira: no task, no feature; with one, each repo gets a subtask and
   let n = 100;
   const fake = {
     issue: async (key: string) => ({ key, summary: "Checkout v2", status: "To Do", type: "Story", url: "" }),
-    createTask: async (_p: string, s: string) => (created.push(`task:${s}`), `NWP-${n++}`),
-    createSubtask: async (parent: string, s: string) => (created.push(`${parent}>${s}`), `NWP-${n++}`),
+    createTask: async (_p: string, s: string) => (created.push(`task:${s}`), `ABC-${n++}`),
+    createSubtask: async (parent: string, s: string) => (created.push(`${parent}>${s}`), `ABC-${n++}`),
   } as unknown as Jira;
   const store = new Store(join(tmp, "s3", "state.json"));
-  const cfg = config({ jira: { level: "required", project: "NWP" } });
+  const cfg = config({ jira: { level: "required", project: "ABC" } });
   const features = new Features(store, cfg, join(tmp, "s3", "logs"), () => fake);
 
   assert.equal((await features.create({ repos: ["web"] })).ok, false);
-  const r = await features.create({ repos: ["web", "api"], jira: { key: "https://x.atlassian.net/browse/NWP-1" } });
+  const r = await features.create({ repos: ["web", "api"], jira: { key: "https://x.atlassian.net/browse/ABC-1" } });
   assert.ok(r.ok, !r.ok ? r.error : "");
-  assert.deepEqual(created, ["NWP-1>web: Checkout v2", "NWP-1>api: Checkout v2"]);
-  assert.equal(readFileSync(join(r.value.folder, "jira.txt"), "utf8"), "NWP-1\nweb: NWP-100\napi: NWP-101\n");
-  assert.deepEqual(r.value.repos.map((x) => x.branch), [`caboose/NWP-100-${r.value.name}`, `caboose/NWP-101-${r.value.name}`]);
+  assert.deepEqual(created, ["ABC-1>web: Checkout v2", "ABC-1>api: Checkout v2"]);
+  assert.equal(readFileSync(join(r.value.folder, "jira.txt"), "utf8"), "ABC-1\nweb: ABC-100\napi: ABC-101\n");
+  assert.deepEqual(r.value.repos.map((x) => x.branch), [`caboose/ABC-100-${r.value.name}`, `caboose/ABC-101-${r.value.name}`]);
 
   const made = await features.create({ repos: ["api"], jira: { create: "Brand new" } });
   assert.ok(made.ok, !made.ok ? made.error : "");
-  assert.deepEqual(features.jiraOf(made.value.id), { task: "NWP-102", subtasks: { api: "NWP-103" } });
+  assert.deepEqual(features.jiraOf(made.value.id), { task: "ABC-102", subtasks: { api: "ABC-103" } });
   await until(settled(store));
 });
 
@@ -140,7 +140,7 @@ test("linking a task later: each repo gets a subtask and its key in the branch, 
   let n = 7;
   const fake = {
     issue: async (key: string) => ({ key, summary: "Thing", status: "", type: "", url: "" }),
-    createSubtask: async () => `NWP-${n++}`,
+    createSubtask: async () => `ABC-${n++}`,
   } as unknown as Jira;
   const store = new Store(join(tmp, "s4", "state.json"));
   const features = new Features(store, config({ jira: { level: "optional" } }), join(tmp, "s4", "logs"), () => fake);
@@ -154,14 +154,14 @@ test("linking a task later: each repo gets a subtask and its key in the branch, 
   sh(web.path, "push", "-q", "-u", "origin", web.branch);
 
   assert.equal((await features.setTask(r.value.id, "nope")).ok, false);
-  const linked = await features.setTask(r.value.id, "NWP-5");
+  const linked = await features.setTask(r.value.id, "ABC-5");
   assert.ok(linked.ok, !linked.ok ? linked.error : "");
-  assert.deepEqual(linked.value.created, ["NWP-7", "NWP-8"]);
-  assert.deepEqual(linked.value.renamed.map((x) => [x.repo, x.to]), [["api", `caboose/NWP-7-${r.value.name}`]]);
+  assert.deepEqual(linked.value.created, ["ABC-7", "ABC-8"]);
+  assert.deepEqual(linked.value.renamed.map((x) => [x.repo, x.to]), [["api", `caboose/ABC-7-${r.value.name}`]]);
   assert.deepEqual(linked.value.skipped, ["web"]);
   const api = features.get(r.value.id)!.repos[0];
-  assert.equal(sh(api.path, "branch", "--show-current"), `caboose/NWP-7-${r.value.name}`);
-  assert.deepEqual(features.jiraOf(r.value.id), { task: "NWP-5", subtasks: { api: "NWP-7", web: "NWP-8" } });
+  assert.equal(sh(api.path, "branch", "--show-current"), `caboose/ABC-7-${r.value.name}`);
+  assert.deepEqual(features.jiraOf(r.value.id), { task: "ABC-5", subtasks: { api: "ABC-7", web: "ABC-8" } });
 
   assert.ok(features.setDetails(r.value.id, { status: "review", title: "" }).ok);
   assert.equal(features.get(r.value.id)!.status, "review");
@@ -243,7 +243,7 @@ test("lines: a feature never mixes them; repos on no line go anywhere; a feature
   const store = new Store(join(tmp, "s9", "state.json"));
   // web is a customer's, api is on no line, mine is on the Personal line (same checkout, another name).
   const repos = [
-    { name: "web", path: web, line: "Varner" },
+    { name: "web", path: web, line: "Acme" },
     { name: "api", path: api },
     { name: "mine", path: api, line: "Personal" },
   ];
@@ -254,15 +254,15 @@ test("lines: a feature never mixes them; repos on no line go anywhere; a feature
   assert.ok((await features.addRepo(a.value.id, "api")).ok, "a repo on no line keeps the feature on no line");
   assert.equal(features.get(a.value.id)?.line, undefined);
   assert.ok((await features.addRepo(a.value.id, "web")).ok);
-  assert.equal(features.get(a.value.id)?.line, "Varner", "taken from its first repo on a line");
+  assert.equal(features.get(a.value.id)?.line, "Acme", "taken from its first repo on a line");
   const mixed = await features.addRepo(a.value.id, "mine");
-  assert.ok(!mixed.ok && /mine is on the Personal line, and this feature is on Varner/.test(mixed.error));
+  assert.ok(!mixed.ok && /mine is on the Personal line, and this feature is on Acme/.test(mixed.error));
 
   const b = await features.create({ line: "Personal", repos: ["web"] });
-  assert.ok(!b.ok && /web is on the Varner line/.test(b.error));
+  assert.ok(!b.ok && /web is on the Acme line/.test(b.error));
   const c = await features.create({ line: "Personal" });
   assert.ok(c.ok && c.value.line === "Personal");
-  assert.ok(!features.setDetails(a.value.id, { line: "Personal" }).ok, "web is in it, and on Varner");
+  assert.ok(!features.setDetails(a.value.id, { line: "Personal" }).ok, "web is in it, and on Acme");
   assert.ok(features.setDetails(c.value.id, { line: null }).ok);
   assert.equal(features.get(c.value.id)?.line, undefined);
   await until(settled(store));

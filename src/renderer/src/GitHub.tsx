@@ -324,7 +324,7 @@ export function RepoRow(props: {
   );
 }
 
-/** "🏷 via_v1.114 · test ✓ · prod –": the first release carrying the merged PR, and which later stages have it. */
+/** "🏷 shop_v1.114 · test ✓ · prod –": the first release carrying the merged PR, and which later stages have it. */
 function ReleaseChips({ release }: { release: StageRelease[] }) {
   const [first, ...later] = release;
   if (!first) return null;
@@ -367,7 +367,7 @@ async function renameBranch(feature: Feature, repo: FeatureRepo, done: () => voi
 }
 
 async function linkSubtask(feature: Feature, repo: FeatureRepo, act: (label: string, fn: () => Promise<{ ok: boolean; error?: string }>) => Promise<void>) {
-  const key = await askText({ title: `Link a Jira subtask to ${repo.name}`, label: "Its key or URL", placeholder: "e.g. NWP-1234", ok: "Link" });
+  const key = await askText({ title: `Link a Jira subtask to ${repo.name}`, label: "Its key or URL", placeholder: "e.g. ABC-1234", ok: "Link" });
   if (key) await act("Saving…", () => api.setRepoSubtask(feature.id, repo.name, key));
 }
 
@@ -429,7 +429,7 @@ export function JiraChip(props: {
       <button
         className="link"
         onClick={async () => {
-          const key = await askText({ title: `Link a ${/jira/i.test(props.label) ? props.label : `Jira ${props.label}`}`, label: "Its key or URL", placeholder: "e.g. NWP-1234", ok: "Link" });
+          const key = await askText({ title: `Link a ${/jira/i.test(props.label) ? props.label : `Jira ${props.label}`}`, label: "Its key or URL", placeholder: "e.g. ABC-1234", ok: "Link" });
           if (key) props.onSet(key);
         }}
       >

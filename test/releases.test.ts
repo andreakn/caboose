@@ -16,20 +16,20 @@ test("stages from text, and back", () => {
 });
 
 test("a tag belongs to the last stage it matches; prefixes are what comes before the version", () => {
-  assert.equal(stageOf("cda_v1.437", STAGES), "release");
-  assert.equal(stageOf("cda_TEST_v1.436", STAGES), "test", "also matches *_v*, but test comes later");
-  assert.equal(stageOf("cda_PROD_v1.435", STAGES), "prod");
+  assert.equal(stageOf("orders_v1.437", STAGES), "release");
+  assert.equal(stageOf("orders_TEST_v1.436", STAGES), "test", "also matches *_v*, but test comes later");
+  assert.equal(stageOf("orders_PROD_v1.435", STAGES), "prod");
   assert.equal(stageOf("something-else", STAGES), undefined);
-  assert.equal(prefixOf("cdsws_v1.335"), "cdsws_");
-  assert.equal(prefixOf("cda_TEST_v1.436"), "cda_TEST_");
+  assert.equal(prefixOf("orderws_v1.335"), "orderws_");
+  assert.equal(prefixOf("orders_TEST_v1.436"), "orders_TEST_");
   assert.equal(prefixOf("v2.10.3"), "");
 });
 
 test("the lowest tag per stage and per prefix (services tagged separately)", () => {
-  const sorted = ["cbsws_v1.004", "cbsws_v1.005", "cdsws_TEST_v1.335", "cdsws_v1.335", "cdsws_v1.336"];
+  const sorted = ["stockws_v1.004", "stockws_v1.005", "orderws_TEST_v1.335", "orderws_v1.335", "orderws_v1.336"];
   assert.deepEqual(lowestPerStage(sorted, STAGES), [
-    { stage: "release", tags: ["cbsws_v1.004", "cdsws_v1.335"] },
-    { stage: "test", tags: ["cdsws_TEST_v1.335"] },
+    { stage: "release", tags: ["stockws_v1.004", "orderws_v1.335"] },
+    { stage: "test", tags: ["orderws_TEST_v1.335"] },
     { stage: "prod", tags: [] },
   ]);
 });
@@ -41,18 +41,18 @@ const sh = (...a: string[]) => execFileSync("git", ["-c", "user.email=t@e", "-c"
 test("from a real repo: tags cut after the merge carry it, earlier ones do not", async () => {
   sh("init", "-q", "-b", "main");
   sh("commit", "-q", "--allow-empty", "-m", "before");
-  sh("tag", "via_v1.112");
-  sh("tag", "via_PROD_v1.112");
+  sh("tag", "shop_v1.112");
+  sh("tag", "shop_PROD_v1.112");
   sh("commit", "-q", "--allow-empty", "-m", "the feature, squash-merged");
   const merge = sh("rev-parse", "HEAD");
   sh("commit", "-q", "--allow-empty", "-m", "after");
-  sh("tag", "via_v1.113");
-  sh("tag", "via_TEST_v1.113");
+  sh("tag", "shop_v1.113");
+  sh("tag", "shop_TEST_v1.113");
   sh("commit", "-q", "--allow-empty", "-m", "later");
-  sh("tag", "via_v1.114");
+  sh("tag", "shop_v1.114");
   assert.deepEqual(await releasesOf(tmp, merge, STAGES), [
-    { stage: "release", tags: ["via_v1.113"] },
-    { stage: "test", tags: ["via_TEST_v1.113"] },
+    { stage: "release", tags: ["shop_v1.113"] },
+    { stage: "test", tags: ["shop_TEST_v1.113"] },
     { stage: "prod", tags: [] },
   ]);
   assert.deepEqual(await releasesOf(tmp, merge, []), [], "no stages: not tracked");
@@ -61,8 +61,8 @@ test("from a real repo: tags cut after the merge carry it, earlier ones do not",
 test("deploy progress: per stage, how many repos with tag rules are tagged; repos without rules do not count", async () => {
   const { deployProgress } = await import("../src/shared/stages.ts");
   const p = deployProgress([
-    { name: "via", stages: ["release", "test", "prod"], release: [{ stage: "release", tags: ["via_v1.114"] }, { stage: "test", tags: ["via_TEST_v1.114"] }, { stage: "prod", tags: [] }] },
-    { name: "cda", stages: ["release", "test", "prod"] }, // not merged yet
+    { name: "shop", stages: ["release", "test", "prod"], release: [{ stage: "release", tags: ["shop_v1.114"] }, { stage: "test", tags: ["shop_TEST_v1.114"] }, { stage: "prod", tags: [] }] },
+    { name: "reports", stages: ["release", "test", "prod"] }, // not merged yet
     { name: "docs" }, // no tag rules
   ]);
   assert.deepEqual(
@@ -73,5 +73,5 @@ test("deploy progress: per stage, how many repos with tag rules are tagged; repo
       ["prod", 0, 2],
     ],
   );
-  assert.deepEqual(p[0].repos, [{ name: "via", tagged: true }, { name: "cda", tagged: false }]);
+  assert.deepEqual(p[0].repos, [{ name: "shop", tagged: true }, { name: "reports", tagged: false }]);
 });

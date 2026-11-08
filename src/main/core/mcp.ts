@@ -362,7 +362,7 @@ const TOOLS: ToolDef[] = [
       "Starts a repo's program in the user's Run tab (visible to them, its port managed by Caboose) and waits until its URL answers, it exits, or `wait` seconds pass; returns which, with its recent output. Use this rather than starting servers in a shell, which leaves programs holding ports. Read more output with GetTerminalOutput.",
     shape: {
       repo: z.string().optional().describe("The repo (a repo chat's own by default)"),
-      program: z.string().optional().describe("Which program: its name (e.g. cda for run_cda.sh), \"run\", or a configured name; default the repo's first"),
+      program: z.string().optional().describe("Which program: its name (e.g. orders for run_orders.sh), \"run\", or a configured name; default the repo's first"),
       wait: z.number().int().min(0).max(180).optional().describe("Seconds to wait for it to answer (default 30)"),
     },
     run: (h, a: { repo?: string; program?: string; wait?: number }) => h.startProgram(a),

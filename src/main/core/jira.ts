@@ -7,7 +7,7 @@ import type { FeatureJira, JiraIssue, JiraStatus } from "../../shared/types.ts";
 export type JiraAuth = { site: string; email: string; token: string };
 type Fetch = typeof fetch;
 
-/** "NWP-123", or the key inside a Jira URL; null when there is none. */
+/** "ABC-123", or the key inside a Jira URL; null when there is none. */
 export function parseKey(text: string): string | null {
   return /\b([A-Z][A-Z0-9_]+-\d+)\b/.exec(text.trim().toUpperCase())?.[1] ?? null;
 }

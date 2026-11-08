@@ -28,8 +28,8 @@ const until = async (fn: () => boolean | Promise<boolean>, ms = 10_000) => {
 };
 
 test("URLs come from # url: lines, else localhost URLs in the header comment", () => {
-  assert.deepEqual(declaredUrls("#!/bin/bash\n# url: http://localhost:15081/cda/ swagger\n# url: http://localhost:15081/health\nexec x"), [
-    { url: "http://localhost:15081/cda/", label: "swagger" },
+  assert.deepEqual(declaredUrls("#!/bin/bash\n# url: http://localhost:15081/orders/ swagger\n# url: http://localhost:15081/health\nexec x"), [
+    { url: "http://localhost:15081/orders/", label: "swagger" },
     { url: "http://localhost:15081/health" },
   ]);
   assert.deepEqual(declaredUrls("#!/bin/bash\n# Starts CDA locally on http://localhost:15081/customer-data-api/.\nset -e\n# not http://localhost:1/"), [
@@ -42,7 +42,7 @@ test("run.sh and run_<moniker>.sh at the root, plus configured scripts that are 
   const repo = join(dir, "api");
   mkdirSync(join(repo, "sub"), { recursive: true });
   writeFileSync(join(repo, "run.sh"), "#!/bin/bash\n# url: http://localhost:5173/ app\nnpm run dev\n");
-  writeFileSync(join(repo, "run_ccws.sh"), "echo worker\n");
+  writeFileSync(join(repo, "run_clean.sh"), "echo worker\n");
   chmodSync(join(repo, "run.sh"), 0o755);
   writeFileSync(join(repo, "runner.sh"), "");
   writeFileSync(join(repo, "sub", "run_x.sh"), "");
@@ -54,7 +54,7 @@ test("run.sh and run_<moniker>.sh at the root, plus configured scripts that are 
     list.map((x) => [x.id, x.label, x.command]),
     [
       ["run.sh", "run", process.platform === "win32" ? "bash run.sh" : "./run.sh"],
-      ["run_ccws.sh", "ccws", "bash run_ccws.sh"],
+      ["run_clean.sh", "clean", "bash run_clean.sh"],
       ["config:test", "test", "npm test"],
     ],
   );
@@ -63,13 +63,13 @@ test("run.sh and run_<moniker>.sh at the root, plus configured scripts that are 
 });
 
 test("monikers name repos and describe their run scripts", () => {
-  const entries = parseMonikers("# comment\ncds  cust-sync   CDS: the sync workers\nccws cust-sync CDS: customer cleanup worker (run_ccws.sh)\ncda ./cust-cda\n", "/home/me/varner");
-  const m = monikersOf(entries, "/home/me/varner/cust-sync/");
-  assert.equal(m.moniker, "cds");
-  assert.equal(m.description, "CDS: the sync workers");
-  assert.equal(m.describe("CCWS"), "CDS: customer cleanup worker (run_ccws.sh)");
-  assert.equal(m.describe(undefined), "CDS: the sync workers", "run.sh is the repo's own program");
-  assert.equal(monikersOf(entries, "/home/me/varner/cust-cda").moniker, "cda");
+  const entries = parseMonikers("# comment\nsync  shop-sync   Sync: the sync workers\nclean shop-sync Sync: cleanup worker (run_clean.sh)\norders ./shop-orders\n", "/home/me/code");
+  const m = monikersOf(entries, "/home/me/code/shop-sync/");
+  assert.equal(m.moniker, "sync");
+  assert.equal(m.description, "Sync: the sync workers");
+  assert.equal(m.describe("CLEAN"), "Sync: cleanup worker (run_clean.sh)");
+  assert.equal(m.describe(undefined), "Sync: the sync workers", "run.sh is the repo's own program");
+  assert.equal(monikersOf(entries, "/home/me/code/shop-orders").moniker, "orders");
   assert.equal(monikersOf(entries, "/elsewhere").moniker, undefined);
 });
 
@@ -98,7 +98,7 @@ test("listeners: ours by ancestry, launchers up to a shell, never Caboose or its
     p(72, 71, "node /w/oslo/api/server.js"),
     p(80, 1, "-zsh"),
     p(81, 80, "dotnet run"),
-    p(82, 81, "/w/oslo/cda/bin/Debug/net9.0/Cda"),
+    p(82, 81, "/w/oslo/orders/bin/Debug/net9.0/Cda"),
   ]);
   const ports = new Map([
     [61, new Set([5173])],
