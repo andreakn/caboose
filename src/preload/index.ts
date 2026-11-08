@@ -36,6 +36,7 @@ const api: CabooseApi = {
   setRepoSubtask: invoke("jira:setSubtask"),
   previewLocalFiles: invoke("config:previewLocalFiles"),
   setFeatureDetails: invoke("feature:details"),
+  addableRepos: invoke("feature:addable"),
   repoScripts: invoke("feature:scripts"),
   conductorImport: invoke("conductor:import"),
   repoRules: invoke("config:repoRules"),

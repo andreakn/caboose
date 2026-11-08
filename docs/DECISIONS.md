@@ -780,6 +780,19 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      little variety. Stations of ended features (visits) now count as taken
      too, so every feature is a new dot; names only repeat ("-2") once all
      1,757 are used. Without a home area, names come from anywhere, as before.
+158. **Lines: repos that belong together, so a feature never mixes them.**
+     For consultants with several customers (and their own projects). A
+     line is just a name on a repo (`line` in `caboose.local.json`); it
+     exists while some repo is on it, so there is nothing to create or
+     delete. A repo on no line serves every line, so nothing changes until
+     the first repo gets one: then New feature offers a line (Any by
+     default, or the last one used), the feature header shows a line chip,
+     and Configure lists repos per line. A feature on no line takes the line
+     of the first repo on one that joins it. Adding a repo from another line
+     is refused (create, add, the agents' proposals), and agents are only
+     told about the repos their feature can have. Named "line" (a railway
+     line) rather than "universe". Per-line settings (Jira site, features
+     folder, PR style) would fit here later; not built yet.
 
 ## Answered (2026-11-05)
 

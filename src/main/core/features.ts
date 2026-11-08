@@ -6,6 +6,7 @@ import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSyn
 import { basename, join } from "node:path";
 import type {
   Feature,
+  FeatureDetails,
   FeatureJira,
   FeatureRepo,
   FeatureStatus,
@@ -19,6 +20,7 @@ import { loadRepoConfig, type ResolvedLocalConfig } from "./config.ts";
 import * as g from "./git.ts";
 import { type Jira, parseKey, readFeatureJira, writeFeatureJira } from "./jira.ts";
 import { copyLocalFiles, DEFAULT_LOCAL_FILES, findLocalFiles } from "./localfiles.ts";
+import { servesLine } from "../../shared/lines.ts";
 import { runScript } from "./scripts.ts";
 import { pickStation } from "./stations.ts";
 import type { Store } from "./store.ts";
@@ -55,6 +57,9 @@ export class Features {
   async create(input: NewFeature): Promise<Result<Feature>> {
     try {
       const repos = (input.repos ?? []).map((name) => this.repoEntry(name));
+      const line = input.line?.trim() || undefined;
+      const off = repos.filter((r) => !servesLine(r, line));
+      if (off.length) return fail(`${off.map((r) => `${r.name} is on the ${r.line} line`).join(", ")}; this feature is on ${line}.`);
       const level = this.config.jira.level;
       if (level === "required" && !input.jira) return fail("Jira is required: link a task or create one.");
 
@@ -90,6 +95,7 @@ export class Features {
         archived: false,
         port: this.freePort(),
         repos: [],
+        ...(line ? { line } : {}),
       };
       this.store.update((s) => ({ ...s, features: [...s.features, feature] }));
       for (const repo of repos) {
@@ -109,6 +115,7 @@ export class Features {
     if (f.repos.some((r) => r.name === repoName)) return fail(`${repoName} is already in this feature.`);
     try {
       const repo = this.repoEntry(repoName);
+      if (!servesLine(repo, f.line)) return fail(`${repo.name} is on the ${repo.line} line, and this feature is on ${f.line}: a feature never mixes lines.`);
       const root = await g.repoRoot(repo.path);
       if (!root) return fail(`${repo.path} is not a git repository.`);
 
@@ -144,7 +151,8 @@ export class Features {
         setup: scripts.setup ? "running" : "none",
         copied,
       };
-      this.patch(featureId, (x) => ({ ...x, repos: [...x.repos, fr] }));
+      // A feature on no line takes the line of its first repo that has one.
+      this.patch(featureId, (x) => ({ ...x, repos: [...x.repos, fr], ...(!x.line && repo.line ? { line: repo.line } : {}) }));
       if (scripts.setup) void this.runSetup(featureId, fr, scripts.setup);
       return ok(undefined);
     } catch (e) {
@@ -309,13 +317,22 @@ export class Features {
     }
   }
 
-  setDetails(featureId: string, details: { title?: string; status?: FeatureStatus }): Result<void> {
-    if (!this.get(featureId)) return fail("Unknown feature.");
-    this.patch(featureId, (f) => ({
-      ...f,
-      ...(details.title !== undefined ? { title: details.title.trim() || undefined } : {}),
-      ...(details.status ? { status: details.status } : {}),
-    }));
+  setDetails(featureId: string, details: FeatureDetails): Result<void> {
+    const f = this.get(featureId);
+    if (!f) return fail("Unknown feature.");
+    const line = details.line === undefined ? undefined : details.line?.trim() || null;
+    if (line) {
+      const off = f.repos.filter((r) => !servesLine(this.config.repos.find((x) => x.name === r.name) ?? {}, line));
+      if (off.length) return fail(`${off.map((r) => r.name).join(", ")} ${off.length === 1 ? "is" : "are"} on another line.`);
+    }
+    this.patch(featureId, (f) => {
+      const { line: _old, ...rest } = f;
+      return {
+        ...(line === undefined ? f : line === null ? rest : { ...rest, line }),
+        ...(details.title !== undefined ? { title: details.title.trim() || undefined } : {}),
+        ...(details.status ? { status: details.status } : {}),
+      };
+    });
     return ok(undefined);
   }
 

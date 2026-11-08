@@ -170,7 +170,7 @@ test("repo proposals: shown as a card, only real repos, answered with confirm / 
   const central = chats.create("f1");
   assert.ok(central.ok);
   const unknown = coord.proposeRepos("f1", central.value.id, [{ name: "nope", reason: "x" }]);
-  assert.ok(!unknown.ok && /Not repos Caboose knows: nope\. The repos are: web, api, cms, bff/.test(unknown.error));
+  assert.ok(!unknown.ok && /Not repos this feature can have: nope\. The repos it can have are: web, api, cms, bff/.test(unknown.error));
   assert.equal(coord.proposeRepos("f1", central.value.id, [{ name: "web", reason: "already there" }]).ok, false);
 
   const r = coord.proposeRepos("f1", central.value.id, [

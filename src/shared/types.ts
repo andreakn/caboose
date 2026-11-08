@@ -22,6 +22,8 @@ export type RepoEntry = {
   name: string;
   /** A friendly name shown instead of `name` (tabs, rows); `name` stays the id and folder name. */
   label?: string;
+  /** The line it is on (a customer's repos, your own…): features never mix lines. None = it serves every line. */
+  line?: string;
   /** Release tag stages for this repo, instead of the config's `releaseStages`; [] = do not track. */
   releaseStages?: ReleaseStage[];
   path: string;
@@ -68,6 +70,8 @@ export type Feature = {
   /** First of the feature's 100 ports; repo i gets port + 10·i as CABOOSE_PORT. */
   port: number;
   repos: FeatureRepo[];
+  /** The line it runs on: only repos on it (or on none) can join. Taken from its first repo on a line, if not chosen. */
+  line?: string;
 };
 
 export type Terminal = {
@@ -372,9 +376,14 @@ export type JiraAlignment = { created: string[]; renamed: { repo: string; from: 
 /** The Jira links of a feature, as written in its jira.txt. */
 export type FeatureJira = { task?: string; subtasks: Record<string, string> };
 
+/** What can be changed about a feature after it is made. `line: null` takes it off its line. */
+export type FeatureDetails = { title?: string; status?: FeatureStatus; line?: string | null };
+
 export type NewFeature = {
   /** Repos to add right away (none = an empty feature, built out later). */
   repos?: string[];
+  /** The line it runs on (none: any, until a repo on a line joins). */
+  line?: string;
   title?: string;
   /** What the user wants, in their words: sent to the feature's central chat, which proposes the repos. */
   text?: string;
@@ -450,7 +459,9 @@ export type CabooseApi = {
   onReleaseNews(listener: (news: { featureId: string; station: string; title?: string; stage: string; repos: number }) => void): () => void;
   /** Saves the sidebar's folders and order. */
   saveSidebar(sidebar: Sidebar): Promise<void>;
-  setFeatureDetails(featureId: string, details: { title?: string; status?: FeatureStatus }): Promise<Result<void>>;
+  setFeatureDetails(featureId: string, details: FeatureDetails): Promise<Result<void>>;
+  /** The configured repos this feature can add (its line's and those on no line), by name. */
+  addableRepos(featureId: string): Promise<string[]>;
   /** The repo's scripts: from the config, plus its own caboose.json. */
   repoScripts(featureId: string, repo: string): Promise<RepoScripts>;
   conductorImport(): Promise<Result<ConductorImport>>;

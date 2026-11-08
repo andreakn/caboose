@@ -40,6 +40,7 @@ import { deployProgress } from "../../shared/stages.ts";
 import { FeatureTree } from "./Sidebar.tsx";
 import { RunView, useRunOverview } from "./Run.tsx";
 import { TerminalPanel, useTerminals } from "./Terminals.tsx";
+import { linesOf, reposFor } from "../../shared/lines.ts";
 import { stationLabel } from "../../shared/stations.ts";
 
 const api = window.caboose;
@@ -489,7 +490,8 @@ function FeatureView(props: {
     }
   });
 
-  const missing = (config.config.repos ?? []).filter((r) => !f.repos.some((x) => x.name === r.name));
+  const lines = linesOf(config.config.repos ?? []);
+  const missing = reposFor(config.config.repos ?? [], f.line).filter((r) => !f.repos.some((x) => x.name === r.name));
   const repoRow = (r: FeatureRepo, inline = false) => (
     <RepoRow
       key={r.name}
@@ -535,6 +537,25 @@ function FeatureView(props: {
                 </option>
               ))}
             </select>
+            {lines.length > 0 && (
+              <select
+                className={`line-chip${f.line ? "" : " none"}`}
+                value={f.line ?? ""}
+                disabled={f.archived}
+                title="The line this feature runs on: only repos on it (or on no line) can join"
+                onChange={async (e) => {
+                  const r = await api.setFeatureDetails(f.id, { line: e.target.value || null });
+                  if (!r.ok) alert(r.error);
+                }}
+              >
+                <option value="">any line</option>
+                {[...new Set([...lines, ...(f.line ? [f.line] : [])])].map((l) => (
+                  <option key={l} value={l}>
+                    {l} line
+                  </option>
+                ))}
+              </select>
+            )}
             {level !== "off" &&
               (jira.task ? (
                 <span className="jira-chip">

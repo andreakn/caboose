@@ -238,3 +238,32 @@ test("repos are found by folder and by scanning a parent folder", async () => {
   assert.equal((await checkRepo(tmp)).ok, false);
   assert.deepEqual(scanRepos(join(tmp, "code")).map((r) => r.name), ["api", "web"]);
 });
+
+test("lines: a feature never mixes them; repos on no line go anywhere; a feature takes its first repo's line", async () => {
+  const store = new Store(join(tmp, "s9", "state.json"));
+  // web is a customer's, api is on no line, mine is on the Personal line (same checkout, another name).
+  const repos = [
+    { name: "web", path: web, line: "Varner" },
+    { name: "api", path: api },
+    { name: "mine", path: api, line: "Personal" },
+  ];
+  const features = new Features(store, config({ repos }), join(tmp, "s9", "logs"));
+
+  const a = await features.create({ title: "No line chosen" });
+  assert.ok(a.ok);
+  assert.ok((await features.addRepo(a.value.id, "api")).ok, "a repo on no line keeps the feature on no line");
+  assert.equal(features.get(a.value.id)?.line, undefined);
+  assert.ok((await features.addRepo(a.value.id, "web")).ok);
+  assert.equal(features.get(a.value.id)?.line, "Varner", "taken from its first repo on a line");
+  const mixed = await features.addRepo(a.value.id, "mine");
+  assert.ok(!mixed.ok && /mine is on the Personal line, and this feature is on Varner/.test(mixed.error));
+
+  const b = await features.create({ line: "Personal", repos: ["web"] });
+  assert.ok(!b.ok && /web is on the Varner line/.test(b.error));
+  const c = await features.create({ line: "Personal" });
+  assert.ok(c.ok && c.value.line === "Personal");
+  assert.ok(!features.setDetails(a.value.id, { line: "Personal" }).ok, "web is in it, and on Varner");
+  assert.ok(features.setDetails(c.value.id, { line: null }).ok);
+  assert.equal(features.get(c.value.id)?.line, undefined);
+  await until(settled(store));
+});

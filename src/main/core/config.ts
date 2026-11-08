@@ -110,8 +110,8 @@ export function applyConfigInput(stored: LocalConfig, input: ConfigInput, codec:
     out.repos = out.repos
       .filter((r) => r.name && r.path)
       .map((r) => {
-        const { label, ...rest } = r;
-        const out: RepoEntry = label?.trim() ? { ...rest, label: label.trim() } : rest;
+        const { label, line, ...rest } = r;
+        const out: RepoEntry = { ...rest, ...(label?.trim() ? { label: label.trim() } : {}), ...(line?.trim() ? { line: line.trim() } : {}) };
         return out.localFiles ? { ...out, localFiles: out.localFiles.map((p) => p.trim()).filter(Boolean) } : out;
       });
   }

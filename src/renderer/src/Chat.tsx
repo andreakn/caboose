@@ -352,8 +352,8 @@ function ProposalCard({ item, chatId, agent }: { item: Extract<ChatItem, { kind:
   const [busy, setBusy] = useState(false);
   const chat = useChat(chatId);
   useEffect(() => {
-    void api.config().then((c) => setAll((c.config.repos ?? []).map((r) => r.name)));
-  }, []);
+    if (chat?.featureId) void api.addableRepos(chat.featureId).then(setAll);
+  }, [chat?.featureId]);
 
   if (item.answer) {
     const { added, declined, failed } = item.answer;

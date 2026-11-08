@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { AGENTS, type Agent } from "../../shared/chat.ts";
+import { linesOf } from "../../shared/lines.ts";
 import type { ConfigView, Feature, JiraIssue } from "../../shared/types.ts";
 
 const api = window.caboose;
+const LAST_LINE = "caboose-new-feature-line";
 
 /**
  * Like Conductor's: one optional text box. Enter with nothing in it makes an
@@ -14,6 +16,12 @@ export function NewFeature({ config, onCreated, onCancel }: { config: ConfigView
   const jiraReady = level !== "off" && Boolean(config.jira?.site && config.jira?.email && config.jira?.hasToken);
   const [text, setText] = useState("");
   const [agent, setAgent] = useState<Agent>(config.defaultAgent ?? "claude");
+  // Lines appear here once a repo is on one; the last one used is picked again.
+  const lines = linesOf(config.repos ?? []);
+  const [line, setLine] = useState(() => {
+    const last = localStorage.getItem(LAST_LINE) ?? "";
+    return lines.includes(last) ? last : "";
+  });
   const [key, setKey] = useState("");
   const [mine, setMine] = useState<JiraIssue[]>([]);
   const [busy, setBusy] = useState(false);
@@ -31,7 +39,8 @@ export function NewFeature({ config, onCreated, onCancel }: { config: ConfigView
     if (level === "expected" && !key.trim() && !confirm("Create the feature without a Jira task?")) return;
     setBusy(true);
     setError(null);
-    const r = await api.createFeature({ text: text.trim() || undefined, jira: key.trim() ? { key: key.trim() } : undefined, agent });
+    localStorage.setItem(LAST_LINE, line);
+    const r = await api.createFeature({ text: text.trim() || undefined, jira: key.trim() ? { key: key.trim() } : undefined, agent, ...(line ? { line } : {}) });
     setBusy(false);
     if (r.ok) onCreated(r.value);
     else setError(r.error);
@@ -65,6 +74,19 @@ export function NewFeature({ config, onCreated, onCancel }: { config: ConfigView
             if (e.key === "Escape") onCancel();
           }}
         />
+        {lines.length > 0 && (
+          <div className="line-picker">
+            <span className="muted">Line</span>
+            <div className="segmented small" title="Which repos the feature can have: those on this line, and those on no line">
+              {["", ...lines].map((l) => (
+                <button key={l || "any"} className={line === l ? "active" : ""} onClick={() => setLine(l)}>
+                  {l || "Any"}
+                </button>
+              ))}
+            </div>
+            {!line && <span className="muted small">takes the line of the first repo on one</span>}
+          </div>
+        )}
         {level !== "off" && (
           <label className="jira-line">
             <span className="muted">Jira task{level === "required" ? "" : " (optional)"}</span>

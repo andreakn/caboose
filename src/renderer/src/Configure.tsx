@@ -17,6 +17,7 @@ import { MODES } from "../../shared/chat.ts";
 import { useApps } from "./Menu.tsx";
 import { applyTheme, getTheme, notificationsOn, setNotifications } from "./prefs.ts";
 import { homeLabel, MapCanvas } from "./Map.tsx";
+import { linesOf } from "../../shared/lines.ts";
 import {
   playSound,
   setSoundFor,
@@ -90,6 +91,14 @@ export function Configure({ onDone, onSaved }: { onDone: () => void; onSaved?: (
   if (!info) return null;
 
   const repos = form.repos ?? [];
+  const lines = linesOf(repos);
+  // With lines, the repos are listed per line (those on none last); without, as one list. Grouped by the
+  // saved line, so a repo does not jump between groups while its line is being typed.
+  const savedLine = (r: RepoEntry) => info.config.repos?.find((x) => x.path === r.path)?.line;
+  const savedLines = linesOf(info.config.repos ?? []);
+  const repoGroups = savedLines.length
+    ? [...savedLines, undefined].map((line) => ({ line, repos: repos.filter((r) => savedLine(r) === line) })).filter((g) => g.repos.length)
+    : [{ line: undefined, repos }];
   const jira = form.jira ?? { level: "off" as JiraLevel };
   const setJira = (patch: Partial<NonNullable<ConfigInput["jira"]>>) => setForm({ ...form, jira: { ...jira, ...patch } });
   const addRepos = (more: RepoEntry[]) => {
@@ -212,19 +221,36 @@ export function Configure({ onDone, onSaved }: { onDone: () => void; onSaved?: (
               The repos you work on. Their name is the folder name inside a feature. For each, choose the gitignored files a new
               feature brings from the repo's main checkout (.env, *.local.* …), so the repo can run there.
             </p>
+            {(lines.length > 0 || repos.length >= 5) && (
+              <p className="muted">
+                {lines.length > 0
+                  ? "Lines keep repos that belong together apart (a customer's, your own): a feature only ever has repos from one line. A repo on no line can join any feature."
+                  : "Working for several customers, or on your own projects too? Give repos a line (a customer's name, or Personal) and features will never mix them. Repos without one stay available everywhere."}
+              </p>
+            )}
             {repos.length === 0 && <p className="del">No repositories yet.</p>}
-            <ul className="repo-list">
-              {repos.map((r) => (
-                <RepoItem
-                  key={r.path}
-                  repo={r}
-                  defaults={info.defaults.localFiles}
-                  stages={form.releaseStages}
-                  onChange={(next) => setForm({ ...form, repos: repos.map((x) => (x.path === r.path ? next : x)) })}
-                  onRemove={() => setForm({ ...form, repos: repos.filter((x) => x.path !== r.path) })}
-                />
+            {repoGroups.map((group) => (
+              <div key={group.line ?? ""} className="repo-group">
+                {savedLines.length > 0 && <h3 className="repo-group-title">{group.line ? `${group.line} line` : "On every line"}</h3>}
+                <ul className="repo-list">
+                  {group.repos.map((r) => (
+                    <RepoItem
+                      key={r.path}
+                      repo={r}
+                      defaults={info.defaults.localFiles}
+                      stages={form.releaseStages}
+                      onChange={(next) => setForm({ ...form, repos: repos.map((x) => (x.path === r.path ? next : x)) })}
+                      onRemove={() => setForm({ ...form, repos: repos.filter((x) => x.path !== r.path) })}
+                    />
+                  ))}
+                </ul>
+              </div>
+            ))}
+            <datalist id="repo-lines">
+              {lines.map((l) => (
+                <option key={l} value={l} />
               ))}
-            </ul>
+            </datalist>
             <div className="row">
               <button
                 onClick={async () => {
@@ -585,6 +611,15 @@ function RepoItem(props: { repo: RepoEntry; defaults: string[]; stages?: Release
           title="Shown instead of the repo's name in tabs and lists"
           onChange={(e) => props.onChange({ ...repo, label: e.target.value || undefined })}
         />
+        <input
+          className="repo-line"
+          list="repo-lines"
+          value={repo.line ?? ""}
+          placeholder="line"
+          title="Which line it is on (a customer's name, Personal…): a feature never mixes repos from different lines. Empty: it can join any feature."
+          onChange={(e) => props.onChange({ ...repo, line: e.target.value || undefined })}
+        />
+
         <code>{repo.path}</code>
         <button className="link" onClick={() => setOpen(!open)}>
           {open ? "▾" : "▸"} local files: {patterns.join(", ") || "none"}

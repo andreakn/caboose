@@ -8,7 +8,8 @@ import type { Agent, Chat, Effort, Mode, Model } from "../shared/chat.ts";
 import { checksSummary } from "../shared/github.ts";
 import { commentsMessage } from "../shared/diff.ts";
 import type { MergeMethod } from "../shared/github.ts";
-import type { AppId, ConfigInput, Feature, HomeArea, FeatureStatus, NewFeature, RetireMode, Sidebar, State, Theme } from "../shared/types.ts";
+import { reposFor } from "../shared/lines.ts";
+import type { AppId, ConfigInput, Feature, FeatureDetails, HomeArea, NewFeature, RetireMode, Sidebar, State, Theme } from "../shared/types.ts";
 import { CopilotClient } from "@github/copilot-sdk";
 import { ClaudeProvider, Inbox } from "./core/agents/claude.ts";
 import { copilotEnv, CopilotProvider } from "./core/agents/copilot.ts";
@@ -130,6 +131,8 @@ const runner = new Runner({
   monikersFile: () => localConfig.monikersFile,
 });
 const current = (f: Feature) => () => featureById(f.id) ?? f;
+/** The configured repos a feature can have: those on its line, and those on none. */
+const addable = (featureId: string) => reposFor(localConfig.repos, featureById(featureId)?.line);
 /** What Caboose's tools work with, for one chat. `coordinator` is set below (the tools only run later). */
 const toolContext = (chat: Chat, f: Feature) => ({
   feature: current(f),
@@ -141,11 +144,11 @@ const toolContext = (chat: Chat, f: Feature) => ({
 });
 const claude = new ClaudeProvider(query, (chat, f) => ({
   mcpServers: { caboose: cabooseMcp(toolContext(chat, f)) },
-  systemPrompt: { type: "preset", preset: "claude_code", append: cabooseInstructions(f, "claude", chat, localConfig.repos) },
+  systemPrompt: { type: "preset", preset: "claude_code", append: cabooseInstructions(f, "claude", chat, addable(f.id)) },
 }));
 const copilot = new CopilotProvider(
   () => new CopilotClient({ logLevel: "error", env: copilotEnv() }),
-  (chat, f) => ({ tools: cabooseCopilotTools(toolContext(chat, f)), instructions: cabooseInstructions(f, "copilot", chat, localConfig.repos) }),
+  (chat, f) => ({ tools: cabooseCopilotTools(toolContext(chat, f)), instructions: cabooseInstructions(f, "copilot", chat, addable(f.id)) }),
 );
 const chats = new Chats(
   store,
@@ -159,7 +162,7 @@ const coordinator = new Coordinator({
   store,
   chats,
   jiraOf: (id) => features.jiraOf(id),
-  repos: () => localConfig.repos,
+  repos: (featureId) => addable(featureId),
   addRepo: (featureId, repo) => features.addRepo(featureId, repo),
   setTitle: (featureId, title) => features.setDetails(featureId, { title }),
   facts: async (r) => {
@@ -310,9 +313,8 @@ ipcMain.handle("jira:issue", (_e, key: string) => attempt(() => needJira().issue
 ipcMain.handle("jira:mine", () => attempt(() => needJira().myIssues()));
 ipcMain.handle("jira:feature", (_e, featureId: string) => features.jiraOf(featureId));
 ipcMain.handle("jira:setTask", (_e, featureId: string, key: string | null) => features.setTask(featureId, key));
-ipcMain.handle("feature:details", (_e, featureId: string, details: { title?: string; status?: FeatureStatus }) =>
-  features.setDetails(featureId, details),
-);
+ipcMain.handle("feature:details", (_e, featureId: string, details: FeatureDetails) => features.setDetails(featureId, details));
+ipcMain.handle("feature:addable", (_e, featureId: string) => addable(featureId).map((r) => r.name));
 ipcMain.handle("feature:scripts", (_e, featureId: string, repo: string) => {
   const r = featureById(featureId)?.repos.find((x) => x.name === repo);
   return r ? features.scriptsFor(r.name, r.source) : {};

@@ -21,8 +21,8 @@ export type CoordinatorDeps = {
   chats: Chats;
   jiraOf: (featureId: string) => FeatureJira;
   facts?: (repo: FeatureRepo) => Promise<RepoFacts | null>;
-  /** The repos in the config (what a feature can add). */
-  repos?: () => RepoEntry[];
+  /** The configured repos a feature can add (those on its line, and those on none). */
+  repos?: (featureId: string) => RepoEntry[];
   addRepo?: (featureId: string, repo: string) => Promise<Result<void>>;
   setTitle?: (featureId: string, title: string) => Result<void>;
 };
@@ -110,9 +110,9 @@ export class Coordinator {
   proposeRepos(featureId: string, chatId: string, repos: { name: string; reason: string }[]): Result<string> {
     const f = this.feature(featureId);
     if (!f || f.archived) return fail("Unknown or archived feature.");
-    const known = this.d.repos?.() ?? [];
+    const known = this.d.repos?.(featureId) ?? [];
     const unknown = repos.filter((r) => !known.some((k) => k.name === r.name)).map((r) => r.name);
-    if (unknown.length) return fail(`Not repos Caboose knows: ${unknown.join(", ")}. The repos are: ${known.map((k) => k.name).join(", ")}.`);
+    if (unknown.length) return fail(`Not repos this feature can have: ${unknown.join(", ")}. The repos it can have are: ${known.map((k) => k.name).join(", ")}.`);
     const fresh = repos.filter((r, i) => !f.repos.some((x) => x.name === r.name) && repos.findIndex((x) => x.name === r.name) === i);
     if (!fresh.length) return fail("Those repos are already in the feature.");
     this.d.chats.propose(chatId, fresh);
