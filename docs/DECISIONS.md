@@ -872,6 +872,15 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      Electron (`npx electron scripts/make-icon.mjs`, any OS) and committed.
      Run from a clone, Caboose is Electron itself, so the icon is set at
      runtime: the Dock icon on macOS, the window icon on Windows and Linux.
+168. **"Caboose", not "Electron", in Cmd-Tab, the Dock and the menu bar.**
+     macOS names an app after the bundle it launched, which from a clone is
+     node_modules' Electron.app. `npm start` now runs `scripts/start.mjs`:
+     on macOS it keeps `.caboose-app/Caboose.app` (gitignored), an APFS clone
+     of Electron.app with its own name, bundle id (`com.caboose.app`) and
+     icon, signed ad hoc like the original, made again when Electron or the
+     icon changes; then it starts that. Other OSes start Electron as before.
+     The new identity means macOS may ask once to let Caboose read its
+     keychain item (the sealed Jira tokens): Always Allow.
 
 ## Answered (2026-11-05)
 

@@ -23,3 +23,6 @@ Thumbs.db
 desktop.ini
 .idea/
 .vscode/
+
+# macOS: the Caboose-named copy of Electron that npm start launches (scripts/start.mjs)
+.caboose-app/

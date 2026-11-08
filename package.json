@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
-    "start": "electron-vite build && electron .",
+    "start": "electron-vite build && node scripts/start.mjs",
     "test": "node --test --test-force-exit test/",
     "typecheck": "tsc -p .",
     "spike": "node spike/phase0.ts"
