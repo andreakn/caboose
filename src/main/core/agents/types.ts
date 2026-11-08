@@ -23,7 +23,8 @@ export interface AgentHost {
   /** The session died; it is started again on the next message. */
   ended(error?: string): void;
   /** Shows an approval card; resolves when the user answers (deny if the session ends). */
-  askPermission(tool: string, input: unknown, signal?: AbortSignal): Promise<PermissionAnswer>;
+  /** `reason`: why the agent asks (a hook's or a rule's explanation), when it says. */
+  askPermission(tool: string, input: unknown, signal?: AbortSignal, reason?: string): Promise<PermissionAnswer>;
   /** Shows a question card; resolves when the user answers. */
   askQuestions(questions: Question[], signal?: AbortSignal): Promise<QuestionAnswer>;
 }

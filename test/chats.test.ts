@@ -278,3 +278,15 @@ test("slash commands: asked of a session that is closed again, cached per folder
   assert.deepEqual(await chats.commands("nope"), []);
   assert.deepEqual(chatCommands([]), []);
 });
+
+test("a permission request says why it asks, and what a shell command does that matters", async () => {
+  const { shellEffects } = await import("../src/shared/chat.ts");
+  const v = [{ t: "permission", id: "p", tool: "Bash", input: { command: "x" }, reason: "Commit requires your approval." } as ChatEvent].reduce(applyEvent, emptyView());
+  assert.deepEqual(v.items[0], { kind: "permission", id: "p", tool: "Bash", input: { command: "x" }, reason: "Commit requires your approval." });
+  // A script written to a file and run: what is inside still counts.
+  const script = `cat > /tmp/cr2.sh <<'EOS'\nfor r in a b; do\ngit -C $r commit -q -am "fix"\ngit -C $r push -q\ngh api "repos/o/$r/pulls/1/comments/2/replies" -f body="done"\ndone\nEOS\nbash /tmp/cr2.sh`;
+  assert.deepEqual(shellEffects(script), ["commits", "pushes", "posts to GitHub"]);
+  assert.deepEqual(shellEffects("git -c core.pager=cat log --oneline && git status && gh pr view 3 && gh api repos/o/r/pulls/1"), [], "reading is fine");
+  assert.deepEqual(shellEffects("git reset --hard origin/main; rm -rf build"), ["discards changes", "deletes files"]);
+  assert.deepEqual(shellEffects("gh pr create --fill && kubectl rollout restart deploy/x"), ["changes a PR", "changes a cluster"]);
+});

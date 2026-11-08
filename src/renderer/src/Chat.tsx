@@ -7,6 +7,7 @@ import {
   type ChatCommand,
   type ChatItem,
   type ChatView,
+  shellEffects,
   EFFORTS,
   emptyView,
   AGENTS,
@@ -307,14 +308,7 @@ function Item(props: { item: ChatItem; chatId: string; agent: string; rel: (p: s
     case "permission":
       return (
         <div className={`permission${item.answer === undefined ? " open" : ""}`}>
-          <div>
-            {agent} wants to use <b>{toolName(item.tool)}</b>
-            {toolSummary(item.input, rel) && (
-              <>
-                : <code>{toolSummary(item.input, rel)}</code>
-              </>
-            )}
-          </div>
+          <PermissionWhat item={item} agent={agent} rel={rel} />
           {item.answer === undefined ? (
             <div className="permission-actions">
               <button className="primary" onClick={() => api.answerPermission(chatId, item.id, "allow")}>
@@ -549,6 +543,45 @@ function ToolRow({ item, rel }: { item: Extract<ChatItem, { kind: "tool" }>; rel
 export function toolName(name: string): string {
   const m = /^mcp__(.+?)__(.+)$/.exec(name);
   return m ? `${m[1]} · ${m[2]}` : name;
+}
+
+/**
+ * What a permission request is about, so it can be judged before allowing:
+ * the agent's own description, why it asks (a hook's or a rule's reason), what
+ * a shell command does that matters (commits, pushes…), and the whole command,
+ * not just its first line.
+ */
+function PermissionWhat({ item, agent, rel }: { item: Extract<ChatItem, { kind: "permission" }>; agent: string; rel: (p: string) => string }) {
+  const input = (item.input ?? {}) as Record<string, unknown>;
+  const command = typeof input.command === "string" ? input.command : undefined;
+  const description = typeof input.description === "string" ? input.description : undefined;
+  const effects = command ? shellEffects(command) : [];
+  const summary = toolSummary(item.input, rel);
+  const open = item.answer === undefined;
+  return (
+    <>
+      <div>
+        {agent} wants to use <b>{toolName(item.tool)}</b>
+        {command && description ? <>: {description}</> : summary && <>: <code>{summary}</code></>}
+        {effects.map((e) => (
+          <span key={e} className="effect-chip">
+            {e}
+          </span>
+        ))}
+      </div>
+      {item.reason && (
+        <div className="permission-reason">
+          <span className="muted">Why it asks:</span> {item.reason}
+        </div>
+      )}
+      {command && (command.includes("\n") || command.length > 120 || description) && (
+        <details className="permission-command" open={open}>
+          <summary className="muted small">The command{command.includes("\n") ? ` (${command.split("\n").length} lines)` : ""}</summary>
+          <pre>{command}</pre>
+        </details>
+      )}
+    </>
+  );
 }
 
 export function toolSummary(input: unknown, rel: (p: string) => string): string {

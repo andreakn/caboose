@@ -56,7 +56,7 @@ export type LastingEvent =
   | { t: "thinking"; id: string; text: string }
   | { t: "tool"; id: string; name: string; input: unknown }
   | { t: "tool_result"; id: string; content: string; isError: boolean }
-  | { t: "permission"; id: string; tool: string; input: unknown }
+  | { t: "permission"; id: string; tool: string; input: unknown; /** Why it is asked (a hook's reason, a rule), when the agent says. */ reason?: string }
   | { t: "permission_answer"; id: string; allowed: boolean }
   | { t: "question"; id: string; questions: Question[] }
   /** null: the user dismissed the questions or replied in the chat instead. */
@@ -91,7 +91,7 @@ export type ChatItem =
   | { kind: "text"; id: string; text: string }
   | { kind: "thinking"; id: string; text: string }
   | { kind: "tool"; id: string; name: string; input: unknown; result?: { content: string; isError: boolean } }
-  | { kind: "permission"; id: string; tool: string; input: unknown; answer?: boolean }
+  | { kind: "permission"; id: string; tool: string; input: unknown; reason?: string; answer?: boolean }
   | { kind: "question"; id: string; questions: Question[]; answered: boolean; answers: Record<string, string> | null }
   | {
       kind: "proposal";
@@ -128,7 +128,7 @@ export function applyEvent(v: ChatView, e: ChatEvent): ChatView {
         ),
       };
     case "permission":
-      return { ...v, items: upsert(v.items, { kind: "permission", id: e.id, tool: e.tool, input: e.input }) };
+      return { ...v, items: upsert(v.items, { kind: "permission", id: e.id, tool: e.tool, input: e.input, ...(e.reason ? { reason: e.reason } : {}) }) };
     case "permission_answer":
       return {
         ...v,
@@ -179,4 +179,24 @@ function upsert(items: ChatItem[], item: ChatItem): ChatItem[] {
   const copy = items.slice();
   copy[i] = item;
   return copy;
+}
+
+/**
+ * What a shell command does that is worth a second look before allowing it,
+ * found anywhere in it (also inside a script it writes and runs): so a long
+ * command that commits, pushes or posts says so on its first line.
+ */
+export function shellEffects(command: string): string[] {
+  const has = (re: RegExp) => re.test(command);
+  const git = (verb: string) => new RegExp(`\\bgit\\b(?:\\s+-{1,2}[^\\s]+(?:\\s+[^-\\s][^\\s]*)?)*\\s+${verb}\\b`);
+  return [
+    has(git("commit")) && "commits",
+    has(git("push")) && "pushes",
+    (has(git("reset\\s+--hard")) || has(git("checkout\\s+--?\\s")) || has(git("clean\\s+-[a-z]*f"))) && "discards changes",
+    has(/\bgh\s+pr\s+(create|merge|close|comment|review|edit)\b/) && "changes a PR",
+    has(/\bgh\s+api\b[^\n]*(\s-f\s|\s-F\s|--field|--raw-field|-X\s*(POST|PATCH|PUT|DELETE)|--method\s+(POST|PATCH|PUT|DELETE))/) && "posts to GitHub",
+    has(/\brm\s+-[a-zA-Z]*[rf]/) && "deletes files",
+    has(/\b(kubectl|helm)\s+(apply|delete|rollout|scale|patch|edit|set)\b/) && "changes a cluster",
+    has(/\bcurl\b[^\n]*(-X\s*(POST|PUT|PATCH|DELETE)|\s-d\s|--data)/) && "sends data",
+  ].filter((x): x is string => Boolean(x));
 }

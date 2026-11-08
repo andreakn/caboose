@@ -303,12 +303,12 @@ export class Chats {
         if (live.draft) this.emit(chatId, { t: "draft_clear" });
         this.emit(chatId, { t: "status", running: false, queued: [] });
       },
-      askPermission: (tool, input, signal) => {
+      askPermission: (tool, input, signal, reason) => {
         if (!current()) return Promise.resolve("deny");
         const id = randomUUID();
         return new Promise((resolve) => {
           live.permissions.set(id, resolve);
-          this.record(chatId, { t: "permission", id, tool, input });
+          this.record(chatId, { t: "permission", id, tool, input, ...(reason ? { reason } : {}) });
           signal?.addEventListener("abort", () => {
             if (live.permissions.delete(id)) {
               this.record(chatId, { t: "permission_answer", id, allowed: false });

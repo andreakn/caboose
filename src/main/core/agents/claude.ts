@@ -183,7 +183,7 @@ async function consume(q: QueryLike, host: AgentHost): Promise<string | undefine
 }
 
 function canUseTool(host: AgentHost): CanUseTool {
-  return async (tool, input, { signal, suggestions }): Promise<PermissionResult> => {
+  return async (tool, input, { signal, suggestions, decisionReason }): Promise<PermissionResult> => {
     // Caboose's own tools only read the diff or write review comments.
     if (tool.startsWith("mcp__caboose__")) return { behavior: "allow", updatedInput: input };
     if (tool === "AskUserQuestion") {
@@ -198,7 +198,7 @@ function canUseTool(host: AgentHost): CanUseTool {
         ? { behavior: "allow", updatedInput: { ...input, answers: answer } }
         : { behavior: "deny", message: "The user dismissed the question without answering." };
     }
-    const answer = await host.askPermission(tool, input, signal);
+    const answer = await host.askPermission(tool, input, signal, decisionReason);
     if (answer === "deny") return { behavior: "deny", message: "The user said no." };
     return {
       behavior: "allow",

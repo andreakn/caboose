@@ -836,6 +836,14 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      (no message, so no tokens; about 0.2 s) and closed; the list is cached
      per folder for 5 minutes and refreshed for free by live sessions.
      Copilot chats get none: its SDK has no way to list the user's skills.
+164. **A permission request shows enough to judge it.** It shows the
+     agent's own description of the command, why it asks (the SDK's
+     `decisionReason`: a hook's `permissionDecisionReason`, a rule), labels
+     for what a shell command does that matters (commits, pushes, posts to
+     GitHub, discards changes, deletes files, changes a PR or a cluster,
+     sends data; found anywhere in it, also inside a script it writes and
+     runs), and the whole command, not its first line. Asks in Bypass mode
+     come from the user's own hooks or rules, which win over the mode.
 
 ## Answered (2026-11-05)
 
