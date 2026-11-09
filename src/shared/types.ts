@@ -536,6 +536,8 @@ export type CabooseApi = {
   setFeatureDetails(featureId: string, details: FeatureDetails): Promise<Result<void>>;
   /** The configured repos this feature can add (its line's and those on no line), by name. */
   addableRepos(featureId: string): Promise<string[]>;
+  /** Asks Copilot to review the open PRs of one repo or of all (skipping PRs where a Copilot review is already pending). */
+  requestCopilotReview(featureId: string, repo?: string): Promise<Result<CopilotRequestOutcome>>;
   /** Archived features (from the archive folders), newest first. */
   archivedFeatures(): Promise<ArchivedFeature[]>;
   /** An archived chat's events, and the archived feature's own files. */
@@ -675,3 +677,8 @@ export type CabooseApi = {
   onTermData(listener: (id: string, data: string) => void): () => void;
   onTerminalsChanged(listener: (terminals: Terminal[]) => void): () => void;
 };
+
+export type CopilotRequestOutcome = { requested: string[]; skipped: { repo: string; why: string }[]; failed: { repo: string; error: string }[] };
+
+/** Copilot has been asked to review and has not yet (its request is still pending). */
+export const copilotPending = (pr: { requested: string[] }) => pr.requested.some((l) => /copilot/i.test(l));

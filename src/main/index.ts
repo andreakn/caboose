@@ -9,6 +9,7 @@ import { checksSummary } from "../shared/github.ts";
 import { commentsMessage } from "../shared/diff.ts";
 import type { MergeMethod } from "../shared/github.ts";
 import { reposFor } from "../shared/lines.ts";
+import { copilotPending, type CopilotRequestOutcome } from "../shared/types.ts";
 import type { AppId, ConfigInput, Feature, FeatureDetails, HomeArea, NewFeature, RetireMode, Sidebar, State, Theme } from "../shared/types.ts";
 import { CopilotClient } from "@github/copilot-sdk";
 import { ClaudeProvider, Inbox } from "./core/agents/claude.ts";
@@ -325,6 +326,31 @@ ipcMain.handle("jira:feature", (_e, featureId: string) => features.jiraOf(featur
 ipcMain.handle("jira:setTask", (_e, featureId: string, key: string | null) => features.setTask(featureId, key));
 ipcMain.handle("feature:details", (_e, featureId: string, details: FeatureDetails) => features.setDetails(featureId, details));
 ipcMain.handle("feature:components", (_e, featureId: string, repo: string, components: string[] | null) => features.setComponents(featureId, repo, components));
+ipcMain.handle("github:copilotReview", (_e, featureId: string, repo?: string) =>
+  attempt(async (): Promise<CopilotRequestOutcome> => {
+    const f = featureOrThrow(featureId);
+    const ov = await overviewOf(featureId, true);
+    const out: CopilotRequestOutcome = { requested: [], skipped: [], failed: [] };
+    await Promise.all(
+      f.repos
+        .filter((r) => !repo || r.name === repo)
+        .map(async (r) => {
+          const pr = ov.repos.find((x) => x.name === r.name)?.pr;
+          if (!pr) return void out.skipped.push({ repo: r.name, why: "no PR" });
+          if (pr.state !== "OPEN" && pr.state !== "DRAFT") return void out.skipped.push({ repo: r.name, why: `PR #${pr.number} is ${pr.state.toLowerCase()}` });
+          if (copilotPending(pr)) return void out.skipped.push({ repo: r.name, why: "a Copilot review is already pending" });
+          try {
+            await github.requestCopilotReview(r.path, pr.number);
+            out.requested.push(r.name);
+          } catch (e) {
+            out.failed.push({ repo: r.name, error: (e as Error).message });
+          }
+        }),
+    );
+    prDetails.forget();
+    return out;
+  }),
+);
 ipcMain.handle("feature:addable", (_e, featureId: string) => addable(featureId).map((r) => r.name));
 ipcMain.handle("feature:scripts", (_e, featureId: string, repo: string) => {
   const r = featureById(featureId)?.repos.find((x) => x.name === repo);

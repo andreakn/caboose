@@ -109,6 +109,11 @@ export class GitHub {
     await this.run("gh", ["pr", "close", String(pr)], wsPath);
   }
 
+  /** Asks Copilot to review the PR (again, if it already has: it then reviews what is new). */
+  async requestCopilotReview(wsPath: string, pr: number): Promise<void> {
+    await this.run("gh", ["pr", "edit", String(pr), "--add-reviewer", "@copilot"], wsPath);
+  }
+
   async renameBranch(wsPath: string, from: string, to: string): Promise<void> {
     await git(wsPath, "check-ref-format", "--branch", to);
     await git(wsPath, "branch", "-m", from, to);

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Chat } from "../../shared/chat.ts";
 import type { PrDetails } from "../../shared/github.ts";
-import type { Feature, FeatureOverview, JiraStatus, RepoOverview } from "../../shared/types.ts";
+import { copilotPending, type Feature, type FeatureOverview, type JiraStatus, type RepoOverview } from "../../shared/types.ts";
 import { activityOf, useActivityVersion } from "./activity.ts";
 import { StatusChip } from "./Plan.tsx";
 import { repoLabel } from "./labels.ts";
@@ -122,7 +122,8 @@ export function JiraStatusChip({ j, site }: { j: JiraStatus | { key: string }; s
 // ---- Pull requests tab -----------------------------------------------------
 
 /** The feature's PRs in numbers: open, merged, failing builds, comments, approvals… (the Repos tab's header). */
-export function PrTiles({ ov, loading, refresh }: { ov: FeatureOverview | null; loading: boolean; refresh: () => void }) {
+export function PrTiles({ ov, loading, refresh, featureId }: { ov: FeatureOverview | null; loading: boolean; refresh: () => void; featureId?: string }) {
+  const [asking, setAsking] = useState<string | null>(null);
   if (!ov) return <div className="muted small">Loading…</div>;
   const prs = ov.repos.filter((r) => r.pr).map((r) => r.pr!);
   const live = prs.filter((p) => p.state === "OPEN" || p.state === "DRAFT");
@@ -147,6 +148,23 @@ export function PrTiles({ ov, loading, refresh }: { ov: FeatureOverview | null; 
           </div>
         ))}
         <span className="spacer" />
+        {asking && <span className="muted small">{asking}</span>}
+        {featureId && live.some((p) => !copilotPending(p)) && (
+          <button
+            className="copilot-review"
+            disabled={!!asking}
+            title={`Ask GitHub Copilot to review every open PR in the feature where it has not been asked already (${live.filter((p) => !copilotPending(p)).length})`}
+            onClick={async () => {
+              setAsking("Asking Copilot…");
+              const r = await window.caboose.requestCopilotReview(featureId);
+              setAsking(r.ok ? `Asked Copilot to review ${r.value.requested.length} PR${r.value.requested.length === 1 ? "" : "s"}${r.value.failed.length ? `; failed: ${r.value.failed.map((f) => f.repo).join(", ")}` : ""}.` : r.error);
+              refresh();
+              setTimeout(() => setAsking(null), 6000);
+            }}
+          >
+            Copilot review all ({live.filter((p) => !copilotPending(p)).length})
+          </button>
+        )}
         <button onClick={refresh} disabled={loading} title="Ask GitHub and Jira again (answers are cached for a minute)">
           {loading ? "Refreshing…" : "Refresh"}
         </button>

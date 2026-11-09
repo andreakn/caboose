@@ -904,6 +904,14 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      answer); streaming thinking only when thinking is on. One choice for
      every chat, kept on this machine; the default is everything, as before.
      The filtering is shared code (`visibleItems`, tested).
+171. **Asking Copilot for a review**, for repos that do not do it on their
+     own: "Copilot review" on a repo with an open (or draft) PR, and "Copilot
+     review all (n)" in the feature's Repos tab. Both go through
+     `gh pr edit --add-reviewer @copilot` and skip PRs where a Copilot request
+     is already pending (it is a bot, `copilot-pull-request-reviewer`, so the
+     PR query now asks for bots among requested reviewers too); a pending one
+     shows as "Copilot reviewing…". Asking again after Copilot has reviewed
+     is allowed: it then reviews what is new.
 
 ## Answered (2026-11-05)
 

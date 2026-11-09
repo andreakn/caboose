@@ -37,6 +37,7 @@ const api: CabooseApi = {
   previewLocalFiles: invoke("config:previewLocalFiles"),
   setFeatureDetails: invoke("feature:details"),
   addableRepos: invoke("feature:addable"),
+  requestCopilotReview: invoke("github:copilotReview"),
   archivedFeatures: invoke("archived:list"),
   archivedChat: invoke("archived:chat"),
   archivedDocs: invoke("archived:docs"),

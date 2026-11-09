@@ -9,7 +9,7 @@ import {
   type MergeMethod,
   resolveConflictsMessage,
 } from "../../shared/github.ts";
-import type { Feature, FeatureRepo, JiraLevel, RepoOverview, StageRelease } from "../../shared/types.ts";
+import { copilotPending, type Feature, type FeatureRepo, type JiraLevel, type RepoOverview, type StageRelease } from "../../shared/types.ts";
 import { activeChat } from "./Chat.tsx";
 import { askText } from "./Dialog.tsx";
 import { MenuButton, type MenuItem, useApps } from "./Menu.tsx";
@@ -238,6 +238,11 @@ export function RepoRow(props: {
         </span>
       )}
       {ov?.pr ? <PrChip pr={ov.pr} /> : ghPr && <PrLink pr={ghPr} />}
+      {live && ov?.pr && copilotPending(ov.pr) && (
+        <span className="chip copilot-pending" title="Copilot has been asked to review and has not yet">
+          Copilot reviewing…
+        </span>
+      )}
       {ov?.release && <ReleaseChips release={ov.release} hide={otherComponents(ov)} />}
       {ov?.running && <RunningChips feature={feature} ov={ov} onChanged={props.onChanged} />}
       {ov?.jira ? <JiraStatusChip j={ov.jira} site={props.jiraSite} /> : props.subtask && <JiraStatusChip j={{ key: props.subtask }} site={props.jiraSite} />}
@@ -245,6 +250,16 @@ export function RepoRow(props: {
   );
   const actions = (
     <span className="row" onClick={(e) => e.stopPropagation()}>
+      {live && ov?.pr && !copilotPending(ov.pr) && !feature.archived && (
+        <button
+          className="copilot-review"
+          disabled={!!busy}
+          title={`Ask GitHub Copilot to review PR #${ov.pr.number} (again, if it already has: it reviews what is new)`}
+          onClick={() => void act("Asking Copilot…", () => requestCopilot(feature.id, repo.name))}
+        >
+          Copilot review
+        </button>
+      )}
       {primary && (
         <button className={primary.ready ? "primary merge-ready" : "primary"} onClick={primary.run} disabled={!!busy} title={primary.title}>
           {primary.label}
@@ -383,6 +398,16 @@ function PrLink({ pr }: { pr: { number: number; url: string; title: string } }) 
       #{pr.number}
     </a>
   );
+}
+
+/** Asks Copilot to review; says why not when it did not. */
+export async function requestCopilot(featureId: string, repo?: string): Promise<{ ok: boolean; error?: string }> {
+  const r = await api.requestCopilotReview(featureId, repo);
+  if (!r.ok) return r;
+  const { requested, skipped, failed } = r.value;
+  if (failed.length) return { ok: false, error: failed.map((f) => `${f.repo}: ${f.error}`).join("\n") };
+  if (!requested.length && skipped.length && repo) return { ok: false, error: `Not asked: ${skipped.map((s) => s.why).join(", ")}.` };
+  return { ok: true };
 }
 
 async function renameBranch(feature: Feature, repo: FeatureRepo, done: () => void) {

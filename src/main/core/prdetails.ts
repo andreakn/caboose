@@ -31,7 +31,7 @@ const FIELDS = `number title url state isDraft reviewDecision mergeable mergeSta
   headRefName baseRefName updatedAt author { login } mergeCommit { oid }
   reviewThreads(first: 100) { nodes { isResolved isOutdated path line comments(first: 1) { totalCount nodes { author { login } body url } } } }
   latestReviews(first: 30) { nodes { state author { login } } }
-  reviewRequests(first: 20) { nodes { requestedReviewer { ... on User { login } } } }
+  reviewRequests(first: 20) { nodes { requestedReviewer { ... on User { login } ... on Bot { login } } } }
   commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 100) { nodes {
     __typename
     ... on CheckRun { name conclusion status detailsUrl checkSuite { workflowRun { workflow { name } } } }
@@ -101,6 +101,11 @@ export class PrDetailsCache {
 
   constructor(runner: Runner = (f, a, cwd) => run(f, a, cwd)) {
     this.run = runner;
+  }
+
+  /** Drops what is cached, after Caboose changed a PR itself. */
+  forget(): void {
+    this.cache.clear();
   }
 
   /** PR per repo name (null = no PR on that branch). One GraphQL call; 60 s cache. */

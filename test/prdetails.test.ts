@@ -1,3 +1,4 @@
+import { copilotPending } from "../src/shared/types.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { buildQuery, githubSlug, PrDetailsCache } from "../src/main/core/prdetails.ts";
@@ -19,7 +20,7 @@ test("one query for every repo; PRs shaped with threads, checks and reviews; cac
       { isResolved: true, path: "src/b.ts", line: 1, comments: { totalCount: 1, nodes: [] } },
     ] },
     latestReviews: { nodes: [{ state: "APPROVED", author: { login: "ann" } }, { state: "CHANGES_REQUESTED", author: { login: "bob" } }] },
-    reviewRequests: { nodes: [{ requestedReviewer: { login: "cid" } }, { requestedReviewer: {} }] },
+    reviewRequests: { nodes: [{ requestedReviewer: { login: "cid" } }, { requestedReviewer: {} }, { requestedReviewer: { login: "copilot-pull-request-reviewer" } }] },
     commits: { nodes: [{ commit: { statusCheckRollup: { contexts: { nodes: [
       { __typename: "CheckRun", name: "build", conclusion: "SUCCESS", status: "COMPLETED", checkSuite: { workflowRun: { workflow: { name: "CI" } } } },
       { __typename: "CheckRun", name: "test", conclusion: "FAILURE", status: "COMPLETED", detailsUrl: "t" },
@@ -41,7 +42,9 @@ test("one query for every repo; PRs shaped with threads, checks and reviews; cac
   const p = r.prs.web!;
   assert.equal(p.state, "OPEN");
   assert.deepEqual(p.threads, [{ path: "src/a.ts", line: 4, outdated: false, author: "copilot", body: "Null check?", url: "u1", replies: 2 }]);
-  assert.deepEqual([p.approvals, p.changesRequested, p.requested], [["ann"], ["bob"], ["cid"]]);
+  assert.deepEqual([p.approvals, p.changesRequested, p.requested], [["ann"], ["bob"], ["cid", "copilot-pull-request-reviewer"]]);
+  assert.equal(copilotPending(p), true, "Copilot (a bot) has been asked and not reviewed yet");
+  assert.equal(copilotPending({ requested: ["cid"] }), false);
   assert.deepEqual(p.checks, { state: "failing", total: 3, passed: 1, failed: [{ name: "test", url: "t" }], pending: 1 });
   await cache.get(qs);
   assert.equal(calls, 1, "cached");

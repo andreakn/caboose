@@ -831,7 +831,7 @@ function FeatureView(props: {
               {tab === "run" && <RunView f={f} ov={runs.ov} reload={runs.reload} onShow={showTerminal} />}
               {tab === "prs" && (
                 <div className="plan-view">
-                  <PrTiles ov={overview.ov} loading={overview.loading} refresh={() => void overview.refresh()} />
+                  <PrTiles ov={overview.ov} loading={overview.loading} refresh={() => void overview.refresh()} featureId={f.archived ? undefined : f.id} />
                 <div className="repos">
                   {f.repos.map((r) => repoRow(r))}
                   {!f.archived && missing.length > 0 && (
