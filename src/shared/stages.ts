@@ -55,3 +55,28 @@ export function deployProgress(repos: ProgressRepo[]) {
     };
   });
 }
+
+/** An emoji for a stage, by its name: 🚀 production, 🧪 a test environment, 🏷 a release (or anything else). */
+export function stageEmoji(stage: string): string {
+  if (/prod|live/i.test(stage)) return "🚀";
+  if (/test|stag|qa|uat|dev|preprod/i.test(stage)) return "🧪";
+  return "🏷";
+}
+
+/**
+ * How far one repo's change has got: the furthest stage it has reached (by
+ * tags, or by what runs where it has a running.sh), and a line per stage for
+ * a tooltip ("test ✓", "prod – tagged, not running yet").
+ */
+export function repoDeploy(repo: ProgressRepo): { reached?: string; lines: string[] } {
+  const progress = deployProgress([repo]);
+  let reached: string | undefined;
+  const lines = progress.map((p) => {
+    const r = p.repos[0];
+    if (r?.done) reached = p.stage;
+    const tags = repo.release?.find((x) => x.stage === p.stage)?.tags ?? [];
+    const state = r?.done ? "✓" : r?.tagged && r.running === false ? "– tagged, not running yet" : "–";
+    return `${stageEmoji(p.stage)} ${p.stage} ${state}${tags.length ? ` (${tags.join(", ")})` : ""}`;
+  });
+  return { ...(reached ? { reached } : {}), lines };
+}

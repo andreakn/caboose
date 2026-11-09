@@ -40,7 +40,7 @@ import { repoLabel, setRepoLabels } from "./labels.ts";
 import { notifySound } from "./sounds.ts";
 import { RetireDialog } from "./Retire.tsx";
 import { featureOrder, normalize } from "../../shared/sidebar.ts";
-import { deployProgress } from "../../shared/stages.ts";
+import { deployProgress, repoDeploy, stageEmoji } from "../../shared/stages.ts";
 import { FeatureTree } from "./Sidebar.tsx";
 import { RunView, useRunOverview } from "./Run.tsx";
 import { TerminalPanel, useTerminals } from "./Terminals.tsx";
@@ -739,7 +739,22 @@ function FeatureView(props: {
                     </span>
                   );
                 })()}
-              {n > 0 && <span className="badge" title={`${n} changed file(s)`}>{n}</span>}
+              {rov &&
+                (() => {
+                  // How far its change has shipped: 🏷 release tagged, 🧪 in test, 🚀 in prod.
+                  const d = repoDeploy(rov);
+                  return d.reached ? (
+                    <span className="tab-deploy" title={`Shipped as far as ${d.reached}:\n${d.lines.join("\n")}`}>
+                      {stageEmoji(d.reached)}
+                    </span>
+                  ) : null;
+                })()}
+              {/* Once merged, the count of changed files says nothing new: the deploy mark takes its place. */}
+              {n > 0 && rov?.pr?.state !== "MERGED" && (
+                <span className="badge" title={`${n} changed file(s)`}>
+                  {n}
+                </span>
+              )}
             </button>
           );
         })}

@@ -75,3 +75,22 @@ test("deploy progress: per stage, how many repos with tag rules are tagged; repo
   );
   assert.deepEqual(p[0].repos, [{ name: "shop", tagged: true, done: true }, { name: "reports", tagged: false, done: false }]);
 });
+
+test("a repo tab's deploy mark: the furthest stage reached, and a line per stage", async () => {
+  const { repoDeploy, stageEmoji } = await import("../src/shared/stages.ts");
+  assert.deepEqual([stageEmoji("release"), stageEmoji("test"), stageEmoji("staging"), stageEmoji("prod"), stageEmoji("live")], ["🏷", "🧪", "🧪", "🚀", "🚀"]);
+  const stages = ["release", "test", "prod"];
+  assert.deepEqual(repoDeploy({ name: "shop", stages }), { lines: ["🏷 release –", "🧪 test –", "🚀 prod –"] }, "not merged: nothing reached");
+  const tagged = repoDeploy({ name: "shop", stages, release: [{ stage: "release", tags: ["shop_v1.2"] }, { stage: "test", tags: ["shop_TEST_v1.2"] }, { stage: "prod", tags: [] }] });
+  assert.equal(tagged.reached, "test");
+  assert.deepEqual(tagged.lines, ["🏷 release ✓ (shop_v1.2)", "🧪 test ✓ (shop_TEST_v1.2)", "🚀 prod –"]);
+  // With a running.sh: tagged for prod is not enough.
+  const running = repoDeploy({
+    name: "shop",
+    stages,
+    release: [{ stage: "release", tags: ["v1"] }, { stage: "test", tags: ["t1"] }, { stage: "prod", tags: ["p1"] }],
+    running: { versions: [{ component: "", env: "test", version: "t1", contains: true }, { component: "", env: "prod", version: "p0", contains: false }] },
+  });
+  assert.equal(running.reached, "test");
+  assert.equal(running.lines[2], "🚀 prod – tagged, not running yet (p1)");
+});

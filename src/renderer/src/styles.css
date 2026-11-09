@@ -1081,3 +1081,4 @@ button.copilot-review { white-space: nowrap; }
 
 /* Files git ignores (.env, bin/, node_modules/): there, but faded. */
 .tree-file.ignored .tree-name, .tree-dir.ignored .tree-name { opacity: 0.5; font-style: italic; }
+.tab-deploy { margin-left: 4px; font-size: 12px; }

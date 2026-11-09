@@ -927,6 +927,13 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      instructions, and a request to note dependencies and merge order
      between the PRs. With Jira "expected", repos without a key are named
      before asking.
+174. **A repo tab says how far its change has shipped**: 🏷 release tagged,
+     🧪 in a test environment, 🚀 in production (the emoji by the stage's
+     name), the furthest stage reached by tags or, where the repo has a
+     running.sh, by what runs; the tooltip has every stage ("prod –
+     tagged, not running yet"). Once the PR is merged the changed-files
+     count leaves the tab: it says nothing new then, and the mark takes
+     its place.
 
 ## Answered (2026-11-05)
 
