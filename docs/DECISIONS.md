@@ -964,6 +964,15 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      itself (since its branch left its base, committed or not) runs its own
      copy from its worktree, so a new script can be tried before it is
      merged. Run scripts stay on the feature branch, as before.
+177. **Which chats the Dock badge counts, and where they are.** The badge
+     counts chats that wait for an answer or finished unseen, in live
+     features only. A 🔔 with the same number in the sidebar header lists
+     them ("Torup · shop's chat · needs your answer"); a click opens that
+     chat where it lives (its repo's tab, or the feature's), which marks it
+     seen. On the way there: a count on each feature in the sidebar (and on
+     a closed folder), and a dot on the feature's Feature/repo tabs (red:
+     waiting for you; blue: finished). `openChat:<id>` is the one command
+     that opens a chat anywhere; notifications and "Needs you" use it.
 
 ## Answered (2026-11-05)
 

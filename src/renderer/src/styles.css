@@ -1091,3 +1091,17 @@ button.copilot-review { white-space: nowrap; }
 .tag-prefixes label.mine code { font-weight: 700; }
 .release-strategy { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
 .release-strategy input { flex: 1; }
+
+/* Chats that want the user: counts on features, folders and tabs, and the 🔔 list. */
+.wants-ind { display: inline-block; min-width: 16px; margin-left: 6px; padding: 0 5px; border-radius: 8px; font-size: 10.5px; font-weight: 700; line-height: 16px; text-align: center; background: color-mix(in srgb, var(--info) 45%, transparent); color: var(--text); vertical-align: 1px; }
+.wants-ind.needs { background: var(--danger); color: var(--card); }
+.brand-icon.bell { position: relative; font-size: 15px; }
+.bell-count { position: absolute; top: -3px; right: -4px; min-width: 15px; padding: 0 4px; border-radius: 8px; font-size: 10px; font-weight: 700; line-height: 15px; background: color-mix(in srgb, var(--info) 70%, var(--card)); color: var(--text); }
+.brand-icon.bell.needs .bell-count { background: var(--danger); color: var(--card); }
+/* Fixed, so the sidebar's edge does not cut it off. */
+.bell-popover { position: fixed; left: 12px; top: 52px; right: auto; width: 340px; display: flex; flex-direction: column; gap: 2px; padding: 6px; }
+.bell-row { display: grid; grid-template-columns: auto 1fr; column-gap: 8px; text-align: left; background: none; border: 0; border-radius: 6px; padding: 6px 8px; color: var(--text); cursor: pointer; }
+.bell-row:hover { background: var(--accent-soft); }
+.bell-row .small { grid-column: 2; }
+.wants-dot { display: inline-block; width: 8px; height: 8px; margin-left: 6px; border-radius: 50%; background: var(--info); vertical-align: 1px; }
+.wants-dot.needs { background: var(--danger); }

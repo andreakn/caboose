@@ -6,7 +6,7 @@ import { MenuButton } from "./Menu.tsx";
 
 const api = window.caboose;
 /** Features in folders you can open, close, rename and drag around (features too). */
-export function FeatureTree(props: { sidebar: Sidebar; features: Feature[]; renderFeature: (f: Feature) => ReactNode }) {
+export function FeatureTree(props: { sidebar: Sidebar; features: Feature[]; renderFeature: (f: Feature) => ReactNode; wants?: (f: Feature) => number }) {
   const sb = normalize(props.sidebar, props.features);
   const byId = new Map(props.features.map((f) => [f.id, f]));
   const [dragging, setDragging] = useState<Key | null>(null);
@@ -15,6 +15,13 @@ export function FeatureTree(props: { sidebar: Sidebar; features: Feature[]; rend
 
   const count = (folder: string): number =>
     (sb.children[folder] ?? []).reduce((n, k) => n + (k.startsWith("f:") ? 1 : count(k.slice(2))), 0);
+  /** How many chats in a folder (and its subfolders) want the user. */
+  const wantsIn = (folder: string): number =>
+    (sb.children[folder] ?? []).reduce((n, k) => {
+      if (k.startsWith("d:")) return n + wantsIn(k.slice(2));
+      const f = byId.get(k.slice(2));
+      return n + (f && props.wants ? props.wants(f) : 0);
+    }, 0);
 
   /** Where in a row the pointer is: top/bottom edge = before/after, a folder's middle = inside. */
   const zone = (e: React.DragEvent, key: Key): Drop => {
@@ -99,6 +106,11 @@ export function FeatureTree(props: { sidebar: Sidebar; features: Feature[]; rend
           >
             <span className="twisty">{open ? "▾" : "▸"}</span>
             <span className="folder-name">{folder.name}</span>
+            {!open && wantsIn(id) > 0 && (
+              <span className="wants-ind" title={`${wantsIn(id)} chat(s) in this folder want you`}>
+                {wantsIn(id)}
+              </span>
+            )}
             <span className="folder-count">{count(id) || ""}</span>
             <span onClick={(e) => e.stopPropagation()}>
               <MenuButton

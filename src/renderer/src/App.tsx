@@ -18,7 +18,7 @@ import {
   type State,
   type Terminal,
 } from "../../shared/types.ts";
-import { type Activity, activityOf, onActivityNotice, useActivityVersion } from "./activity.ts";
+import { type Activity, activityOf, attentionOf, onActivityNotice, useActivityVersion } from "./activity.ts";
 import { ChangesView, useFeatureChanges } from "./Changes.tsx";
 import { activeChat, ChatArea } from "./Chat.tsx";
 import { dispatch, useCommand } from "./commands.ts";
@@ -64,6 +64,11 @@ export function App() {
     localStorage.setItem("caboose-selected", id);
     setScreen("feature");
   };
+  /** Opens a chat wherever it is: its feature, its repo's tab (or the feature's), its chat tab. */
+  const openChatAnywhere = (featureId: string, chatId: string) => {
+    select(featureId);
+    setTimeout(() => dispatch(`openChat:${chatId}`), 50);
+  };
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -108,11 +113,7 @@ export function App() {
         });
         n.onclick = () => {
           api.focusWindow();
-          select(f.id);
-          setTimeout(() => {
-            dispatch("showChat");
-            dispatch(`selectChat:${chat.id}`);
-          });
+          openChatAnywhere(f.id, chat.id);
         };
       }),
     [],
@@ -139,14 +140,13 @@ export function App() {
     [],
   );
 
-  // Dock/taskbar badge: chats that finished unseen or wait for an answer.
+  // Chats that want the user: waiting for an answer, or finished unseen (in live features only).
+  const attention = state.chats.filter((c) => state.features.some((f) => f.id === c.featureId && !f.archived) && attentionOf(c.id));
+  // Dock/taskbar badge: how many; the 🔔 in the sidebar says which.
   useEffect(() => {
-    const count = state.chats.filter((c) => {
-      const a = activityOf([c.id]);
-      return a.unread || a.waiting > 0;
-    }).length;
+    const count = attention.length;
     api.setBadge(count);
-  }, [activityVersion, state.chats]);
+  }, [activityVersion, state.chats, state.features]);
 
   /** Runs an action, showing `label` while it runs and any error after. */
   async function act<T>(label: string, fn: () => Promise<Result<T> | null>): Promise<T | undefined> {
@@ -166,6 +166,8 @@ export function App() {
   // Fall back to the newest live feature when the remembered one is gone.
   const feature = state.features.find((f) => f.id === selected) ?? live.at(-1);
   const activity = (f: Feature) => activityOf(state.chats.filter((c) => c.featureId === f.id).map((c) => c.id));
+  /** How many of a feature's chats want the user. */
+  const wants = (f: Feature) => attention.filter((c) => c.featureId === f.id).length;
 
   useCommand((c) => {
     if (c === "settings" || c === "addRepo") setScreen((s) => (s === "configure" ? "feature" : "configure"));
@@ -207,6 +209,7 @@ export function App() {
               <path d="M4 4h7v7H4Z M13 4h7v7h-7Z M4 13h7v7H4Z M13 13h7v7h-7Z" />
             </svg>
           </button>
+          <AttentionBell chats={attention} features={state.features} onOpen={(c) => openChatAnywhere(c.featureId, c.id)} />
         </div>
         <button className="new-feature" onClick={() => setCreating(true)}>
           + New feature
@@ -215,8 +218,9 @@ export function App() {
           <FeatureTree
             sidebar={state.sidebar}
             features={live}
+            wants={wants}
             renderFeature={(f) => (
-              <FeatureRow f={f} activity={activity(f)} run={runSummary[f.id]} active={screen === "feature" && f.id === feature?.id} onClick={() => select(f.id)} />
+              <FeatureRow f={f} activity={activity(f)} run={runSummary[f.id]} wants={wants(f)} active={screen === "feature" && f.id === feature?.id} onClick={() => select(f.id)} />
             )}
           />
           {archived.length + ended.length > 0 && (
@@ -345,7 +349,7 @@ function useRunSummary(terminals: Terminal[]): Record<string, RunSummary> {
   return summary;
 }
 
-function FeatureRow(props: { f: Feature; activity?: Activity; run?: RunSummary; active: boolean; onClick: () => void }) {
+function FeatureRow(props: { f: Feature; activity?: Activity; run?: RunSummary; wants?: number; active: boolean; onClick: () => void }) {
   const { f, active, onClick, activity: a } = props;
   const { ov } = useOverview(f.archived ? undefined : f);
   const setup = f.repos.some((r) => r.setup === "failed") ? "failed" : f.repos.some((r) => r.setup === "running") ? "running" : "ok";
@@ -367,6 +371,11 @@ function FeatureRow(props: { f: Feature; activity?: Activity; run?: RunSummary; 
       <span className="ws-name">
         {stationLabel(f.name)}
         {f.status && f.status !== "active" && <span className={`status-mini st-${f.status}`}>{f.status}</span>}
+        {(props.wants ?? 0) > 0 && (
+          <span className={`wants-ind${a?.waiting ? " needs" : ""}`} title={`${props.wants} chat${props.wants === 1 ? "" : "s"} ${a?.waiting ? "need you or finished" : "finished while you were away"} (the 🔔 lists them)`}>
+            {props.wants}
+          </span>
+        )}
         {props.run && props.run.running > 0 && (
           <span
             className={`run-ind${props.run.running >= props.run.total ? " full" : ""}`}
@@ -521,6 +530,16 @@ function FeatureView(props: {
   };
 
   useCommand(async (c) => {
+    if (c.startsWith("openChat:")) {
+      const chat = props.chats.find((x) => x.id === c.slice("openChat:".length));
+      if (!chat) return;
+      if (chat.repo && f.repos.some((r) => r.name === chat.repo)) openRepo(chat.repo, "chat");
+      else {
+        setScope("feature");
+        setTab("chat");
+      }
+      setTimeout(() => dispatch(`selectChat:${chat.id}`), 50);
+    }
     if (c === "showChat" || c === "focusComposer") {
       if (scopeRepo) setRepoTab("chat");
       else setTab("chat");
@@ -690,10 +709,7 @@ function FeatureView(props: {
 
       {!f.archived && allMerged(overview.ov) && <MergedOffer f={f} prs={overview.ov!.repos.map((r) => r.pr!.number)} onArchive={props.onArchive} />}
 
-      <NeedsYou f={f} chats={props.chats} reported={reported} onOpenChat={(id) => {
-        setTab("chat");
-        setTimeout(() => dispatch(`selectChat:${id}`));
-      }} />
+      <NeedsYou f={f} chats={props.chats} reported={reported} onOpenChat={(id) => dispatch(`openChat:${id}`)} />
 
       <div className="scope-tabs">
         <button
@@ -702,6 +718,7 @@ function FeatureView(props: {
           title="What the repos share: the central chat, the plan, every program, the PRs, all activity"
         >
           Feature
+          <AttentionDot chats={props.chats.filter((c) => !c.repo || !f.repos.some((r) => r.name === c.repo))} />
         </button>
         {f.repos.map((r) => {
           const n = diff.byRepo[r.name]?.files.length ?? 0;
@@ -710,6 +727,7 @@ function FeatureView(props: {
             <button key={r.name} className={scopeRepo?.name === r.name ? "active" : ""} onClick={() => setScope(r.name)} title={r.path}>
               {rov && <HealthDot r={rov} />}
               {repoLabel(r.name)}
+              <AttentionDot chats={props.chats.filter((c) => c.repo === r.name)} />
               {rov?.pr &&
                 (() => {
                   const pr = rov.pr;
@@ -1055,6 +1073,61 @@ function NeedsYou(props: { f: Feature; chats: Chat[]; reported: Record<string, L
         );
       })}
     </div>
+  );
+}
+
+/** A tab's chats that want the user: a count, red when one is waiting for an answer. */
+function AttentionDot({ chats }: { chats: Chat[] }) {
+  useActivityVersion();
+  const states = chats.map((c) => attentionOf(c.id)).filter(Boolean);
+  if (!states.length) return null;
+  const needs = states.includes("needs");
+  return (
+    <span
+      className={`wants-dot${needs ? " needs" : ""}`}
+      title={needs ? "A chat here needs you" : `${states.length === 1 ? "A chat here" : `${states.length} chats here`} finished while you were away`}
+    />
+  );
+}
+
+/** 🔔 n in the sidebar: which chats want the user, in which feature and repo; a click opens the chat. */
+function AttentionBell({ chats, features, onOpen }: { chats: Chat[]; features: Feature[]; onOpen: (c: Chat) => void }) {
+  const [open, setOpen] = useState(false);
+  if (!chats.length) return null;
+  const needs = chats.filter((c) => attentionOf(c.id) === "needs");
+  const done = chats.filter((c) => attentionOf(c.id) === "done");
+  const row = (c: Chat, what: string) => {
+    const f = features.find((x) => x.id === c.featureId);
+    return (
+      <button
+        key={c.id}
+        className="bell-row"
+        onClick={() => {
+          setOpen(false);
+          onOpen(c);
+        }}
+      >
+        <b>{f ? stationLabel(f.name) : "?"}</b>
+        <span>{c.repo ? `${repoLabel(c.repo)}'s chat` : c.title === "New chat" ? "feature chat" : c.title}</span>
+        <span className="muted small">{what}</span>
+      </button>
+    );
+  };
+  return (
+    <span className="info-wrap">
+      <button className={`brand-icon bell${needs.length ? " needs" : ""}`} onClick={() => setOpen(!open)} title={`${chats.length} chat${chats.length === 1 ? "" : "s"} want you: which ones`}>
+        🔔<span className="bell-count">{chats.length}</span>
+      </button>
+      {open && (
+        <>
+          <div className="popover-backdrop" onClick={() => setOpen(false)} />
+          <div className="popover bell-popover">
+            {needs.map((c) => row(c, "needs your answer"))}
+            {done.map((c) => row(c, "finished while you were away"))}
+          </div>
+        </>
+      )}
+    </span>
   );
 }
 

@@ -93,3 +93,12 @@ export function useActivityVersion(): number {
     () => version,
   );
 }
+
+/** What a chat wants from the user: "needs" (waiting for an answer), "done" (finished unseen), or nothing. */
+export function attentionOf(chatId: string): "needs" | "done" | undefined {
+  const c = chats.get(chatId);
+  if (!c) return undefined;
+  if (c.waiting.size > 0) return "needs";
+  if (c.unread) return "done";
+  return undefined;
+}
