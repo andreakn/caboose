@@ -934,6 +934,24 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      tagged, not running yet"). Once the PR is merged the changed-files
      count leaves the tab: it says nothing new then, and the mark takes
      its place.
+175. **Each repo says how its releases are made** (`releaseStrategy`, in
+     Configure → the repo's releases, or the repo's own
+     `.caboose/config.json`; this machine's setting wins):
+     - **"tag"**: someone cuts the next version. Caboose does it like the
+       user's tagdeploy script: fetch, the highest `<prefix>_v<major>.<minor>`
+       of a prefix (numerically; a patch part dropped, zero padding kept,
+       `ignoreTags` never counted nor produced), the minor + 1, tagged on
+       the tip of origin's base branch (so the checkout need not be on it),
+       and only that tag pushed. A merged repo with no release yet offers
+       "Tag release…" as its main action (and the ⋯ menu always): one row
+       per tag prefix with latest and next, the prefixes of the feature's
+       components ticked; it warns when the PR is not merged yet. The log
+       records the tag. The deploy-time timer of tagdeploy is left out:
+       Caboose follows releases itself.
+     - **"merge"**: every merge to the base is a release and goes to test
+       (the bff and storefront way), so a merged PR counts as reached for
+       the stages up to the first test-like one ("merged #12"); later
+       stages still need their tags (or a running.sh).
 
 ## Answered (2026-11-05)
 

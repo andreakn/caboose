@@ -4,6 +4,7 @@ import {
   type ConfigInput,
   type DoctorCheck,
   JIRA_LEVELS,
+  RELEASE_STRATEGIES,
   type JiraLevel,
   type AgentLogins,
   type ConductorImport,
@@ -651,7 +652,7 @@ function RepoItem(props: { repo: RepoEntry; defaults: string[]; stages?: Release
           {scriptsOpen ? "▾" : "▸"} scripts: {[repo.scripts?.setup && "setup", runCount && `${runCount} run`, repo.scripts?.archive && "archive"].filter(Boolean).join(", ") || "none"}
         </button>
         <button className="link" onClick={() => setReleasesOpen(!releasesOpen)} title="Which git tags mark a release of this repo">
-          {releasesOpen ? "▾" : "▸"} releases: {own === undefined ? (props.stages?.length ? "as all repos" : "off") : own.length ? own.map((s) => s.name).join(", ") : "off"}
+          {releasesOpen ? "▾" : "▸"} releases: {repo.releaseStrategy === "tag" ? "tagged · " : repo.releaseStrategy === "merge" ? "on merge · " : ""}{own === undefined ? (props.stages?.length ? "as all repos" : "off") : own.length ? own.map((s) => s.name).join(", ") : "off"}
         </button>
         <span className="spacer" />
         <button className="link" onClick={props.onRemove}>
@@ -692,6 +693,35 @@ function RepoItem(props: { repo: RepoEntry; defaults: string[]; stages?: Release
       )}
       {releasesOpen && (
         <div className="repo-releases">
+          <label className="release-strategy">
+            <span className="muted">How a release is made</span>
+            <select
+              value={repo.releaseStrategy ?? ""}
+              onChange={(e) => props.onChange({ ...repo, releaseStrategy: (e.target.value || undefined) as RepoEntry["releaseStrategy"] })}
+              title={RELEASE_STRATEGIES.find((s) => s.value === repo.releaseStrategy)?.hint ?? "Not said here (the repo's own .caboose/config.json may say)"}
+            >
+              <option value="">not said (or as the repo's .caboose/config.json says)</option>
+              {RELEASE_STRATEGIES.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          {repo.releaseStrategy === "tag" && (
+            <label className="release-strategy">
+              <span className="muted">Tags to ignore</span>
+              <input
+                defaultValue={(repo.ignoreTags ?? []).join(" ")}
+                placeholder="e.g. orders_v11.001 (a mistyped version that outranks the real ones)"
+                onBlur={(e) => {
+                  const tags = e.target.value.split(/[\s,]+/).filter(Boolean);
+                  props.onChange({ ...repo, ignoreTags: tags.length ? tags : undefined });
+                }}
+              />
+            </label>
+          )}
+          <div className="muted small">Which tags mark a release, a test deploy, a prod deploy:</div>
           <div className="segmented small">
             <button className={own === undefined ? "active" : ""} onClick={() => props.onChange({ ...repo, releaseStages: undefined })}>
               As all repos

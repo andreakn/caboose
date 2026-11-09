@@ -35,6 +35,10 @@ export type RepoEntry = {
   line?: string;
   /** Release tag stages for this repo, instead of the config's `releaseStages`; [] = do not track. */
   releaseStages?: ReleaseStage[];
+  /** How a release of it is made, overriding the repo's own .caboose/config.json. */
+  releaseStrategy?: ReleaseStrategy;
+  /** Release tags never counted nor produced as "next" (a mistyped version that would outrank the real ones). */
+  ignoreTags?: string[];
   path: string;
   scripts?: RepoScripts;
   /**
@@ -268,7 +272,23 @@ export type RepoConfig = {
   archive?: string;
   /** More local-file patterns (like RepoEntry.localFiles), kept in the repo itself. */
   copy?: string[];
+  /** How a release of it is made (see ReleaseStrategy). */
+  releaseStrategy?: ReleaseStrategy;
+  /** Release tags never counted nor produced as "next". */
+  ignoreTags?: string[];
 };
+
+/**
+ * How a repo's releases are made. "tag": someone tags the next version
+ * (<prefix>_v<major>.<minor> + 1) on the base branch; Caboose can do it.
+ * "merge": every merge to the base branch is a release and goes to the test
+ * environment (no tagging), so a merged change counts as released and in test.
+ */
+export type ReleaseStrategy = "tag" | "merge";
+export const RELEASE_STRATEGIES: { value: ReleaseStrategy; label: string; hint: string }[] = [
+  { value: "tag", label: "Tag the next version", hint: "A tag like orders_v1.338 on the base branch makes a release; Caboose can cut it after a merge." },
+  { value: "merge", label: "Every merge is a release", hint: "Merging to the base branch releases it to the test environment; nothing to tag." },
+];
 
 /** How strongly features must be tied to Jira. */
 export type JiraLevel = "off" | "optional" | "expected" | "required";
@@ -407,6 +427,8 @@ export type RepoOverview = {
   running?: Running;
   /** The components (monikers) that matter to this feature; absent = all of them. */
   components?: string[];
+  /** How its releases are made (absent: not said). */
+  strategy?: ReleaseStrategy;
 };
 
 /** A feature at a glance: what the board and the feature page show. */
@@ -536,6 +558,10 @@ export type CabooseApi = {
   setFeatureDetails(featureId: string, details: FeatureDetails): Promise<Result<void>>;
   /** The configured repos this feature can add (its line's and those on no line), by name. */
   addableRepos(featureId: string): Promise<string[]>;
+  /** For a repo whose releases are tags: origin's base and each prefix's next tag. */
+  releasePlan(featureId: string, repo: string): Promise<Result<{ base: string; commit: string; subject: string; prefixes: { prefix: string; latest: string; next: string }[] }>>;
+  /** Tags origin's base as the prefix's next version and pushes the tag. */
+  tagRelease(featureId: string, repo: string, prefix: string): Promise<Result<{ tag: string; previous: string; commit: string }>>;
   /** Asks Copilot to review the open PRs of one repo or of all (skipping PRs where a Copilot review is already pending). */
   requestCopilotReview(featureId: string, repo?: string): Promise<Result<CopilotRequestOutcome>>;
   /** Archived features (from the archive folders), newest first. */

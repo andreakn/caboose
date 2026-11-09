@@ -17,6 +17,7 @@ import { HealthDot, JiraStatusChip, PrChip, PrDetailsPanel } from "./Overview.ts
 import { StatusChip } from "./Plan.tsx";
 import { repoLabel } from "./labels.ts";
 import { RunningChips } from "./Running.tsx";
+import { TagReleaseDialog } from "./TagRelease.tsx";
 
 const api = window.caboose;
 
@@ -89,6 +90,7 @@ export function RepoRow(props: {
   const { status, error, refresh } = useGitHub(feature, repo.name, props.chats);
   const [busy, setBusy] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  const [tagging, setTagging] = useState(false);
   const apps = useApps();
 
   async function act(label: string, fn: () => Promise<{ ok: boolean; error?: string } | void>) {
@@ -191,9 +193,11 @@ export function RepoRow(props: {
                   ready: cleared,
                   title: cleared ? `Cleared for merging: checks and reviews are done (${method})` : (mergeState && notYet[mergeState]) || undefined,
                 }
-              : b && b.behindBase > 0 && pr?.state !== "MERGED"
-                ? { label: `Merge ${base}`, run: () => void mergeLocally("base") }
-                : null;
+              : pr?.state === "MERGED" && ov?.strategy === "tag" && !ov.release?.[0]?.tags.length
+                ? { label: "Tag release…", run: () => setTagging(true), title: "Merged, but no release has it yet: tag the next version on the base branch" }
+                : b && b.behindBase > 0 && pr?.state !== "MERGED"
+                  ? { label: `Merge ${base}`, run: () => void mergeLocally("base") }
+                  : null;
 
   const items: MenuItem[] = feature.archived
     ? []
@@ -209,6 +213,7 @@ export function RepoRow(props: {
           ? (["squash", "merge", "rebase"] as MergeMethod[]).map((m) => ({ label: `Merge (${m === "merge" ? "merge commit" : m})`, onClick: () => merge(m) }))
           : []),
         ...(pr ? [{ label: `Open PR #${pr.number} on GitHub`, onClick: () => void api.openUrl(pr.url) }] : []),
+        ...(ov?.strategy === "tag" ? [{ label: "Tag a release…", onClick: () => setTagging(true) }] : []),
         "separator" as const,
         // In a repo's own tab the open-in button sits in the tab row instead.
         ...(props.inline
@@ -306,10 +311,24 @@ export function RepoRow(props: {
     </div>
   );
 
+  const tagDialog = tagging && (
+    <TagReleaseDialog
+      f={feature}
+      repo={repo.name}
+      ov={ov}
+      onClose={() => setTagging(false)}
+      onDone={() => {
+        refresh();
+        props.onChanged();
+      }}
+    />
+  );
+
   // In the repo's own tab row: no card and no name (the tab says it), details behind ⓘ.
   if (props.inline) {
     return (
       <span className="repo-inline">
+        {tagDialog}
         {chips}
         <span className="muted repo-local one-line">{busy ?? (error ? "status failed" : local.join(" · "))}</span>
         {actions}
@@ -330,6 +349,7 @@ export function RepoRow(props: {
 
   return (
     <div className={`repo-row${open ? " open" : ""}`}>
+      {tagDialog}
       <div className="repo-line" onClick={() => setOpen(!open)}>
         <span className="twisty">{open ? "▾" : "▸"}</span>
         {ov ? <HealthDot r={ov} /> : <span className={`dot setup-${repo.setup}`} title={`Setup: ${repo.setup}`} />}

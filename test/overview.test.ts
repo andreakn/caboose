@@ -69,3 +69,34 @@ test("PRs are looked up by the branch the worktree is on now, and the switch is 
   assert.equal(ov.repos[0].pr?.number, 546);
   assert.deepEqual(switched, ["g/shop:ABC-8241_FixStartupMapping"]);
 });
+
+test("where every merge is a release, a merged PR counts as released and in test; prod still needs its tag", async () => {
+  const src = join(tmp, "src-bff");
+  execFileSync("git", ["init", "-q", src]);
+  execFileSync("git", ["remote", "add", "origin", "git@github.com:o/bff.git"], { cwd: src });
+  const f: Feature = {
+    id: "m", name: "moss", folder: join(tmp, "moss"), createdAt: "", archived: false, port: 41000,
+    repos: [{ name: "bff", source: src, path: src, branch: "caboose/moss", baseRef: "main", setup: "none" }],
+  };
+  const deps = (state: string) => ({
+    github: { branchStatus: async () => ({ uncommitted: 0, ahead: 0, behind: 0, behindBase: 0 }) } as never,
+    prs: { get: async () => ({ prs: { bff: { number: 12, state } } }) } as never,
+    jira: () => null,
+    jiraOf: () => ({ subtasks: {} }),
+    stagesFor: () => [
+      { name: "release", pattern: "*_v*" },
+      { name: "test", pattern: "*_TEST_v*" },
+      { name: "prod", pattern: "*_PROD_v*" },
+    ],
+    strategyFor: () => "merge" as const,
+  });
+  const merged = await featureOverview(f, deps("MERGED"));
+  assert.equal(merged.repos[0].strategy, "merge");
+  assert.deepEqual(merged.repos[0].release, [
+    { stage: "release", tags: ["merged #12"] },
+    { stage: "test", tags: ["merged #12"] },
+    { stage: "prod", tags: [] },
+  ]);
+  const open = await featureOverview(f, deps("OPEN"));
+  assert.equal(open.repos[0].release, undefined, "not merged: nothing released");
+});

@@ -44,6 +44,7 @@ import { checkRepo, Features, scanRepos } from "./core/features.ts";
 import { GitHub } from "./core/github.ts";
 import { Jira } from "./core/jira.ts";
 import { RunningCache } from "./core/running.ts";
+import { strategyOf, tagNextRelease, tagPlan } from "./core/tagging.ts";
 import { archivedChatEvents, archivedDocs, listArchived } from "./core/archived.ts";
 import { DEFAULT_LOCAL_FILES, scanLocalFiles } from "./core/localfiles.ts";
 import { cabooseCopilotTools, cabooseInstructions, cabooseMcp } from "./core/mcp.ts";
@@ -326,6 +327,33 @@ ipcMain.handle("jira:feature", (_e, featureId: string) => features.jiraOf(featur
 ipcMain.handle("jira:setTask", (_e, featureId: string, key: string | null) => features.setTask(featureId, key));
 ipcMain.handle("feature:details", (_e, featureId: string, details: FeatureDetails) => features.setDetails(featureId, details));
 ipcMain.handle("feature:components", (_e, featureId: string, repo: string, components: string[] | null) => features.setComponents(featureId, repo, components));
+// --- cutting the next release tag (repos whose strategy is "tag")
+/** A repo's release strategy and ignored tags: this machine's config first, then the repo's own. */
+const repoOwn = (source: string) => {
+  try {
+    return loadRepoConfig(source);
+  } catch {
+    return {};
+  }
+};
+const releaseStrategy = (repo: string, source: string) => strategyOf(localConfig.repos.find((r) => r.name === repo), repoOwn(source));
+const ignoredTags = (repo: string, source: string) => [...(localConfig.repos.find((r) => r.name === repo)?.ignoreTags ?? []), ...(repoOwn(source).ignoreTags ?? [])];
+ipcMain.handle("release:plan", (_e, featureId: string, repo: string) =>
+  attempt(() => {
+    const r = liveRepo(featureId, repo).r;
+    return tagPlan(r.source, r.baseRef, ignoredTags(r.name, r.source));
+  }),
+);
+ipcMain.handle("release:tag", (_e, featureId: string, repo: string, prefix: string) =>
+  attempt(async () => {
+    const r = liveRepo(featureId, repo).r;
+    if (releaseStrategy(r.name, r.source) !== "tag") throw new Error(`${repo}'s releases are not made by tagging (see its release strategy in Configure).`);
+    const out = await tagNextRelease(r.source, r.baseRef, prefix, ignoredTags(r.name, r.source));
+    appendLog(featureOrThrow(featureId).folder, { from: "user", text: `Tagged ${out.tag} on ${r.baseRef} (${out.commit.slice(0, 8)}) in ${r.name}, after ${out.previous}.` });
+    prDetails.forget();
+    return out;
+  }),
+);
 ipcMain.handle("github:copilotReview", (_e, featureId: string, repo?: string) =>
   attempt(async (): Promise<CopilotRequestOutcome> => {
     const f = featureOrThrow(featureId);
@@ -559,6 +587,7 @@ const overviewOf = (featureId: string, fresh = false) =>
       jiraOf: (id) => features.jiraOf(id),
       onBranch: (id, repo, branch) => features.setBranch(id, repo, branch),
       stagesFor,
+      strategyFor: (r) => releaseStrategy(r.name, r.source),
       running: (source, fresh) => runningCache.get(source, fresh),
     },
     fresh,

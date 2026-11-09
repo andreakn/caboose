@@ -528,6 +528,7 @@ textarea.wide:focus { outline: none; border-color: var(--accent); }
 .dialog p { margin: 0; }
 .dialog input, .dialog textarea { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 7px 9px; width: 100%; resize: vertical; }
 .dialog input:focus, .dialog textarea:focus { outline: none; border-color: var(--accent); }
+.dialog input[type="checkbox"], .dialog input[type="radio"] { width: auto; padding: 0; }
 .plan-view { overflow-x: hidden; }
 .log-list, .log-entry { min-width: 0; }
 .log-entry { overflow: hidden; }
@@ -1082,3 +1083,11 @@ button.copilot-review { white-space: nowrap; }
 /* Files git ignores (.env, bin/, node_modules/): there, but faded. */
 .tree-file.ignored .tree-name, .tree-dir.ignored .tree-name { opacity: 0.5; font-style: italic; }
 .tab-deploy { margin-left: 4px; font-size: 12px; }
+
+/* Tagging the next release. */
+.tag-dialog { width: min(560px, 90vw); }
+.tag-prefixes { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+.tag-prefixes label { display: flex; gap: 8px; align-items: baseline; }
+.tag-prefixes label.mine code { font-weight: 700; }
+.release-strategy { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+.release-strategy input { flex: 1; }

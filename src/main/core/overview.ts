@@ -1,7 +1,8 @@
 // A feature at a glance: per repo what its agent reported, its local git
 // state, its PR (one GraphQL call per feature) and its Jira subtask (one search
 // per feature). GitHub and Jira answers are cached 60 s.
-import type { Feature, FeatureJira, FeatureOverview, JiraStatus, ReleaseStage, Running } from "../../shared/types.ts";
+import type { Feature, FeatureJira, FeatureOverview, FeatureRepo, JiraStatus, ReleaseStage, ReleaseStrategy, Running, StageRelease } from "../../shared/types.ts";
+import { stageEmoji } from "../../shared/stages.ts";
 import { readDocs } from "./docs.ts";
 import { releasesOf } from "./releases.ts";
 import { resolveRunning } from "./running.ts";
@@ -19,6 +20,8 @@ export type OverviewDeps = {
   onBranch?: (featureId: string, repo: string, branch: string) => void;
   /** A repo's release tag stages (none: releases are not tracked). */
   stagesFor?: (repo: string) => ReleaseStage[];
+  /** How a repo's releases are made (its config, else the repo's own). */
+  strategyFor?: (r: FeatureRepo) => ReleaseStrategy | undefined;
   /** What a repo's .caboose/running.sh reports (null: it has none). Cached by the caller. */
   running?: (source: string, fresh: boolean) => Promise<Running | null>;
 };
@@ -83,6 +86,29 @@ export async function featureOverview(f: Feature, d: OverviewDeps, fresh = false
     }),
   );
 
+  // Repos where every merge is a release: merged means released and in test (the stages up to the first test-like one).
+  const strategies = f.repos.map((r) => d.strategyFor?.(r));
+  const merged = (i: number) => {
+    const pr = prs.prs[f.repos[i].name];
+    return pr?.state === "MERGED" ? pr : undefined;
+  };
+  const stageNames = (i: number) => {
+    const names = (d.stagesFor?.(f.repos[i].name) ?? []).map((s) => s.name);
+    return names.length ? names : strategies[i] === "merge" ? ["test"] : [];
+  };
+  const releaseOf = (i: number): StageRelease[] | undefined => {
+    const tagged = releases[i];
+    const pr = merged(i);
+    if (strategies[i] !== "merge" || !pr) return tagged;
+    const names = stageNames(i);
+    const upTo = names.findIndex((n) => stageEmoji(n) === "🧪");
+    const byMerge = new Set(names.slice(0, upTo >= 0 ? upTo + 1 : 1));
+    return names.map((stage) => {
+      const tags = tagged?.find((x) => x.stage === stage)?.tags ?? [];
+      return { stage, tags: tags.length || !byMerge.has(stage) ? tags : [`merged #${pr.number}`] };
+    });
+  };
+
   return {
     id: f.id,
     progress: docs.progress,
@@ -97,8 +123,9 @@ export async function featureOverview(f: Feature, d: OverviewDeps, fresh = false
         local: b ? { uncommitted: b.uncommitted, ahead: b.ahead, aheadBase: b.aheadBase ?? 0, behindBase: b.behindBase, pushed: Boolean(b.upstream) } : undefined,
         pr: slugs[i] ? (r.name in prs.prs ? prs.prs[r.name] : undefined) : undefined,
         jira: jiraFor(links.subtasks[r.name]),
-        ...(releases[i] ? { release: releases[i] } : {}),
-        ...((d.stagesFor?.(r.name) ?? []).length ? { stages: d.stagesFor!(r.name).map((s) => s.name) } : {}),
+        ...(releaseOf(i) ? { release: releaseOf(i) } : {}),
+        ...(stageNames(i).length ? { stages: stageNames(i) } : {}),
+        ...(strategies[i] ? { strategy: strategies[i] } : {}),
         ...(running[i] ? { running: running[i] } : {}),
         ...(f.components?.[r.name]?.length ? { components: f.components[r.name] } : {}),
       };
