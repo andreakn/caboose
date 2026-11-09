@@ -28,7 +28,7 @@ test("branch status counts uncommitted files and unpushed commits, before and af
   sh(ws, "commit", "-q", "-m", "a");
   writeFileSync(join(ws, "b.txt"), "b");
   let s = await gh.branchStatus(ws, "origin/main");
-  assert.deepEqual(s, { head: "caboose/finse", uncommitted: 1, upstream: undefined, ahead: 1, behind: 0, behindBase: 0 });
+  assert.deepEqual(s, { head: "caboose/finse", uncommitted: 1, upstream: undefined, ahead: 1, behind: 0, behindBase: 0, aheadBase: 1 });
 
   await gh.push(ws, "caboose/finse");
   s = await gh.branchStatus(ws, "origin/main");
@@ -86,4 +86,21 @@ test("the create-PR message names the branch and the base", () => {
   assert.match(m, /Jira issue ABC-9/);
   assert.doesNotMatch(m, /start the title/);
   assert.doesNotMatch(createPrMessage("web", "b", "origin/main", false), /Jira/);
+});
+
+test("one message asks the feature's chat for a PR in each repo with work", async () => {
+  const { createPrsMessage } = await import("../src/shared/github.ts");
+  const m = createPrsMessage(
+    [
+      { repo: "shop-api", branch: "caboose/ABC-2-oslo", baseRef: "origin/main", jiraKey: "ABC-2" },
+      { repo: "web", branch: "caboose/oslo", baseRef: "origin/develop" },
+    ],
+    true,
+    "Imperative titles.",
+  );
+  assert.match(m, /^Open a draft pull request for each of these repos/);
+  assert.match(m, /- shop-api: branch caboose\/ABC-2-oslo, base main, Jira ABC-2\n- web: branch caboose\/oslo, base develop\n/);
+  assert.match(m, /gh pr create --base <base> --draft/);
+  assert.match(m, /in which order they should be merged/);
+  assert.match(m, /How I want PRs written:\nImperative titles\./);
 });

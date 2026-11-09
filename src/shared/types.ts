@@ -396,7 +396,7 @@ export type RepoOverview = {
   name: string;
   branch: string;
   reported?: LogEntry;
-  local?: { uncommitted: number; ahead: number; behindBase: number; pushed: boolean };
+  local?: { uncommitted: number; ahead: number; aheadBase: number; behindBase: number; pushed: boolean };
   pr?: PrDetails | null;
   jira?: JiraStatus | { key: string };
   /** Once merged: the lowest tags per release stage that contain the merge commit. */

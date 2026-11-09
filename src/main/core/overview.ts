@@ -94,7 +94,7 @@ export async function featureOverview(f: Feature, d: OverviewDeps, fresh = false
         name: r.name,
         branch: branches[i],
         reported: reported[r.name],
-        local: b ? { uncommitted: b.uncommitted, ahead: b.ahead, behindBase: b.behindBase, pushed: Boolean(b.upstream) } : undefined,
+        local: b ? { uncommitted: b.uncommitted, ahead: b.ahead, aheadBase: b.aheadBase ?? 0, behindBase: b.behindBase, pushed: Boolean(b.upstream) } : undefined,
         pr: slugs[i] ? (r.name in prs.prs ? prs.prs[r.name] : undefined) : undefined,
         jira: jiraFor(links.subtasks[r.name]),
         ...(releases[i] ? { release: releases[i] } : {}),

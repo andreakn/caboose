@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 import type { Chat } from "../../shared/chat.ts";
 import type { PrDetails } from "../../shared/github.ts";
 import { copilotPending, type Feature, type FeatureOverview, type JiraStatus, type RepoOverview } from "../../shared/types.ts";
@@ -122,7 +122,7 @@ export function JiraStatusChip({ j, site }: { j: JiraStatus | { key: string }; s
 // ---- Pull requests tab -----------------------------------------------------
 
 /** The feature's PRs in numbers: open, merged, failing builds, comments, approvals… (the Repos tab's header). */
-export function PrTiles({ ov, loading, refresh, featureId }: { ov: FeatureOverview | null; loading: boolean; refresh: () => void; featureId?: string }) {
+export function PrTiles({ ov, loading, refresh, featureId, extra }: { ov: FeatureOverview | null; loading: boolean; refresh: () => void; featureId?: string; extra?: ReactNode }) {
   const [asking, setAsking] = useState<string | null>(null);
   if (!ov) return <div className="muted small">Loading…</div>;
   const prs = ov.repos.filter((r) => r.pr).map((r) => r.pr!);
@@ -149,6 +149,7 @@ export function PrTiles({ ov, loading, refresh, featureId }: { ov: FeatureOvervi
         ))}
         <span className="spacer" />
         {asking && <span className="muted small">{asking}</span>}
+        {extra}
         {featureId && live.some((p) => !copilotPending(p)) && (
           <button
             className="copilot-review"

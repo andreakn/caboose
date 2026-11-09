@@ -26,6 +26,8 @@ export type BranchStatus = {
   ahead: number;
   /** Commits on the upstream not pulled. */
   behind: number;
+  /** Commits on this branch that its base does not have (what a PR would bring). */
+  aheadBase?: number;
   /** Commits on the base ref the branch does not have. */
   behindBase: number;
 };
@@ -89,6 +91,28 @@ export function createPrMessage(
       : "",
     instructions?.trim() ? `How I want PRs written:\n${instructions.trim()}` : "",
     "Reply with the PR's URL.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+/** One message for the feature's chat: a PR for each of these repos, the same way as for one. */
+export function createPrsMessage(
+  repos: { repo: string; branch: string; baseRef: string; jiraKey?: string }[],
+  draft: boolean,
+  instructions?: string,
+): string {
+  return [
+    `Open a ${draft ? "draft " : ""}pull request for each of these repos of the feature (each worktree is the repo's folder; run git and gh there):`,
+    ...repos.map((r) => `- ${r.repo}: branch ${r.branch}, base ${baseBranch(r.baseRef)}${r.jiraKey ? `, Jira ${r.jiraKey}` : ""}`),
+    "For each:",
+    "1. Commit the uncommitted changes that belong in the PR, in small logical commits with clear messages (leave out scratch files).",
+    "2. Push with `git push -u origin <branch>`.",
+    `3. Create it with \`gh pr create --base <base>${draft ? " --draft" : ""}\`, with a clear title and a description of what changed and why. Follow that repo's conventions (CLAUDE.md, PR templates, commit style).`,
+    "Where a Jira key is given, the PR belongs to that issue (the branch name carries the key, which is what links it); mention it in the description.",
+    "Where the PRs depend on each other, say so in their descriptions (and in which order they should be merged).",
+    instructions?.trim() ? `How I want PRs written:\n${instructions.trim()}` : "",
+    "Reply with each PR's URL.",
   ]
     .filter(Boolean)
     .join("\n");

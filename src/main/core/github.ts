@@ -43,6 +43,7 @@ export class GitHub {
       ahead: ab ? Number(ab[1]) : await count(`${baseRef}..HEAD`),
       behind: ab ? Number(ab[2]) : 0,
       behindBase: await count(`HEAD..${baseRef}`),
+      aheadBase: await count(`${baseRef}..HEAD`),
     };
   }
 

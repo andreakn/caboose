@@ -30,7 +30,7 @@ test("the overview joins reports, git, PRs and Jira per repo", async () => {
   };
   const asked: unknown[] = [];
   const ov = await featureOverview(f, {
-    github: { branchStatus: async (p: string) => ({ uncommitted: p === src ? 1 : 0, ahead: 2, behind: 0, behindBase: 3, upstream: "origin/x" }) } as never,
+    github: { branchStatus: async (p: string) => ({ uncommitted: p === src ? 1 : 0, ahead: 2, behind: 0, behindBase: 3, aheadBase: 4, upstream: "origin/x" }) } as never,
     prs: { get: async (qs: unknown) => (asked.push(qs), { prs: { web: { number: 7 } } }) } as never,
     jira: () => ({ statuses: async (keys: string[]) => ({ "ABC-1": { key: "ABC-1", status: "In Progress", category: "indeterminate" }, ...(keys.includes("ABC-2") ? { "ABC-2": { key: "ABC-2", status: "Done", category: "done" } } : {}) }) }) as never,
     jiraOf: () => ({ task: "ABC-1", subtasks: { web: "ABC-2", api: "ABC-3" } }),
@@ -40,7 +40,7 @@ test("the overview joins reports, git, PRs and Jira per repo", async () => {
   assert.equal((ov.task as { status: string }).status, "In Progress");
   const [web, api] = ov.repos;
   assert.equal(web.reported?.status, "in-review");
-  assert.deepEqual(web.local, { uncommitted: 1, ahead: 2, behindBase: 3, pushed: true });
+  assert.deepEqual(web.local, { uncommitted: 1, ahead: 2, aheadBase: 4, behindBase: 3, pushed: true });
   assert.equal(web.pr?.number, 7);
   assert.equal(api.pr, undefined, "not on GitHub: unknown, not 'no PR'");
   assert.equal((web.jira as { status: string }).status, "Done");

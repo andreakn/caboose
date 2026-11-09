@@ -25,7 +25,7 @@ import { dispatch, useCommand } from "./commands.ts";
 import { Configure } from "./Configure.tsx";
 import { JiraChip, RepoRow } from "./GitHub.tsx";
 import { ActivityView } from "./Activity.tsx";
-import { OpenAppButton } from "./Menu.tsx";
+import { MenuButton, OpenAppButton } from "./Menu.tsx";
 import { allMerged, Board, HealthDot, JiraStatusChip, PrTiles, useOverview } from "./Overview.tsx";
 import { DialogHost } from "./Dialog.tsx";
 import { NewFeature } from "./NewFeature.tsx";
@@ -34,6 +34,7 @@ import { notificationsOn } from "./prefs.ts";
 import { FilesView } from "./Files.tsx";
 import { liveState, MapView } from "./Map.tsx";
 import { ArchivedView } from "./Archived.tsx";
+import { createPrsMessage } from "../../shared/github.ts";
 import { TodoView } from "./Todos.tsx";
 import { repoLabel, setRepoLabels } from "./labels.ts";
 import { notifySound } from "./sounds.ts";
@@ -543,6 +544,33 @@ function FeatureView(props: {
 
   const lines = linesOf(config.config.repos ?? []);
   const missing = reposFor(config.config.repos ?? [], f.line).filter((r) => !f.repos.some((x) => x.name === r.name));
+  // Repos on GitHub with work and no PR yet (none, or only a closed one): what "Create PRs" covers.
+  const prReady = f.repos.filter((r) => {
+    const o = overview.ov?.repos.find((x) => x.name === r.name);
+    const changes = Boolean(o?.local && (o.local.uncommitted > 0 || o.local.aheadBase > 0));
+    // pr: null = on GitHub without a PR; undefined = not on GitHub (or not known yet).
+    return changes && (o?.pr === null || o?.pr?.state === "CLOSED");
+  });
+  /** One message to the feature's chat, which works across every repo. */
+  const createPrs = async (draft: boolean) => {
+    const keyOf = (repo: string) => jira.subtasks[repo] ?? jira.task;
+    const noKey = prReady.filter((r) => !keyOf(r.name));
+    if (level === "expected" && noKey.length && !confirm(`${noKey.map((r) => r.name).join(", ")} ha${noKey.length === 1 ? "s" : "ve"} no Jira issue. Create the PRs anyway?`)) return;
+    let chat = props.chats.filter((c) => !c.repo).at(-1);
+    if (!chat) {
+      const made = await api.createChat(f.id);
+      if (!made.ok) return alert(made.error);
+      chat = made.value;
+    }
+    const message = createPrsMessage(
+      prReady.map((r) => ({ repo: r.name, branch: r.branch, baseRef: r.baseRef, ...(keyOf(r.name) ? { jiraKey: keyOf(r.name) } : {}) })),
+      draft,
+      own.prInstructions,
+    );
+    const r = await api.send(chat.id, message);
+    if (!r.ok) return alert(r.error);
+    openChat(chat.id);
+  };
   const repoRow = (r: FeatureRepo, inline = false) => (
     <RepoRow
       key={r.name}
@@ -831,7 +859,23 @@ function FeatureView(props: {
               {tab === "run" && <RunView f={f} ov={runs.ov} reload={runs.reload} onShow={showTerminal} />}
               {tab === "prs" && (
                 <div className="plan-view">
-                  <PrTiles ov={overview.ov} loading={overview.loading} refresh={() => void overview.refresh()} featureId={f.archived ? undefined : f.id} />
+                  <PrTiles
+                    ov={overview.ov}
+                    loading={overview.loading}
+                    refresh={() => void overview.refresh()}
+                    featureId={f.archived ? undefined : f.id}
+                    extra={!f.archived && prReady.length > 0 && (
+                      <MenuButton
+                        className="create-prs"
+                        label={`Create PRs (${prReady.length}) ▾`}
+                        title={`Ask the feature's chat to commit, push and open a PR for: ${prReady.map((r) => repoLabel(r.name)).join(", ")}`}
+                        items={[
+                          { label: `Create PRs for ${prReady.map((r) => repoLabel(r.name)).join(", ")}`, onClick: () => void createPrs(false) },
+                          { label: "Create them as drafts", onClick: () => void createPrs(true) },
+                        ]}
+                      />
+                    )}
+                  />
                 <div className="repos">
                   {f.repos.map((r) => repoRow(r))}
                   {!f.archived && missing.length > 0 && (

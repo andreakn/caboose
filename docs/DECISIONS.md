@@ -917,6 +917,16 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      (node_modules, bin) as one entry that is read a level at a time when
      opened, so huge folders cost nothing until looked into. Quick-find covers
      ignored files and opened folders, not the insides of unopened ones.
+173. **Create PRs for the whole feature.** "Create PRs (n) ▾" in the
+     feature's Repos tab, for the repos on GitHub with work (uncommitted
+     changes, or commits their base does not have: the new `aheadBase`) and
+     no PR yet (or only a closed one); also as drafts. Like the per-repo
+     button it asks an agent rather than running `gh` itself: one message to
+     the feature's chat, which works across every repo, listing each repo's
+     branch, base and Jira key, with the same steps, the line's PR
+     instructions, and a request to note dependencies and merge order
+     between the PRs. With Jira "expected", repos without a key are named
+     before asking.
 
 ## Answered (2026-11-05)
 
