@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { applyEvent, type ChatEvent, emptyView } from "../src/shared/chat.ts";
+import { applyEvent, type ChatEvent, type ChatItem, emptyView } from "../src/shared/chat.ts";
 import { ClaudeProvider, type QueryLike } from "../src/main/core/agents/claude.ts";
 import { Chats } from "../src/main/core/chats.ts";
 import { Store } from "../src/main/core/store.ts";
@@ -308,4 +308,40 @@ test("a continued chat shows the earlier conversation, with anything left open c
   assert.deepEqual(v.items[3], { kind: "continued", id: (v.items[3] as { id: string }).id, from: "oslo", archivedAt: "2026-11-01T10:00:00Z", history: "history/01-gift-receipts.md" });
   chats.rename(chatId, "Gift receipts");
   assert.equal(store.get().chats.find((c) => c.id === chatId)?.title, "Gift receipts");
+});
+
+test("how chatty: answers and what needs the user always; notes, thinking and tools as chosen, summed up per finished turn", async () => {
+  const { visibleItems, currentActivity, SHOW_ALL } = await import("../src/shared/chat.ts");
+  const items = [
+    { kind: "user", id: "u1", text: "Fix the test" },
+    { kind: "thinking", id: "th1", text: "hmm" },
+    { kind: "text", id: "t1", text: "Let me look." },
+    { kind: "tool", id: "x1", name: "Bash", input: { command: "npm test" } },
+    { kind: "permission", id: "p1", tool: "Bash", input: {}, answer: true },
+    { kind: "text", id: "t2", text: "Fixed: the date was off by one." },
+    { kind: "result", id: "r1", ok: true, durationMs: 1, turns: 1 },
+    { kind: "user", id: "u2", text: "And the docs?" },
+    { kind: "text", id: "t3", text: "Looking…" },
+    { kind: "tool", id: "x2", name: "Read", input: { file_path: "/w/README.md" } },
+  ] as ChatItem[];
+  const ids = (xs: { id: string; kind: string }[]) => xs.map((x) => (x.kind === "hidden" ? `hidden(${JSON.stringify(x)})` : x.id));
+  assert.equal(visibleItems(items, true, SHOW_ALL), items, "everything: as it was");
+  const quiet = { notes: false, thinking: false, tools: false };
+  assert.deepEqual(ids(visibleItems(items, true, quiet)), [
+    "u1",
+    "p1",
+    `hidden(${JSON.stringify({ kind: "hidden", id: "user:u1", turn: "user:u1", notes: 1, thinking: 1, tools: 1 })})`,
+    "t2",
+    "r1",
+    "u2",
+  ], "the running turn hides its steps without a line; the working indicator tells");
+  assert.deepEqual(
+    ids(visibleItems(items, false, quiet)).slice(-3),
+    ["u2", `hidden(${JSON.stringify({ kind: "hidden", id: "user:u2", turn: "user:u2", notes: 0, thinking: 0, tools: 1 })})`, "t3"],
+    "once it ends, its last message is its answer",
+  );
+  assert.deepEqual(ids(visibleItems(items, true, { notes: false, thinking: true, tools: true })).slice(0, 4), ["u1", "th1", "x1", "p1"]);
+  assert.deepEqual(ids(visibleItems(items, true, quiet, new Set(["user:u1"]))).slice(0, 7), ["u1", "th1", "t1", "x1", "p1", "t2", "r1"], "an opened turn shows all");
+  assert.equal(currentActivity(items)?.id, "x2");
+  assert.equal(currentActivity(items.slice(0, 8)), undefined, "a new turn has done nothing yet");
 });

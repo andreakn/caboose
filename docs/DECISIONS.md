@@ -892,6 +892,18 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      which lists open to-dos), and "Tell … it is done" messages the chat that
      asked. The tab and the sidebar show how many are open. Separate from
      plan.md, which is the work's checklist, not the user's chores.
+170. **How chatty a chat is: a Show picker under the message box.** Three
+     switches: progress notes (the agent's messages between steps), thinking
+     and tool calls. Always shown: the user's messages, each turn's last
+     message (its answer), and whatever needs the user or says what happened
+     (questions, permissions, repo proposals, errors, results). A finished
+     turn's hidden steps become one line ("··· 2 tool calls, 2 notes and 1
+     thought hidden") that opens that turn; a running turn hides them without
+     a line, and the working indicator says what the agent is doing ("is
+     working: Bash `npm test`"). A streaming message is shown (it may be the
+     answer); streaming thinking only when thinking is on. One choice for
+     every chat, kept on this machine; the default is everything, as before.
+     The filtering is shared code (`visibleItems`, tested).
 
 ## Answered (2026-11-05)
 

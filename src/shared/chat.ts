@@ -225,3 +225,64 @@ export function closeOpen(events: LastingEvent[]): LastingEvent[] {
   );
   return [...events, ...closing];
 }
+
+/** What a chat shows besides the conversation itself (which is always shown). */
+export type ChatShow = { notes: boolean; thinking: boolean; tools: boolean };
+export const SHOW_ALL: ChatShow = { notes: true, thinking: true, tools: true };
+
+/** Steps of a finished turn that are not shown: a line to open them. `turn` names the turn (its first item). */
+export type HiddenSteps = { kind: "hidden"; id: string; turn: string; notes: number; thinking: number; tools: number };
+
+/**
+ * The items to show. Always: what the user wrote, each finished turn's last
+ * message (its answer), and everything that needs the user or says what
+ * happened (questions, permissions, proposals, errors, results). The agent's
+ * other messages (progress notes), its thinking and its tool calls only as
+ * `show` says; what a finished turn hides is summed up in one line, which
+ * opens that turn (`open`). A running turn hides them without a line: the
+ * working indicator says what it is doing.
+ */
+export function visibleItems(items: ChatItem[], running: boolean, show: ChatShow, open: Set<string> = new Set()): (ChatItem | HiddenSteps)[] {
+  if (show.notes && show.thinking && show.tools) return items;
+  // Turns: from a user message to the next one (the first may start without one).
+  const turns: ChatItem[][] = [];
+  for (const it of items) {
+    if (it.kind === "user" || !turns.length) turns.push([]);
+    turns.at(-1)!.push(it);
+  }
+  const out: (ChatItem | HiddenSteps)[] = [];
+  turns.forEach((turn, n) => {
+    const key = `${turn[0].kind}:${turn[0].id}`;
+    const live = running && n === turns.length - 1;
+    if (open.has(key)) return void out.push(...turn);
+    const texts = turn.filter((i) => i.kind === "text");
+    const answer = live ? undefined : texts.at(-1);
+    const hidden = { notes: 0, thinking: 0, tools: 0 };
+    const kept: (ChatItem | HiddenSteps)[] = [];
+    for (const it of turn) {
+      if (it.kind === "text" && it !== answer && !show.notes) hidden.notes++;
+      else if (it.kind === "thinking" && !show.thinking) hidden.thinking++;
+      else if (it.kind === "tool" && !show.tools) hidden.tools++;
+      else kept.push(it);
+    }
+    const any = hidden.notes + hidden.thinking + hidden.tools > 0;
+    if (!any || live) return void out.push(...kept);
+    // The line goes where the hidden steps were: before the answer (or the turn's end).
+    const at = answer ? kept.indexOf(answer) : kept.findIndex((i) => i.kind === "result");
+    const line: HiddenSteps = { kind: "hidden", id: key, turn: key, ...hidden };
+    if (at < 0) kept.push(line);
+    else kept.splice(at, 0, line);
+    out.push(...kept);
+  });
+  return out;
+}
+
+/** What the agent is doing now, from the running turn's latest step ("" when nothing has happened yet). */
+export function currentActivity(items: ChatItem[]): ChatItem | undefined {
+  for (let i = items.length - 1; i >= 0; i--) {
+    const it = items[i];
+    if (it.kind === "user") return undefined;
+    if (it.kind === "tool" || it.kind === "thinking" || it.kind === "text") return it;
+  }
+  return undefined;
+}

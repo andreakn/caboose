@@ -6,8 +6,13 @@ import {
   type Chat,
   type ChatCommand,
   type ChatItem,
+  type ChatShow,
   type ChatView,
+  currentActivity,
+  type HiddenSteps,
+  SHOW_ALL,
   shellEffects,
+  visibleItems,
   EFFORTS,
   emptyView,
   AGENTS,
@@ -20,6 +25,7 @@ import type { Feature } from "../../shared/types.ts";
 import { activityOf, setVisibleChat, useActivityVersion } from "./activity.ts";
 import { stationLabel } from "../../shared/stations.ts";
 import { useCommand } from "./commands.ts";
+import { setChatShow, useChatShow } from "./prefs.ts";
 import { askText } from "./Dialog.tsx";
 import { MenuButton } from "./Menu.tsx";
 import { repoLabel } from "./labels.ts";
@@ -206,6 +212,12 @@ function ChatPanel({ chat, ws }: { chat: Chat; ws: Feature }) {
   const pinned = useRef(true);
   // Scrolled up: offer a way back down (a wheel fighting streaming output is not the only way).
   const [awayFromLatest, setAwayFromLatest] = useState(false);
+  // How chatty: what is shown besides the conversation, and the turns opened to show all their steps.
+  const show = useChatShow();
+  const [openTurns, setOpenTurns] = useState<Set<string>>(new Set());
+  const shown = visibleItems(view.items, view.running, show, openTurns);
+  const doing = view.running ? currentActivity(view.items) : undefined;
+  const draftShown = view.draft && (view.draft.kind === "text" || show.thinking);
 
   useEffect(() => {
     // Events that arrive before the saved transcript are already in it; drop them.
@@ -245,10 +257,17 @@ function ChatPanel({ chat, ws }: { chat: Chat; ws: Feature }) {
             {agentName(chat)} works in <code>{ws.folder}</code>, with {ws.repos.map((r) => repoLabel(r.name)).join(", ") || "no repos yet"}.
           </div>
         )}
-        {view.items.map((item) => (
-          <Item key={`${item.kind}:${item.id}`} item={item} chatId={chat.id} agent={agentName(chat)} rel={rel} />
-        ))}
-        {view.draft &&
+        {shown.map((item) =>
+          item.kind === "hidden" ? (
+            <button key={`hidden:${item.id}`} className="hidden-steps link" onClick={() => setOpenTurns(new Set(openTurns).add(item.turn))} title="Show this turn's steps">
+              {hiddenSummary(item)}
+            </button>
+          ) : (
+            <Item key={`${item.kind}:${item.id}`} item={item} chatId={chat.id} agent={agentName(chat)} rel={rel} />
+          ),
+        )}
+        {draftShown &&
+          view.draft &&
           (view.draft.kind === "text" ? (
             <div className="msg-text">
               <Markdown remarkPlugins={[remarkGfm]}>{view.draft.text}</Markdown>
@@ -256,7 +275,20 @@ function ChatPanel({ chat, ws }: { chat: Chat; ws: Feature }) {
           ) : (
             <div className="thinking live">{view.draft.text || "Thinking…"}</div>
           ))}
-        {view.running && !view.draft && <div className="working">{agentName(chat)} is working…</div>}
+        {view.running && !draftShown && (
+          <div className="working">
+            {agentName(chat)} is working
+            {view.draft?.kind === "thinking" || doing?.kind === "thinking"
+              ? ": thinking…"
+              : doing?.kind === "tool"
+                ? (
+                    <>
+                      : {toolName(doing.name)} <code>{toolSummary(doing.input, rel)}</code>
+                    </>
+                  )
+                : "…"}
+          </div>
+        )}
         {view.queued.map((q, i) => (
           <div key={i} className="msg-user queued" title="Sent when the current turn ends">
             {q}
@@ -610,6 +642,61 @@ export function toolSummary(input: unknown, rel: (p: string) => string): string 
   return s.length > 120 ? `${s.slice(0, 119)}…` : s;
 }
 
+/** "4 tool calls, 2 notes and 1 thought hidden" */
+function hiddenSummary(h: HiddenSteps): string {
+  const parts = [
+    h.tools && `${h.tools} tool call${h.tools === 1 ? "" : "s"}`,
+    h.notes && `${h.notes} note${h.notes === 1 ? "" : "s"}`,
+    h.thinking && `${h.thinking} thought${h.thinking === 1 ? "" : "s"}`,
+  ].filter(Boolean) as string[];
+  const list = parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}` : parts[0];
+  return `··· ${list} hidden`;
+}
+
+const SHOW_OPTIONS: { key: keyof ChatShow; label: string; hint: string }[] = [
+  { key: "notes", label: "Progress notes", hint: "What the agent says between steps (its last message of a turn is always shown)" },
+  { key: "thinking", label: "Thinking", hint: "The agent's reasoning" },
+  { key: "tools", label: "Tool calls", hint: "Commands run, files read and edited, searches" },
+];
+
+/** Under the message box: how chatty the chats are (one choice for all of them). */
+function ShowPicker() {
+  const show = useChatShow();
+  const [open, setOpen] = useState(false);
+  const on = SHOW_OPTIONS.filter((o) => show[o.key]);
+  const label = on.length === SHOW_OPTIONS.length ? "everything" : on.length ? `answers + ${on.map((o) => o.label.toLowerCase()).join(", ")}` : "answers";
+  return (
+    <span className="info-wrap show-picker">
+      <button className={`show-button${open ? " active" : ""}`} onClick={() => setOpen(!open)} title="What the chats show">
+        Show: {label} ▾
+      </button>
+      {open && (
+        <>
+          <div className="popover-backdrop" onClick={() => setOpen(false)} />
+          <div className="popover show-popover">
+            <div className="muted small">Always: your messages, the answers, and anything that needs you.</div>
+            {SHOW_OPTIONS.map((o) => (
+              <label key={o.key} title={o.hint}>
+                <input type="checkbox" checked={show[o.key]} onChange={(e) => setChatShow({ ...show, [o.key]: e.target.checked })} />
+                {o.label}
+                <span className="muted small">{o.hint}</span>
+              </label>
+            ))}
+            <div className="row">
+              <button className="link" onClick={() => setChatShow({ notes: false, thinking: false, tools: false })}>
+                Answers only
+              </button>
+              <button className="link" onClick={() => setChatShow(SHOW_ALL)}>
+                Everything
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </span>
+  );
+}
+
 /** Each chat's commands, fetched the first time "/" is typed in it. */
 const commandLists = new Map<string, Promise<ChatCommand[]>>();
 
@@ -788,6 +875,7 @@ function Composer(props: { chat: Chat; running: boolean; asking: boolean; disabl
             </option>
           ))}
         </select>
+        <ShowPicker />
         <span className="spacer" />
         {running && (
           <button className="danger" onClick={() => api.interrupt(chat.id)} title="Stop (Esc)">
