@@ -799,13 +799,28 @@ function Composer(props: { chat: Chat; running: boolean; asking: boolean; disabl
     });
   });
   // One line to start with; grows with what is typed (wrapped lines too), up to about ten lines.
-  useLayoutEffect(() => {
+  // A hidden chat (another tab) measures 0: leave it be, and measure again once it is shown or its width changes.
+  const fit = () => {
     const el = input.current;
-    if (!el) return;
+    if (!el || !el.offsetParent) return;
     el.style.height = "auto";
+    if (!el.scrollHeight) return;
     el.style.height = `${Math.min(el.scrollHeight + 2, 240)}px`;
     el.style.overflowY = el.scrollHeight + 2 > 240 ? "auto" : "hidden";
-  }, [text]);
+  };
+  useLayoutEffect(fit, [text]);
+  useEffect(() => {
+    const el = input.current;
+    if (!el) return;
+    let width = el.clientWidth;
+    const watch = new ResizeObserver(() => {
+      if (el.clientWidth === width) return;
+      width = el.clientWidth;
+      fit();
+    });
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, []);
 
   useEffect(() => input.current?.focus(), [chat.id]);
   useCommand((c) => {

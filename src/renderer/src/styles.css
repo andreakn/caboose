@@ -245,6 +245,8 @@ pre code { background: none; padding: 0; }
 .composer textarea {
   display: block;
   width: 100%;
+  /* Never smaller than one line, whatever the auto-grow measured. */
+  min-height: calc(1.45em + 16px);
   resize: none;
   font: inherit;
   color: var(--text);
