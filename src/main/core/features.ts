@@ -19,7 +19,7 @@ import type {
 } from "../../shared/types.ts";
 import { type Effective, featureRoots, forLine, loadRepoConfig, type ResolvedLocalConfig } from "./config.ts";
 import * as g from "./git.ts";
-import { type Jira, parseKey, readFeatureJira, writeFeatureJira } from "./jira.ts";
+import { type Jira, leadingKey, parseKey, readFeatureJira, writeFeatureJira } from "./jira.ts";
 import { copyLocalFiles, DEFAULT_LOCAL_FILES, findLocalFiles } from "./localfiles.ts";
 import { servesLine } from "../../shared/lines.ts";
 import { runScript } from "./scripts.ts";
@@ -66,6 +66,13 @@ export class Features {
       const off = repos.filter((r) => !servesLine(r, line));
       if (off.length) return fail(`${off.map((r) => `${r.name} is on the ${r.line} line`).join(", ")}; this feature is on ${line}.`);
       const level = eff.jira.level;
+      // No task given, but the description starts with a key ("NWP-8259 Feature toggle…"): that is the task,
+      // if Jira knows it ("UTF-8 everywhere" starts with something that only looks like a key).
+      if (!input.jira && level !== "off") {
+        const key = leadingKey(input.text ?? input.title ?? "");
+        const j = key ? this.jira(line) : null;
+        if (key && (!j || (await j.issue(key).then(() => true, () => false)))) input = { ...input, jira: { key } };
+      }
       if (level === "required" && !input.jira) return fail("Jira is required: link a task or create one.");
 
       // The task first: a failed Jira call should not leave a half-made feature.

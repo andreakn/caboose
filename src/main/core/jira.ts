@@ -12,6 +12,8 @@ export function parseKey(text: string): string | null {
   return /\b([A-Z][A-Z0-9_]+-\d+)\b/.exec(text.trim().toUpperCase())?.[1] ?? null;
 }
 
+export { leadingKey } from "../../shared/jirakey.ts";
+
 export class Jira {
   private auth: JiraAuth;
   private fetch: Fetch;
@@ -80,9 +82,9 @@ export class Jira {
       types.find((t) => !t.subtask && /^story$/i.test(t.name)) ??
       types.find((t) => !t.subtask);
     if (!type) throw new Error(`Project ${project} has no issue type for tasks.`);
-    const r = await this.call<{ key: string }>("POST", "/rest/api/3/issue", {
-      fields: { project: { key: project }, summary, issuetype: { id: type.id } },
-    });
+    const fields: Record<string, unknown> = { project: { key: project }, summary, issuetype: { id: type.id } };
+    Object.assign(fields, await this.requiredExtras(project, type, fields));
+    const r = await this.call<{ key: string }>("POST", "/rest/api/3/issue", { fields });
     return r.key;
   }
 
@@ -90,14 +92,63 @@ export class Jira {
     const project = parent.replace(/-\d+$/, "");
     const type = (await this.issueTypes(project)).find((t) => t.subtask);
     if (!type) throw new Error(`Project ${project} has no sub-task issue type.`);
-    const r = await this.call<{ key: string }>("POST", "/rest/api/3/issue", {
-      fields: { project: { key: project }, parent: { key: parent }, summary, issuetype: { id: type.id } },
-    });
+    const fields: Record<string, unknown> = { project: { key: project }, parent: { key: parent }, summary, issuetype: { id: type.id } };
+    Object.assign(fields, await this.requiredExtras(project, type, fields, parent));
+    const r = await this.call<{ key: string }>("POST", "/rest/api/3/issue", { fields });
     return r.key;
+  }
+
+  /**
+   * Values for the fields a project requires on a new issue that Caboose
+   * would otherwise leave out (an "Owner", say): the parent's value where it
+   * has one, else, for a person field, the user. A required field Caboose
+   * cannot fill is named in the error, instead of Jira's bare HTTP 400.
+   */
+  private async requiredExtras(project: string, type: { id: string; name: string }, given: Record<string, unknown>, parent?: string): Promise<Record<string, unknown>> {
+    type Meta = { fields?: RawField[]; values?: RawField[] };
+    const meta: Meta = await this.call<Meta>("GET", `/rest/api/3/issue/createmeta/${encodeURIComponent(project)}/issuetypes/${encodeURIComponent(type.id)}?maxResults=200`).catch(
+      (): Meta => ({}),
+    );
+    const missing = (meta.fields ?? meta.values ?? []).filter((f: RawField) => f.required && !f.hasDefaultValue && !(f.fieldId in given));
+    if (!missing.length) return {};
+    type Fields = { fields?: Record<string, unknown> };
+    const fromParent: Record<string, unknown> = parent
+      ? ((
+          await this.call<Fields>("GET", `/rest/api/3/issue/${encodeURIComponent(parent)}?fields=${missing.map((f: RawField) => f.fieldId).join(",")}`).catch((): Fields => ({}))
+        ).fields ?? {})
+      : {};
+    let me: string | undefined;
+    const out: Record<string, unknown> = {};
+    const unfilled: string[] = [];
+    for (const f of missing) {
+      const inherited = asInput(fromParent[f.fieldId]);
+      if (inherited !== undefined) {
+        out[f.fieldId] = inherited;
+        continue;
+      }
+      const person = f.schema?.type === "user" || (f.schema?.type === "array" && f.schema.items === "user");
+      if (person) {
+        me ??= (await this.call<{ accountId: string }>("GET", "/rest/api/3/myself")).accountId;
+        out[f.fieldId] = f.schema?.type === "array" ? [{ accountId: me }] : { accountId: me };
+        continue;
+      }
+      unfilled.push(f.name || f.fieldId);
+    }
+    if (unfilled.length) {
+      throw new Error(
+        `Jira project ${project} requires ${unfilled.join(", ")} on a new ${type.name}, which Caboose cannot fill in${parent ? ` (${parent} has no value to copy)` : ""}. Create the issue in Jira and link its key instead.`,
+      );
+    }
+    return out;
   }
 
   url(key: string): string {
     return `${this.site}/browse/${key}`;
+  }
+
+  /** The user's account id (for person fields Caboose fills with the user). */
+  async accountId(): Promise<string> {
+    return (await this.call<{ accountId: string }>("GET", "/rest/api/3/myself")).accountId;
   }
 
   private async issueTypes(project: string): Promise<{ id: string; name: string; subtask: boolean }[]> {
@@ -196,4 +247,25 @@ export function writeFeatureJira(folder: string, j: FeatureJira): void {
     return;
   }
   writeFileSync(file, `${lines.join("\n")}\n`);
+}
+
+/** A field as Jira's create metadata describes it. */
+type RawField = { fieldId: string; name?: string; required?: boolean; hasDefaultValue?: boolean; schema?: { type?: string; items?: string; custom?: string } };
+
+/** A value read from an issue, as a value to create one with (people by account id, options by id); undefined when empty. */
+export function asInput(v: unknown): unknown {
+  if (v === null || v === undefined || v === "") return undefined;
+  if (Array.isArray(v)) {
+    const items = v.map(asInput).filter((x) => x !== undefined);
+    return items.length ? items : undefined;
+  }
+  if (typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    if (typeof o.accountId === "string") return { accountId: o.accountId };
+    if (typeof o.id === "string" || typeof o.id === "number") return { id: String(o.id) };
+    if (typeof o.key === "string") return { key: o.key };
+    if (typeof o.value === "string") return { value: o.value };
+    return undefined;
+  }
+  return v;
 }

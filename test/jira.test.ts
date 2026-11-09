@@ -48,7 +48,7 @@ test("subtasks are created with the project's sub-task type under the parent", a
   });
   const key = await new Jira(auth, f.fn).createSubtask("ABC-1", "web: Big thing");
   assert.equal(key, "ABC-9");
-  assert.deepEqual(f.calls[1].body.fields, { project: { key: "ABC" }, parent: { key: "ABC-1" }, summary: "web: Big thing", issuetype: { id: "5" } });
+  assert.deepEqual(f.calls.find((c) => c.method === "POST")!.body.fields, { project: { key: "ABC" }, parent: { key: "ABC-1" }, summary: "web: Big thing", issuetype: { id: "5" } });
 });
 
 test("new tasks prefer the Task type", async () => {
@@ -57,7 +57,7 @@ test("new tasks prefer the Task type", async () => {
     "POST /rest/api/3/issue": () => [201, { key: "ABC-10" }],
   });
   assert.equal(await new Jira(auth, f.fn).createTask("ABC", "Do it"), "ABC-10");
-  assert.equal(f.calls[1].body.fields.issuetype.id, "3");
+  assert.equal(f.calls.find((c) => c.method === "POST")!.body.fields.issuetype.id, "3");
 });
 
 test("errors say what went wrong", async () => {
@@ -83,4 +83,53 @@ test("a typed key or issue link is a key; a summary that mentions one is not", a
   assert.equal(parseKeyLike("https://acme.atlassian.net/browse/ABC-77?focus=1"), "ABC-77");
   assert.equal(parseKeyLike("Fix ABC-12 again"), null);
   assert.equal(parseKeyLike("Gift receipts"), null);
+});
+
+test("fields the project requires on new issues: the parent's value, else the user for a person field, else a clear error", async () => {
+  const meta = {
+    fields: [
+      { fieldId: "summary", name: "Summary", required: true },
+      { fieldId: "reporter", name: "Reporter", required: true, hasDefaultValue: true },
+      { fieldId: "customfield_11882", name: "Owner", required: true, schema: { type: "user" } },
+      { fieldId: "customfield_200", name: "Team", required: true, schema: { type: "option" } },
+    ],
+  };
+  const f = fakeFetch({
+    "GET /rest/api/3/issue/createmeta/ABC/issuetypes/5": () => [200, meta],
+    "GET /rest/api/3/issue/createmeta/ABC/issuetypes": () => [200, { issueTypes: [{ id: "3", name: "Task" }, { id: "5", name: "Sub-task", subtask: true }] }],
+    "GET /rest/api/3/issue/ABC-1?fields=customfield_11882,customfield_200": () => [200, { fields: { customfield_11882: { accountId: "owner-1", displayName: "Ola" }, customfield_200: { id: "77", value: "Commerce" } } }],
+    "POST /rest/api/3/issue": () => [201, { key: "ABC-9" }],
+  });
+  assert.equal(await new Jira(auth, f.fn).createSubtask("ABC-1", "web: Big thing"), "ABC-9");
+  assert.deepEqual(f.calls.find((c) => c.method === "POST")!.body.fields, {
+    project: { key: "ABC" },
+    parent: { key: "ABC-1" },
+    summary: "web: Big thing",
+    issuetype: { id: "5" },
+    customfield_11882: { accountId: "owner-1" },
+    customfield_200: { id: "77" },
+  }, "copied from the parent task");
+
+  // A new task has no parent: a person field gets the user; anything else cannot be guessed.
+  const g = fakeFetch({
+    "GET /rest/api/3/issue/createmeta/ABC/issuetypes/3": () => [200, { fields: [meta.fields[2]] }],
+    "GET /rest/api/3/issue/createmeta/ABC/issuetypes": () => [200, { issueTypes: [{ id: "3", name: "Task" }] }],
+    "GET /rest/api/3/myself": () => [200, { accountId: "me-42" }],
+    "POST /rest/api/3/issue": () => [201, { key: "ABC-10" }],
+  });
+  assert.equal(await new Jira(auth, g.fn).createTask("ABC", "Do it"), "ABC-10");
+  assert.deepEqual(g.calls.find((c) => c.method === "POST")!.body.fields.customfield_11882, { accountId: "me-42" });
+  const h = fakeFetch({
+    "GET /rest/api/3/issue/createmeta/ABC/issuetypes/3": () => [200, { fields: [meta.fields[3]] }],
+    "GET /rest/api/3/issue/createmeta/ABC/issuetypes": () => [200, { issueTypes: [{ id: "3", name: "Task" }] }],
+  });
+  await assert.rejects(new Jira(auth, h.fn).createTask("ABC", "Do it"), /Jira project ABC requires Team on a new Task, which Caboose cannot fill in/);
+});
+
+test("a description that starts with a key names the task", async () => {
+  const { leadingKey } = await import("../src/shared/jirakey.ts");
+  assert.equal(leadingKey("NWP-8259 Feature toggle i VAM for Commerce API"), "NWP-8259");
+  assert.equal(leadingKey("  nwp-8259: toggle"), "NWP-8259");
+  assert.equal(leadingKey("Feature toggle for NWP-8259"), null, "only at the start");
+  assert.equal(leadingKey("UTF-8 everywhere"), "UTF-8", "looks like one: creating the feature checks it with Jira");
 });

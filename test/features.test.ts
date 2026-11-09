@@ -356,3 +356,22 @@ test("a task for a feature made without one: created in the project, linked, a s
   assert.equal(features.get(f.value.id)?.repos[0].branch, `caboose/ABC-501-${f.value.name}`, "not pushed: the branch carries the key");
   await until(settled(store));
 });
+
+test("a description that starts with a key links that task, if Jira knows it", async () => {
+  const fake = {
+    issue: async (key: string) => {
+      if (key !== "NWP-8259") throw new Error(`Jira: HTTP 404 (Issue does not exist)`);
+      return { key, summary: "Feature toggle", status: "To Do", type: "Story", url: "" };
+    },
+    createSubtask: async () => "NWP-9000",
+  } as unknown as Jira;
+  const store = new Store(join(tmp, "s14", "state.json"));
+  const features = new Features(store, config({ jira: { level: "expected", project: "NWP" } }), join(tmp, "s14", "logs"), () => fake);
+  const a = await features.create({ text: "NWP-8259 Feature toggle i VAM for Commerce API", repos: ["web"] });
+  assert.ok(a.ok, !a.ok ? a.error : "");
+  assert.equal(features.jiraOf(a.value.id).task, "NWP-8259");
+  const b = await features.create({ text: "UTF-8 everywhere" });
+  assert.ok(b.ok, !b.ok ? b.error : "");
+  assert.equal(features.jiraOf(b.value.id).task, undefined, "not an issue: no task, and no failure");
+  await until(settled(store));
+});

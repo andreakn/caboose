@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { AGENTS, type Agent } from "../../shared/chat.ts";
+import { leadingKey } from "../../shared/jirakey.ts";
 import { lineConfig, linesOf } from "../../shared/lines.ts";
 import type { ConfigView, Feature, JiraIssue } from "../../shared/types.ts";
 
@@ -38,12 +39,14 @@ export function NewFeature({ config, onCreated, onCancel }: { config: ConfigView
 
   async function create() {
     if (busy) return;
-    if (level === "required" && !key.trim()) return setError("Jira is required: give the feature a task (key or URL).");
-    if (level === "expected" && !key.trim() && !confirm("Create the feature without a Jira task?")) return;
+    // A description that starts with a key ("NWP-8259 Feature toggle…") gives the task too.
+    const task = key.trim() || (level !== "off" ? (leadingKey(text) ?? "") : "");
+    if (level === "required" && !task) return setError("Jira is required: give the feature a task (key or URL).");
+    if (level === "expected" && !task && !confirm("Create the feature without a Jira task?")) return;
     setBusy(true);
     setError(null);
     localStorage.setItem(LAST_LINE, line);
-    const r = await api.createFeature({ text: text.trim() || undefined, jira: key.trim() ? { key: key.trim() } : undefined, agent, ...(line ? { line } : {}) });
+    const r = await api.createFeature({ text: text.trim() || undefined, jira: task ? { key: task } : undefined, agent, ...(line ? { line } : {}) });
     setBusy(false);
     if (r.ok) onCreated(r.value);
     else setError(r.error);
@@ -93,7 +96,12 @@ export function NewFeature({ config, onCreated, onCancel }: { config: ConfigView
         {level !== "off" && (
           <label className="jira-line">
             <span className="muted">Jira task{level === "required" ? "" : " (optional)"}</span>
-            <input list="my-issues" value={key} placeholder="key or URL, e.g. ABC-1234" onChange={(e) => setKey(e.target.value)} />
+            <input
+              list="my-issues"
+              value={key}
+              placeholder={leadingKey(text) ? `${leadingKey(text)} (from the description)` : "key or URL, e.g. ABC-1234"}
+              onChange={(e) => setKey(e.target.value)}
+            />
             <datalist id="my-issues">
               {mine.map((i) => (
                 <option key={i.key} value={i.key}>

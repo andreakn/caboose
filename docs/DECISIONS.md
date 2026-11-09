@@ -990,6 +990,18 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      PR description is then where the key is. "Open without Jira" is offered
      unless Jira is required. Creating a task for an existing feature is
      new (`Features.createTask`); before, only a new feature could.
+180. **Jira issues get the fields their project requires.** Before creating
+     a task or subtask, Caboose reads the project's create metadata for that
+     issue type; a required field it would leave out (with no default) gets
+     the parent task's value (people by account id, options by id), or, for
+     a person field, the user; a field it cannot fill is named in the error
+     ("requires Team on a new Task…: create it in Jira and link its key")
+     instead of Jira's bare HTTP 400. Found with a project whose sub-tasks
+     require an "Owner".
+181. **A description that starts with a Jira key gives the feature its
+     task** ("NWP-8259 Feature toggle…"), when the Jira field is empty and
+     Jira knows the key (so "UTF-8 everywhere" does not count); New feature
+     shows the key it will use and does not warn about a missing task.
 
 ## Answered (2026-11-05)
 

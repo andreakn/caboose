@@ -8,3 +8,8 @@ export function parseKeyLike(text: string): string | null {
   const link = /^https?:\/\/\S+\/browse\/([A-Za-z][A-Za-z0-9_]+-\d+)\S*$/.exec(t)?.[1];
   return link ? link.toUpperCase() : null;
 }
+
+/** The Jira key a text starts with ("NWP-8259 Feature toggle…", "NWP-8259: …"), or null. */
+export function leadingKey(text: string): string | null {
+  return /^\s*([A-Za-z][A-Za-z0-9_]+-\d+)(?=$|[\s:.,)\]-])/.exec(text)?.[1]?.toUpperCase() ?? null;
+}
