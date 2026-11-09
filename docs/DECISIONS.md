@@ -973,6 +973,12 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      a closed folder), and a dot on the feature's Feature/repo tabs (red:
      waiting for you; blue: finished). `openChat:<id>` is the one command
      that opens a chat anywhere; notifications and "Needs you" use it.
+178. **"Open PRs" at the top of a feature once every repo is ready.** When
+     every repo without a PR has reported "ready" (work committed) and has
+     something to open a PR for, the header gets a green "Open PRs (n)" with
+     a ▾ for "Open draft PRs". It sends the same one message to the
+     feature's chat as "Create PRs" in the Repos tab (decision 173), for
+     those repos.
 
 ## Answered (2026-11-05)
 

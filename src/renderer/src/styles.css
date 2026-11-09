@@ -1105,3 +1105,8 @@ button.copilot-review { white-space: nowrap; }
 .bell-row .small { grid-column: 2; }
 .wants-dot { display: inline-block; width: 8px; height: 8px; margin-left: 6px; border-radius: 50%; background: var(--info); vertical-align: 1px; }
 .wants-dot.needs { background: var(--danger); }
+
+/* "Open PRs" with its ▾ for drafts, in the feature's header once every repo is ready. */
+.split-button { display: inline-flex; align-items: stretch; }
+.split-button > .open-prs { border-top-right-radius: 0; border-bottom-right-radius: 0; background: var(--ok); border-color: var(--ok); color: var(--card); font-weight: 600; }
+.split-button > button.open-prs-more { border-top-left-radius: 0; border-bottom-left-radius: 0; margin-left: 1px; padding: 0 8px; background: var(--ok); border-color: var(--ok); color: var(--card); }

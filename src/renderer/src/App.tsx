@@ -570,10 +570,16 @@ function FeatureView(props: {
     // pr: null = on GitHub without a PR; undefined = not on GitHub (or not known yet).
     return changes && (o?.pr === null || o?.pr?.state === "CLOSED");
   });
+  // Every repo still without a PR has reported "ready" (its work committed): time to open them, from the header.
+  const noPrYet = f.repos.filter((r) => {
+    const pr = overview.ov?.repos.find((x) => x.name === r.name)?.pr;
+    return !pr || pr.state === "CLOSED";
+  });
+  const allReady = noPrYet.length > 0 && noPrYet.every((r) => reported[r.name]?.status === "ready" && prReady.includes(r));
   /** One message to the feature's chat, which works across every repo. */
-  const createPrs = async (draft: boolean) => {
+  const createPrs = async (draft: boolean, repos = prReady) => {
     const keyOf = (repo: string) => jira.subtasks[repo] ?? jira.task;
-    const noKey = prReady.filter((r) => !keyOf(r.name));
+    const noKey = repos.filter((r) => !keyOf(r.name));
     if (level === "expected" && noKey.length && !confirm(`${noKey.map((r) => r.name).join(", ")} ha${noKey.length === 1 ? "s" : "ve"} no Jira issue. Create the PRs anyway?`)) return;
     let chat = props.chats.filter((c) => !c.repo).at(-1);
     if (!chat) {
@@ -582,7 +588,7 @@ function FeatureView(props: {
       chat = made.value;
     }
     const message = createPrsMessage(
-      prReady.map((r) => ({ repo: r.name, branch: r.branch, baseRef: r.baseRef, ...(keyOf(r.name) ? { jiraKey: keyOf(r.name) } : {}) })),
+      repos.map((r) => ({ repo: r.name, branch: r.branch, baseRef: r.baseRef, ...(keyOf(r.name) ? { jiraKey: keyOf(r.name) } : {}) })),
       draft,
       own.prInstructions,
     );
@@ -694,6 +700,23 @@ function FeatureView(props: {
             </>
           ) : (
             <>
+              {allReady && (
+                <span className="split-button" title={`Every repo reported ready: ask the feature's chat to open a PR for ${noPrYet.map((r) => repoLabel(r.name)).join(", ")}`}>
+                  <button className="primary open-prs" onClick={() => void createPrs(false, noPrYet)}>
+                    Open PRs ({noPrYet.length})
+                  </button>
+                  <MenuButton
+                    className="primary open-prs-more"
+                    label="▾"
+                    title="Other ways to open them"
+                    align="right"
+                    items={[
+                      { label: "Open PRs", onClick: () => void createPrs(false, noPrYet) },
+                      { label: "Open draft PRs", onClick: () => void createPrs(true, noPrYet) },
+                    ]}
+                  />
+                </span>
+              )}
               <button className="primary" onClick={() => setTab("run")} title="The Run tab: start and stop each repo's programs (Cmd/Ctrl+R runs them all)">
                 ▶ Run{running > 0 ? ` (${running})` : ""}
               </button>
