@@ -952,6 +952,18 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
        (the bff and storefront way), so a merged PR counts as reached for
        the stages up to the first test-like one ("merged #12"); later
        stages still need their tags (or a running.sh).
+176. **A repo's own Caboose files come from its main line**, not from
+     whatever the main checkout has on disk: `.caboose/config.json` (and
+     `caboose.json`) and `.caboose/running.sh` are read with
+     `git show origin/HEAD:<path>` (origin's default branch), origin fetched
+     in the background at most every 2 minutes; where origin has none, the
+     main checkout's copy is used (unpushed, or no origin). running.sh stays
+     one script per repo (one answer for every feature, and it still works
+     for ended features whose worktrees are gone), run as a temporary file
+     from the main checkout's folder; but a feature that changed running.sh
+     itself (since its branch left its base, committed or not) runs its own
+     copy from its worktree, so a new script can be tried before it is
+     merged. Run scripts stay on the feature branch, as before.
 
 ## Answered (2026-11-05)
 

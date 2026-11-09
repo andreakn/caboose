@@ -104,9 +104,14 @@ A version starts with the git tag that made its release; Caboose finds that
 tag and checks with git whether it has a feature's merge commit. Each repo
 shows what runs in each environment; once its PR is merged, ✓ where the change
 runs. Where a repo has the script, a feature's deploy progress and
-announcements count what runs, not just tags. The script runs from the main
-checkout with your own credentials (kubectl, VPN), at most every minute, and
-gives up after 20 s; it does not need to know about features. A feature
+announcements count what runs, not just tags. Caboose runs the script as it
+is on the repo's main line (origin's default branch, fetched now and then),
+from the main checkout's folder, with your own credentials (kubectl, VPN), at
+most every minute, giving up after 20 s; it does not need to know about
+features. A feature that changes `running.sh` runs its own copy, so a new
+script can be tried before it is merged. `.caboose/config.json` is read from
+the main line too; where origin has none of these files yet, the main
+checkout's copies are used. A feature
 can say which components it touches (the picker behind the chips, or the
 agent's SetComponents), and only those are shown and counted.
 
