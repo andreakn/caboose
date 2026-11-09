@@ -414,6 +414,8 @@ ipcMain.handle("apps:open", (_e, app: AppId, path: string) =>
 ipcMain.handle("jira:setSubtask", (_e, featureId: string, repo: string, key: string | null) =>
   features.setSubtask(featureId, repo, key),
 );
+ipcMain.handle("jira:createTask", (_e, featureId: string, summary: string) => features.createTask(featureId, summary));
+ipcMain.handle("jira:align", (_e, featureId: string) => features.alignWithJira(featureId));
 ipcMain.handle("jira:createSubtask", (_e, featureId: string, repo: string) => features.createSubtask(featureId, repo));
 
 // --- features

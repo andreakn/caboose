@@ -14,6 +14,65 @@ type Ask = {
 
 let show: ((a: Ask) => void) | null = null;
 
+/** A question with buttons (and maybe a line of text to fill in): which button, and the text. */
+type Choice = {
+  title: string;
+  body: string;
+  input?: { label: string; value: string; placeholder?: string };
+  buttons: { id: string; label: string; primary?: boolean }[];
+  resolve: (v: { id: string; value: string } | null) => void;
+};
+let showChoice: ((c: Choice) => void) | null = null;
+
+/** Asks the user to pick one of the buttons; null when dismissed. */
+export function askChoice(opts: Omit<Choice, "resolve">): Promise<{ id: string; value: string } | null> {
+  return new Promise((resolve) => {
+    if (!showChoice) return resolve(null);
+    showChoice({ ...opts, resolve });
+  });
+}
+
+function ChoiceHost() {
+  const [c, setC] = useState<Choice | null>(null);
+  const [value, setValue] = useState("");
+  useEffect(() => {
+    showChoice = (x) => {
+      setC(x);
+      setValue(x.input?.value ?? "");
+    };
+    return () => {
+      showChoice = null;
+    };
+  }, []);
+  if (!c) return null;
+  const done = (v: { id: string; value: string } | null) => {
+    c.resolve(v);
+    setC(null);
+  };
+  return (
+    <div className="dialog-backdrop" onMouseDown={(e) => e.target === e.currentTarget && done(null)}>
+      <div className="dialog" role="dialog">
+        <h2>{c.title}</h2>
+        <p className="choice-body">{c.body}</p>
+        {c.input && (
+          <label className="choice-input">
+            <span className="muted small">{c.input.label}</span>
+            <input autoFocus value={value} placeholder={c.input.placeholder} onChange={(e) => setValue(e.target.value)} onKeyDown={(e) => e.key === "Escape" && done(null)} />
+          </label>
+        )}
+        <div className="row">
+          <span className="spacer" />
+          {c.buttons.map((b) => (
+            <button key={b.id} className={b.primary ? "primary" : ""} disabled={b.primary && !!c.input && !value.trim()} onClick={() => done({ id: b.id, value })}>
+              {b.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** Asks for a line (or block) of text; null when cancelled. */
 export function askText(opts: Omit<Ask, "resolve">): Promise<string | null> {
   return new Promise((resolve) => {
@@ -24,6 +83,15 @@ export function askText(opts: Omit<Ask, "resolve">): Promise<string | null> {
 
 /** Mounted once, in App. */
 export function DialogHost() {
+  return (
+    <>
+      <TextHost />
+      <ChoiceHost />
+    </>
+  );
+}
+
+function TextHost() {
   const [ask, setAsk] = useState<Ask | null>(null);
   const [value, setValue] = useState("");
   const input = useRef<HTMLInputElement & HTMLTextAreaElement>(null);

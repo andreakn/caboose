@@ -334,3 +334,25 @@ test("continuing an archived feature: its repos on fresh branches, line, title, 
   assert.match(readFileSync(join(f.folder, "log.md"), "utf8"), /web: started[\s\S]*caboose: Continues oslo \(archived 2026-11-01/);
   await until(settled(store));
 });
+
+test("a task for a feature made without one: created in the project, linked, a subtask per repo, keys into the branches", async () => {
+  const created: string[] = [];
+  let n = 500;
+  const fake = {
+    issue: async (key: string) => ({ key, summary: "Gift receipts", status: "To Do", type: "Story", url: "" }),
+    createTask: async (p: string, s: string) => (created.push(`task ${p}:${s}`), `ABC-${n++}`),
+    createSubtask: async (parent: string, s: string) => (created.push(`${parent}>${s}`), `ABC-${n++}`),
+  } as unknown as Jira;
+  const store = new Store(join(tmp, "s13", "state.json"));
+  const features = new Features(store, config({ jira: { level: "optional", project: "ABC" } }), join(tmp, "s13", "logs"), () => fake);
+  const f = await features.create({ repos: ["web"], title: "Gift receipts" });
+  assert.ok(f.ok && !features.jiraOf(f.value.id).task);
+  assert.equal((await features.createTask(f.value.id, "  ")).ok, false);
+  const r = await features.createTask(f.value.id, "Gift receipts");
+  assert.ok(r.ok, !r.ok ? r.error : "");
+  assert.equal(r.value.task, "ABC-500");
+  assert.deepEqual(created, ["task ABC:Gift receipts", "ABC-500>web: Gift receipts"]);
+  assert.deepEqual(features.jiraOf(f.value.id), { task: "ABC-500", subtasks: { web: "ABC-501" } });
+  assert.equal(features.get(f.value.id)?.repos[0].branch, `caboose/ABC-501-${f.value.name}`, "not pushed: the branch carries the key");
+  await until(settled(store));
+});

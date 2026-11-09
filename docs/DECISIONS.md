@@ -979,6 +979,17 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      a ▾ for "Open draft PRs". It sends the same one message to the
      feature's chat as "Create PRs" in the Repos tab (decision 173), for
      those repos.
+179. **Before PRs are opened, Jira is offered for branches without it.**
+     Every way of opening PRs (the header's Open PRs, the Repos tab's Create
+     PRs, a repo's Create PR) first checks, unless Jira is off or not set
+     up: with no feature task, it asks to create one (summary prefilled with
+     the title; typing a key or issue link links an existing task instead)
+     and a subtask per repo; with a task but repos without subtasks, it asks
+     to create those under it. Keys go into branches not pushed yet (Jira
+     automation follows the branch name); pushed ones are named, as their
+     PR description is then where the key is. "Open without Jira" is offered
+     unless Jira is required. Creating a task for an existing feature is
+     new (`Features.createTask`); before, only a new feature could.
 
 ## Answered (2026-11-05)
 

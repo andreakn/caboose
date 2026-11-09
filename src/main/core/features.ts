@@ -287,6 +287,23 @@ export class Features {
     return this.alignWithJira(featureId);
   }
 
+  /** A new task in the line's Jira project, linked to the feature (which gives every repo its subtask). */
+  async createTask(featureId: string, summary: string): Promise<Result<JiraAlignment & { task: string }>> {
+    const f = this.get(featureId);
+    if (!f) return fail("Unknown feature.");
+    if (!summary.trim()) return fail("Give the new Jira task a summary.");
+    try {
+      const j = this.requireJira(f.line);
+      const project = this.eff(f.line).jira.project;
+      if (!project) return fail(`Set the Jira project in Configure${f.line ? ` (the ${f.line} line)` : ""} to create tasks.`);
+      const task = await j.createTask(project, summary.trim());
+      const r = await this.setTask(featureId, task);
+      return r.ok ? ok({ ...r.value, task }) : fail(`Created ${task}, but: ${r.error}`);
+    } catch (e) {
+      return fail(e);
+    }
+  }
+
   /** Subtasks for repos without one (if Jira is connected), then keys into unpushed branches. */
   async alignWithJira(featureId: string, only?: string): Promise<Result<JiraAlignment>> {
     const f = this.get(featureId);

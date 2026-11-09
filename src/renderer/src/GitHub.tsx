@@ -16,6 +16,7 @@ import { MenuButton, type MenuItem, useApps } from "./Menu.tsx";
 import { HealthDot, JiraStatusChip, PrChip, PrDetailsPanel } from "./Overview.tsx";
 import { StatusChip } from "./Plan.tsx";
 import { repoLabel } from "./labels.ts";
+import { jiraBeforePrs } from "./jiraCheck.ts";
 import { RunningChips } from "./Running.tsx";
 import { TagReleaseDialog } from "./TagRelease.tsx";
 
@@ -112,9 +113,13 @@ export function RepoRow(props: {
     props.onAskedAgent();
   }
 
-  function createPr(draft: boolean) {
-    if (props.jiraLevel === "expected" && !jiraKey && !confirm("This PR has no Jira issue. Create it anyway?")) return;
-    void askAgent(createPrMessage(repo.name, repo.branch, repo.baseRef, draft, jiraKey, props.prInstructions));
+  async function createPr(draft: boolean) {
+    // No Jira issue for the branch: offer to create the feature's task and this repo's subtask first.
+    const fresh = await jiraBeforePrs(feature, [repo], props.jiraLevel, Boolean(props.jiraSite));
+    if (!fresh) return;
+    props.onJiraChanged();
+    const now = (await api.getState()).features.find((x) => x.id === feature.id)?.repos.find((r) => r.name === repo.name) ?? repo;
+    void askAgent(createPrMessage(now.name, now.branch, now.baseRef, draft, fresh.subtasks[repo.name] ?? fresh.task, props.prInstructions));
   }
 
   function merge(method: MergeMethod) {

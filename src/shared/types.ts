@@ -586,6 +586,10 @@ export type CabooseApi = {
   /** Copies the repo's local files into the feature again, overwriting. */
   copyLocalFilesAgain(featureId: string, repo: string): Promise<Result<string[]>>;
   createSubtask(featureId: string, repo: string): Promise<Result<JiraAlignment>>;
+  /** A new task in the line's Jira project for the feature; its repos get subtasks (and unpushed branches the keys). */
+  createFeatureTask(featureId: string, summary: string): Promise<Result<JiraAlignment & { task: string }>>;
+  /** Subtasks for every repo without one, and their keys into unpushed branches. */
+  alignJira(featureId: string): Promise<Result<JiraAlignment>>;
 
   createFeature(f: NewFeature): Promise<Result<Feature>>;
   addRepoToFeature(featureId: string, repo: string): Promise<Result<void>>;

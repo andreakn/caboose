@@ -76,3 +76,11 @@ test("jira.txt round-trips and tolerates hand edits", () => {
   writeFeatureJira(tmp, { subtasks: {} });
   assert.deepEqual(readFeatureJira(tmp), { subtasks: {} });
 });
+
+test("a typed key or issue link is a key; a summary that mentions one is not", async () => {
+  const { parseKeyLike } = await import("../src/shared/jirakey.ts");
+  assert.equal(parseKeyLike(" abc-123 "), "ABC-123");
+  assert.equal(parseKeyLike("https://acme.atlassian.net/browse/ABC-77?focus=1"), "ABC-77");
+  assert.equal(parseKeyLike("Fix ABC-12 again"), null);
+  assert.equal(parseKeyLike("Gift receipts"), null);
+});

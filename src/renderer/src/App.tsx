@@ -34,6 +34,7 @@ import { notificationsOn } from "./prefs.ts";
 import { FilesView } from "./Files.tsx";
 import { liveState, MapView } from "./Map.tsx";
 import { ArchivedView } from "./Archived.tsx";
+import { jiraBeforePrs } from "./jiraCheck.ts";
 import { createPrsMessage } from "../../shared/github.ts";
 import { TodoView } from "./Todos.tsx";
 import { repoLabel, setRepoLabels } from "./labels.ts";
@@ -577,10 +578,16 @@ function FeatureView(props: {
   });
   const allReady = noPrYet.length > 0 && noPrYet.every((r) => reported[r.name]?.status === "ready" && prReady.includes(r));
   /** One message to the feature's chat, which works across every repo. */
-  const createPrs = async (draft: boolean, repos = prReady) => {
-    const keyOf = (repo: string) => jira.subtasks[repo] ?? jira.task;
-    const noKey = repos.filter((r) => !keyOf(r.name));
-    if (level === "expected" && noKey.length && !confirm(`${noKey.map((r) => r.name).join(", ")} ha${noKey.length === 1 ? "s" : "ve"} no Jira issue. Create the PRs anyway?`)) return;
+  const createPrs = async (draft: boolean, picked = prReady) => {
+    // No Jira issue for the branches: offer to create the task and subtasks first.
+    const connected = Boolean(own.jira?.site && own.jira?.email && own.jira?.hasToken);
+    const fresh = await jiraBeforePrs(f, picked, level, connected);
+    if (!fresh) return;
+    void loadJira();
+    const keyOf = (repo: string) => fresh.subtasks[repo] ?? fresh.task;
+    // Branches may have been renamed to carry their keys.
+    const now = (await api.getState()).features.find((x) => x.id === f.id) ?? f;
+    const repos = picked.map((r) => now.repos.find((x) => x.name === r.name) ?? r);
     let chat = props.chats.filter((c) => !c.repo).at(-1);
     if (!chat) {
       const made = await api.createChat(f.id);
