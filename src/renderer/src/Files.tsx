@@ -8,12 +8,12 @@ const api = window.caboose;
 
 type Dir = { name: string; path: string; dirs: Map<string, Dir>; files: string[] };
 
-function buildTree(files: string[]): Dir {
+/** The folder tree of these files, plus (empty until opened) folders that are only known by name. */
+function buildTree(files: string[], dirs: string[] = []): Dir {
   const root: Dir = { name: "", path: "", dirs: new Map(), files: [] };
-  for (const f of files) {
-    const parts = f.split("/");
+  const folder = (parts: string[]) => {
     let d = root;
-    for (const p of parts.slice(0, -1)) {
+    for (const p of parts) {
       let next = d.dirs.get(p);
       if (!next) {
         next = { name: p, path: d.path ? `${d.path}/${p}` : p, dirs: new Map(), files: [] };
@@ -21,8 +21,10 @@ function buildTree(files: string[]): Dir {
       }
       d = next;
     }
-    d.files.push(f);
-  }
+    return d;
+  };
+  for (const f of files) folder(f.split("/").slice(0, -1)).files.push(f);
+  for (const d of dirs) folder(d.split("/"));
   return root;
 }
 
@@ -52,6 +54,10 @@ export function FilesView(props: { f: Feature; repo: FeatureRepo; changes?: Work
   const store = `caboose-files-${f.id}-${repo.name}`;
   const [files, setFiles] = useState<string[] | null>(null);
   const [truncated, setTruncated] = useState(false);
+  // What git ignores: files, folders as one entry, and the folders opened so far (read a level at a time).
+  const [ignored, setIgnored] = useState<string[]>([]);
+  const [ignoredDirs, setIgnoredDirs] = useState<string[]>([]);
+  const [opened, setOpened] = useState<Map<string, { files: string[]; dirs: string[] }>>(new Map());
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState<Set<string>>(() => new Set(JSON.parse(localStorage.getItem(`${store}-open`) ?? "[]") as string[]));
@@ -65,6 +71,9 @@ export function FilesView(props: { f: Feature; repo: FeatureRepo; changes?: Work
       if (r.ok) {
         setFiles(r.value.files);
         setTruncated(r.value.truncated);
+        setIgnored(r.value.ignored);
+        setIgnoredDirs(r.value.ignoredDirs);
+        setOpened(new Map());
         setError(null);
       } else setError(r.error);
     });
@@ -73,7 +82,20 @@ export function FilesView(props: { f: Feature; repo: FeatureRepo; changes?: Work
     };
   }, [f.id, repo.name, tick, props.changes]);
 
-  const tree = useMemo(() => buildTree(files ?? []), [files]);
+  const openedFiles = useMemo(() => [...opened.values()].flatMap((o) => o.files), [opened]);
+  const openedDirs = useMemo(() => [...opened.values()].flatMap((o) => o.dirs), [opened]);
+  const tree = useMemo(
+    () => buildTree([...(files ?? []), ...ignored, ...openedFiles], [...ignoredDirs, ...openedDirs]),
+    [files, ignored, ignoredDirs, openedFiles, openedDirs],
+  );
+  const ignoredSet = useMemo(() => new Set([...ignored, ...openedFiles]), [ignored, openedFiles]);
+  const isIgnored = (path: string) => ignoredSet.has(path) || ignoredDirs.some((d) => path === d || path.startsWith(`${d}/`));
+  // An ignored folder is read when it is first opened (node_modules can be huge).
+  const lazy = (path: string) => isIgnored(path) && !opened.has(path) && (ignoredDirs.includes(path) || openedDirs.includes(path));
+  const openLazy = async (path: string) => {
+    const r = await api.repoDir(f.id, repo.name, path);
+    if (r.ok) setOpened((m) => new Map(m).set(path, r.value));
+  };
   const status = useMemo(() => new Map((props.changes?.files ?? []).map((c) => [c.path, c.status])), [props.changes]);
   const changedDirs = useMemo(() => {
     const s = new Set<string>();
@@ -81,10 +103,18 @@ export function FilesView(props: { f: Feature; repo: FeatureRepo; changes?: Work
     return s;
   }, [status]);
 
+  // Ignored folders left open last time are read again.
+  useEffect(() => {
+    for (const p of open) if (lazy(p)) void openLazy(p);
+  }, [open, ignoredDirs, openedDirs]);
+
   const toggle = (path: string) => {
     const n = new Set(open);
     if (n.has(path)) n.delete(path);
-    else n.add(path);
+    else {
+      n.add(path);
+      if (lazy(path)) void openLazy(path);
+    }
     setOpen(n);
     localStorage.setItem(`${store}-open`, JSON.stringify([...n]));
   };
@@ -103,9 +133,9 @@ export function FilesView(props: { f: Feature; repo: FeatureRepo; changes?: Work
     return (
       <button
         key={path}
-        className={`tree-file${path === selected ? " active" : ""}`}
+        className={`tree-file${path === selected ? " active" : ""}${isIgnored(path) ? " ignored" : ""}`}
         style={{ paddingLeft: 8 + depth * 14 }}
-        title={path}
+        title={isIgnored(path) ? `${path} (ignored by git)` : path}
         onClick={() => pick(path)}
       >
         <span className="tree-name">{label}</span>
@@ -121,27 +151,35 @@ export function FilesView(props: { f: Feature; repo: FeatureRepo; changes?: Work
         // Folders with a single folder inside read as one line (src/main/core), as in most editors.
         let shown = sub;
         let label = sub.name;
-        while (shown.files.length === 0 && shown.dirs.size === 1) {
+        while (shown.files.length === 0 && shown.dirs.size === 1 && !lazy(shown.path)) {
           shown = [...shown.dirs.values()][0];
           label += `/${shown.name}`;
         }
         const isOpen = open.has(shown.path);
         return [
-          <button key={shown.path} className="tree-dir" style={{ paddingLeft: 8 + depth * 14 }} onClick={() => toggle(shown.path)} title={shown.path}>
+          <button
+            key={shown.path}
+            className={`tree-dir${isIgnored(shown.path) ? " ignored" : ""}`}
+            style={{ paddingLeft: 8 + depth * 14 }}
+            onClick={() => toggle(shown.path)}
+            title={isIgnored(shown.path) ? `${shown.path} (ignored by git)` : shown.path}
+          >
             <span className="twisty">{isOpen ? "▾" : "▸"}</span>
             <span className="tree-name">{label}</span>
             {changedDirs.has(shown.path) && <span className="tree-changed" title="Has changes" />}
           </button>,
           ...(isOpen ? renderDir(shown, depth + 1) : []),
+          ...(isOpen && lazy(shown.path) ? [<div key={`${shown.path}/…`} className="muted small tree-note" style={{ paddingLeft: 22 + depth * 14 }}>Reading…</div>] : []),
         ];
       }),
-    ...d.files.map((p) => fileButton(p, p.slice(p.lastIndexOf("/") + 1), depth)),
+    ...[...d.files].sort((a, b) => a.localeCompare(b)).map((p) => fileButton(p, p.slice(p.lastIndexOf("/") + 1), depth)),
   ];
 
   if (f.archived) return <div className="changes-empty muted">This feature is archived.</div>;
   if (error) return <div className="banner error">{error}</div>;
   if (!files) return <div className="changes-empty muted">Loading…</div>;
-  const found = query.trim() ? matches(files, query.trim()) : null;
+  const searchable = [...files, ...ignored, ...openedFiles];
+  const found = query.trim() ? matches(searchable, query.trim()) : null;
 
   return (
     <div className="files">
@@ -161,7 +199,7 @@ export function FilesView(props: { f: Feature; repo: FeatureRepo; changes?: Work
         <div className="tree">
           {found
             ? found.map((p) => (
-                <button key={p} className={`tree-file found${p === selected ? " active" : ""}`} title={p} onClick={() => (pick(p), setQuery(""))}>
+                <button key={p} className={`tree-file found${p === selected ? " active" : ""}${isIgnored(p) ? " ignored" : ""}`} title={p} onClick={() => (pick(p), setQuery(""))}>
                   <span className="tree-name">{p.slice(p.lastIndexOf("/") + 1)}</span>
                   <span className="file-dir">{p.includes("/") ? p.slice(0, p.lastIndexOf("/")) : ""}</span>
                   {status.get(p) && <span className={`status st-${status.get(p)}`}>{LETTER[status.get(p)!]}</span>}
@@ -172,10 +210,12 @@ export function FilesView(props: { f: Feature; repo: FeatureRepo; changes?: Work
           {truncated && <div className="muted small tree-note">Showing the first 50,000 files.</div>}
         </div>
       </div>
-      {selected && files.includes(selected) ? (
+      {selected && (files.includes(selected) || ignoredSet.has(selected)) ? (
         <FileView key={`${selected}-${tick}`} f={f} repo={repo} path={selected} status={status.get(selected)} onShowChange={props.onShowChange} />
       ) : (
-        <div className="changes-empty muted">{files.length} files. Pick one, or type to find one.</div>
+        <div className="changes-empty muted">
+          {files.length} files{ignored.length + ignoredDirs.length ? `, and what git ignores (faded)` : ""}. Pick one, or type to find one.
+        </div>
       )}
     </div>
   );

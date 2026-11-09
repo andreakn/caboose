@@ -912,6 +912,11 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      PR query now asks for bots among requested reviewers too); a pending one
      shows as "Copilot reviewing…". Asking again after Copilot has reviewed
      is allowed: it then reviews what is new.
+172. **The Files tab shows what git ignores too, faded** (translucent and
+     italic): ignored files (.env) one by one, and ignored folders
+     (node_modules, bin) as one entry that is read a level at a time when
+     opened, so huge folders cost nothing until looked into. Quick-find covers
+     ignored files and opened folders, not the insides of unopened ones.
 
 ## Answered (2026-11-05)
 

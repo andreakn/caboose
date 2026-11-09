@@ -1078,3 +1078,6 @@ button.primary.merge-ready:hover { background: color-mix(in srgb, var(--ok) 85%,
 /* Asking GitHub Copilot for a review. */
 button.copilot-review { white-space: nowrap; }
 .chip.copilot-pending { background: color-mix(in srgb, var(--info) 18%, transparent); font-size: 11px; }
+
+/* Files git ignores (.env, bin/, node_modules/): there, but faded. */
+.tree-file.ignored .tree-name, .tree-dir.ignored .tree-name { opacity: 0.5; font-style: italic; }

@@ -38,7 +38,7 @@ import {
 import { appIconPath, availableApps, openIn, openVsCodeAt, realMachine } from "./core/apps.ts";
 import { conductorImport, conductorRules } from "./core/conductor.ts";
 import { changes, filePatch, mergeBase } from "./core/diff.ts";
-import { listFiles, readFileAt, readRepoFile } from "./core/files.ts";
+import { listDir, listFiles, readFileAt, readRepoFile } from "./core/files.ts";
 import { doctor } from "./core/doctor.ts";
 import { checkRepo, Features, scanRepos } from "./core/features.ts";
 import { GitHub } from "./core/github.ts";
@@ -592,6 +592,7 @@ ipcMain.handle("chat:configure", (_e, chatId: string, patch: { model?: Model; ef
 
 // --- changes and comments
 ipcMain.handle("files:list", (_e, featureId: string, repo: string) => attempt(() => listFiles(liveRepo(featureId, repo).r.path)));
+ipcMain.handle("files:dir", (_e, featureId: string, repo: string, dir: string) => attempt(() => listDir(liveRepo(featureId, repo).r.path, dir)));
 ipcMain.handle("files:read", (_e, featureId: string, repo: string, path: string) =>
   attempt(() => readRepoFile(liveRepo(featureId, repo).r.path, path)),
 );

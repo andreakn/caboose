@@ -55,6 +55,7 @@ const api: CabooseApi = {
   addRepoToFeature: invoke("feature:addRepo"),
   archiveFeature: invoke("feature:archive"),
   repoFiles: invoke("files:list"),
+  repoDir: invoke("files:dir"),
   readRepoFile: invoke("files:read"),
   readBaseFile: invoke("files:readBase"),
   openInVsCode: invoke("apps:vscodeAt"),

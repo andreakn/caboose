@@ -605,7 +605,9 @@ export type CabooseApi = {
 
   changes(featureId: string, repo: string): Promise<Result<WorkspaceChanges>>;
   /** Every file git sees in a repo's worktree (tracked + untracked, not ignored). */
-  repoFiles(featureId: string, repo: string): Promise<Result<{ files: string[]; truncated: boolean }>>;
+  repoFiles(featureId: string, repo: string): Promise<Result<RepoFiles>>;
+  /** One level of an ignored folder, when it is opened in the Files tab. */
+  repoDir(featureId: string, repo: string, dir: string): Promise<Result<{ files: string[]; dirs: string[]; truncated: boolean }>>;
   /** One file of a repo's worktree. */
   readRepoFile(featureId: string, repo: string, path: string): Promise<Result<FileContent>>;
   /** A file as it was at the branch's base (what Changes compares with); null when it did not exist there. */
@@ -682,3 +684,6 @@ export type CopilotRequestOutcome = { requested: string[]; skipped: { repo: stri
 
 /** Copilot has been asked to review and has not yet (its request is still pending). */
 export const copilotPending = (pr: { requested: string[] }) => pr.requested.some((l) => /copilot/i.test(l));
+
+/** A repo's files: what git sees, and what it ignores (files, and whole folders as one entry). */
+export type RepoFiles = { files: string[]; truncated: boolean; ignored: string[]; ignoredDirs: string[] };

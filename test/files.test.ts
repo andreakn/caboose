@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { listFiles, readFileAt, readRepoFile } from "../src/main/core/files.ts";
+import { listDir, listFiles, readFileAt, readRepoFile } from "../src/main/core/files.ts";
 
 const tmp = mkdtempSync(join(tmpdir(), "caboose-files-"));
 after(() => rmSync(tmp, { recursive: true, force: true }));
@@ -13,7 +13,8 @@ const repo = join(tmp, "repo");
 mkdirSync(join(repo, "src"), { recursive: true });
 mkdirSync(join(repo, "node_modules", "x"), { recursive: true });
 execFileSync("git", ["init", "-q", repo]);
-writeFileSync(join(repo, ".gitignore"), "node_modules/\n");
+writeFileSync(join(repo, ".gitignore"), "node_modules/\n.env\n");
+writeFileSync(join(repo, ".env"), "SECRET=1\n");
 writeFileSync(join(repo, "src", "a.ts"), "export const a = 1;\n");
 writeFileSync(join(repo, "node_modules", "x", "index.js"), "");
 execFileSync("git", ["add", "."], { cwd: repo });
@@ -24,9 +25,16 @@ writeFileSync(join(tmp, "secret.txt"), "outside\n");
 symlinkSync(join(tmp, "secret.txt"), join(repo, "link.txt"));
 
 test("lists tracked and untracked files, not ignored ones", async () => {
-  const { files, truncated } = await listFiles(repo);
+  const { files, truncated, ignored, ignoredDirs } = await listFiles(repo);
   assert.deepEqual(files, [".gitignore", "data.bin", "link.txt", "logo.png", "new.md", "src/a.ts"]);
   assert.equal(truncated, false);
+  // What git ignores, apart: files one by one, folders as one entry (read when opened).
+  assert.deepEqual(ignored, [".env"]);
+  assert.deepEqual(ignoredDirs, ["node_modules"]);
+  assert.deepEqual(listDir(repo, "node_modules"), { files: [], dirs: ["node_modules/x"], truncated: false });
+  assert.deepEqual(listDir(repo, "node_modules/x"), { files: ["node_modules/x/index.js"], dirs: [], truncated: false });
+  assert.throws(() => listDir(repo, "../"), /Not a path inside the repo/);
+  assert.equal(readRepoFile(repo, ".env").kind, "text", "an ignored file opens like any other");
 });
 
 test("reads text, images and binaries, and never leaves the worktree", () => {
