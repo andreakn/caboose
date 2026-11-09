@@ -3,6 +3,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { mainLineFile } from "./mainline.ts";
 import type { ConfigInput, ConfigView, HomeArea, JiraConfig, JiraInput, JiraView, LineSettings, LocalConfig, RepoConfig, RepoEntry, Secret } from "../../shared/types.ts";
 
 /** Encrypts secrets for the config file (Electron's safeStorage in the app). */
@@ -200,10 +201,24 @@ function cleanStrings<T extends object>(o: T): T {
 /** The folder in a repo where Caboose's files can live, to keep the repo's root tidy. */
 export const REPO_DIR = ".caboose";
 
-/** A repo's own config: `.caboose/config.json`, else `caboose.json` at its root. */
+/**
+ * A repo's own config: `.caboose/config.json`, else `caboose.json` at its
+ * root, as on the repo's main line (origin's default branch); where origin
+ * has neither, the main checkout's copy.
+ */
 export function loadRepoConfig(repoPath: string): RepoConfig {
+  const fromMain = mainLineFile(repoPath, `${REPO_DIR}/config.json`) ?? mainLineFile(repoPath, "caboose.json");
+  if (fromMain !== null) return parseJson<RepoConfig>(fromMain, `${repoPath} (main line)`);
   const inDir = join(repoPath, REPO_DIR, "config.json");
   return readJson<RepoConfig>(existsSync(inDir) ? inDir : join(repoPath, "caboose.json"));
+}
+
+function parseJson<T>(text: string, where: string): T {
+  try {
+    return JSON.parse(text) as T;
+  } catch (e) {
+    throw new Error(`${where}: not valid JSON: ${(e as Error).message}`);
+  }
 }
 
 function expandHome(p: string): string {

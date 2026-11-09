@@ -9,13 +9,18 @@
 //
 // A version starts with the git tag that made the release. Caboose finds that
 // tag and asks git whether it contains a PR's merge commit, so the script
-// knows nothing about features. It runs from the repo's main checkout, with
-// the user's own credentials (kubectl, VPN), in the background.
+// knows nothing about features. The script is the one on the repo's main line
+// (origin's default branch), run from the main checkout's folder with the
+// user's own credentials (kubectl, VPN), in the background; a feature that
+// changed running.sh itself runs its own copy, from its worktree.
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { RunningVersion } from "../../shared/types.ts";
 import { REPO_DIR } from "./config.ts";
+import { changedInFeature, repoFile } from "./mainline.ts";
 import { git } from "./run.ts";
 import { findBash } from "./scripts.ts";
 
@@ -50,13 +55,35 @@ export function tagOf(version: string, tags: string[]): string | undefined {
 
 export type RunningReport = { versions: RunningVersion[]; error?: string };
 
+/** A feature's worktree, when the script may be its own: it is, if the feature changed running.sh. */
+export type FeatureCheckout = { worktree: string; baseRef: string };
+
+/** The script to run and where: a feature's own changed copy, else the main line's (null when there is none). */
+export async function runningScript(source: string, feature?: FeatureCheckout): Promise<{ key: string; cwd: string; text: string } | null> {
+  if (feature && existsSync(join(feature.worktree, RUNNING_SCRIPT)) && (await changedInFeature(feature.worktree, feature.baseRef, RUNNING_SCRIPT))) {
+    return { key: feature.worktree, cwd: feature.worktree, text: readFileSync(join(feature.worktree, RUNNING_SCRIPT), "utf8") };
+  }
+  const file = repoFile(source, RUNNING_SCRIPT);
+  return file ? { key: source, cwd: source, text: file.text } : null;
+}
+
 /** Runs a repo's running.sh (null when it has none). Never throws: a failure is reported, not "nothing runs". */
-export async function readRunning(source: string, bashPath?: string): Promise<RunningReport | null> {
-  if (!existsSync(join(source, RUNNING_SCRIPT))) return null;
+export async function readRunning(source: string, bashPath?: string, feature?: FeatureCheckout): Promise<RunningReport | null> {
+  const script = await runningScript(source, feature).catch(() => null);
+  if (!script) return null;
+  return runScriptText(script.cwd, script.text, bashPath);
+}
+
+/** Runs the script's text (as a temporary file) in `cwd`. */
+async function runScriptText(cwd: string, text: string, bashPath?: string): Promise<RunningReport> {
   try {
+    const dir = join(tmpdir(), "caboose-running");
+    mkdirSync(dir, { recursive: true });
+    const file = join(dir, `${createHash("sha1").update(text).digest("hex").slice(0, 12)}.sh`);
+    if (!existsSync(file)) writeFileSync(file, text);
     const bash = await findBash(bashPath);
     const out = await new Promise<string>((resolve, reject) => {
-      const p = spawn(bash, [RUNNING_SCRIPT], { cwd: source, windowsHide: true, env: { ...process.env, GIT_TERMINAL_PROMPT: "0" }, stdio: ["ignore", "pipe", "pipe"] });
+      const p = spawn(bash, [file], { cwd, windowsHide: true, env: { ...process.env, GIT_TERMINAL_PROMPT: "0" }, stdio: ["ignore", "pipe", "pipe"] });
       let stdout = "";
       let stderr = "";
       p.stdout.on("data", (d) => (stdout += d));
@@ -111,11 +138,15 @@ export class RunningCache {
     this.bashPath = bashPath;
   }
 
-  get(source: string, fresh = false): Promise<RunningReport | null> {
-    const hit = this.cache.get(source);
+  /** Cached per script that runs: the main line's per repo, a feature's own per worktree. */
+  async get(source: string, fresh = false, feature?: FeatureCheckout): Promise<RunningReport | null> {
+    const script = await runningScript(source, feature).catch(() => null);
+    if (!script) return null;
+    const key = `${script.key}\0${createHash("sha1").update(script.text).digest("hex")}`;
+    const hit = this.cache.get(key);
     if (hit && !fresh && Date.now() - hit.at < 60_000) return hit.value;
-    const value = readRunning(source, this.bashPath());
-    this.cache.set(source, { at: Date.now(), value });
+    const value = runScriptText(script.cwd, script.text, this.bashPath());
+    this.cache.set(key, { at: Date.now(), value });
     return value;
   }
 }

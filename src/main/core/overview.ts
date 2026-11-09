@@ -23,7 +23,7 @@ export type OverviewDeps = {
   /** How a repo's releases are made (its config, else the repo's own). */
   strategyFor?: (r: FeatureRepo) => ReleaseStrategy | undefined;
   /** What a repo's .caboose/running.sh reports (null: it has none). Cached by the caller. */
-  running?: (source: string, fresh: boolean) => Promise<Running | null>;
+  running?: (source: string, fresh: boolean, feature?: { worktree: string; baseRef: string }) => Promise<Running | null>;
 };
 
 const jiraCache = new Map<string, { at: number; value: Promise<Record<string, JiraStatus>> }>();
@@ -77,7 +77,7 @@ export async function featureOverview(f: Feature, d: OverviewDeps, fresh = false
   // What runs where (repos with a running.sh), and whether it has the merged change.
   const running = await Promise.all(
     f.repos.map(async (r): Promise<Running | undefined> => {
-      const report = await d.running?.(r.source, fresh).catch(() => null);
+      const report = await d.running?.(r.source, fresh, { worktree: r.path, baseRef: r.baseRef }).catch(() => null);
       if (!report) return undefined;
       const pr = prs.prs[r.name];
       const merge = pr?.state === "MERGED" ? pr.mergeCommit : undefined;

@@ -16,6 +16,7 @@ import type { Coordinator } from "./coordination.ts";
 import { changes, fullPatch } from "./diff.ts";
 import { addTodo, readDocs } from "./docs.ts";
 import { readFeatureJira } from "./jira.ts";
+import { repoFile } from "./mainline.ts";
 import { RUNNING_SCRIPT } from "./running.ts";
 import { runnables } from "./runscripts.ts";
 
@@ -573,7 +574,7 @@ export function cabooseInstructions(f: Feature, agent: "claude" | "copilot" = "c
     `The feature's working files are plain markdown in ${f.folder}: brief.md (the goal), plan.md (a checklist the user follows; tick items as they are done), briefs/<repo>.md (each repo's part) and log.md (append-only; write to it with ${n("Log")} and ${n("ReportStatus")}, not by editing). Read them when they exist.`,
     `The user sees the changes in Caboose's Changes view. Use ${n("GetWorkspaceDiff")} to see the same diff, ${n("GetDiffComments")} to read the user's review comments, and ${n("DiffComment")} to point the user at specific lines.`,
     `Use ${n("GetTerminalOutput")} to read the user's terminals in Caboose, such as a dev server started by the Run button. Ports ${f.port}–${f.port + 99} are reserved for this feature; each repo's scripts and terminals get their own CABOOSE_PORT.`,
-    ...(f.repos.some((r) => runnables(r.path).filter((s) => s.moniker).length > 1 || existsSync(join(r.path, RUNNING_SCRIPT)))
+    ...(f.repos.some((r) => runnables(r.path).filter((s) => s.moniker).length > 1 || existsSync(join(r.path, RUNNING_SCRIPT)) || repoFile(r.source, RUNNING_SCRIPT) !== null)
       ? [`Some repos have several components (run_<moniker>.sh scripts, services). Once you know which ones this feature changes, say so with ${n("SetComponents")}: the user then sees only their deployments.`]
       : []),
     `${n("GetFeatureStatus")} shows every repo's reported status, chat, git state and PR at a glance.`,

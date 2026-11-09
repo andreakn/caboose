@@ -588,7 +588,7 @@ const overviewOf = (featureId: string, fresh = false) =>
       onBranch: (id, repo, branch) => features.setBranch(id, repo, branch),
       stagesFor,
       strategyFor: (r) => releaseStrategy(r.name, r.source),
-      running: (source, fresh) => runningCache.get(source, fresh),
+      running: (source, fresh, feature) => runningCache.get(source, fresh, feature),
     },
     fresh,
   );
