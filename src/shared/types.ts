@@ -715,5 +715,8 @@ export type CopilotRequestOutcome = { requested: string[]; skipped: { repo: stri
 /** Copilot has been asked to review and has not yet (its request is still pending). */
 export const copilotPending = (pr: { requested: string[] }) => pr.requested.some((l) => /copilot/i.test(l));
 
+/** Whether asking Copilot for a review would add anything: not pending, and not already done on the latest commit. */
+export const copilotWanted = (pr: { requested: string[]; copilot?: { current: boolean } }) => !copilotPending(pr) && !pr.copilot?.current;
+
 /** A repo's files: what git sees, and what it ignores (files, and whole folders as one entry). */
 export type RepoFiles = { files: string[]; truncated: boolean; ignored: string[]; ignoredDirs: string[] };

@@ -9,7 +9,7 @@ import {
   type MergeMethod,
   resolveConflictsMessage,
 } from "../../shared/github.ts";
-import { copilotPending, type Feature, type FeatureRepo, type JiraLevel, type RepoOverview, type StageRelease } from "../../shared/types.ts";
+import { copilotPending, copilotWanted, type Feature, type FeatureRepo, type JiraLevel, type RepoOverview, type StageRelease } from "../../shared/types.ts";
 import { activeChat } from "./Chat.tsx";
 import { askText } from "./Dialog.tsx";
 import { MenuButton, type MenuItem, useApps } from "./Menu.tsx";
@@ -248,10 +248,20 @@ export function RepoRow(props: {
         </span>
       )}
       {ov?.pr ? <PrChip pr={ov.pr} /> : ghPr && <PrLink pr={ghPr} />}
-      {live && ov?.pr && copilotPending(ov.pr) && (
+      {live && ov?.pr && copilotPending(ov.pr) ? (
         <span className="chip copilot-pending" title="Copilot has been asked to review and has not yet">
           Copilot reviewing…
         </span>
+      ) : (
+        ov?.pr?.copilot && (
+          <span
+            className={`chip copilot-verdict v-${ov.pr.copilot.verdict}${ov.pr.copilot.current ? "" : " outdated"}`}
+            title={`Copilot's review, ${ov.pr.copilot.at.slice(0, 16).replace("T", " ")}: ${ov.pr.copilot.summary}${ov.pr.copilot.current ? "" : "\nOf an older commit: there are newer commits it has not seen."}`}
+          >
+            Copilot {{ approve: "🟢", comments: "🟡", changes: "🔴", reviewed: "💬" }[ov.pr.copilot.verdict]} {ov.pr.copilot.summary}
+            {ov.pr.copilot.current ? "" : " (older commit)"}
+          </span>
+        )
       )}
       {ov?.release && <ReleaseChips release={ov.release} hide={otherComponents(ov)} />}
       {ov?.running && <RunningChips feature={feature} ov={ov} onChanged={props.onChanged} />}
@@ -270,14 +280,14 @@ export function RepoRow(props: {
           Fix CI
         </button>
       )}
-      {live && ov?.pr && !copilotPending(ov.pr) && !feature.archived && (
+      {live && ov?.pr && copilotWanted(ov.pr) && !feature.archived && (
         <button
           className="copilot-review"
           disabled={!!busy}
           title={`Ask GitHub Copilot to review PR #${ov.pr.number} (again, if it already has: it reviews what is new)`}
           onClick={() => void act("Asking Copilot…", () => requestCopilot(feature.id, repo.name))}
         >
-          Copilot review
+          {ov.pr.copilot ? "Copilot review again" : "Copilot review"}
         </button>
       )}
       {primary && (

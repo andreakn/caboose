@@ -66,7 +66,27 @@ export type PrDetails = {
   checks: { state: "none" | "passing" | "pending" | "failing"; total: number; passed: number; failed: { name: string; url?: string }[]; pending: number };
   /** The commit a merged PR became on its base (a merge or squash commit). */
   mergeCommit?: string;
+  /** Copilot's latest review, if it has reviewed. */
+  copilot?: CopilotReview;
 };
+
+/**
+ * Copilot's latest review of a PR. Copilot only comments (it never approves
+ * in GitHub's sense), so its verdict is the heading of its review: 🟢
+ * "Approval recommended", or something to look at. `current`: it reviewed
+ * the PR's latest commit (else there are newer commits it has not seen).
+ */
+export type CopilotReview = { verdict: "approve" | "comments" | "changes" | "reviewed"; summary: string; at: string; current: boolean };
+
+/** The verdict and its words from the heading of Copilot's review ("### 🟢 Approval recommended"). */
+export function copilotVerdict(body: string): { verdict: CopilotReview["verdict"]; summary: string } {
+  const heading = body.split("\n").find((l) => /^#{1,4}\s/.test(l.trim()))?.replace(/^#+\s*/, "").trim() ?? "";
+  const summary = heading.replace(/^[\p{Extended_Pictographic}\uFE0F\s]+/u, "").trim() || "Reviewed";
+  if (/🟢|✅/.test(heading) || /approv/i.test(summary)) return { verdict: "approve", summary };
+  if (/🔴|❌/.test(heading) || /change|block/i.test(summary)) return { verdict: "changes", summary };
+  if (/🟡|🟠|⚠/.test(heading) || /comment|issue|suggest/i.test(summary)) return { verdict: "comments", summary };
+  return { verdict: "reviewed", summary };
+}
 
 /** "origin/main" → "main" */
 export function baseBranch(baseRef: string): string {

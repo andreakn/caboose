@@ -1,7 +1,7 @@
 // Everything about a feature's pull requests in one GitHub GraphQL call (via
 // `gh api graphql`): per repo the newest PR on its branch, with review threads,
 // reviews, checks, merge state and size. Cached 60 s; refresh bypasses it.
-import type { PrDetails, PrThread } from "../../shared/github.ts";
+import { type CopilotReview, copilotVerdict, type PrDetails, type PrThread } from "../../shared/github.ts";
 import { git, run } from "./run.ts";
 
 export type Runner = (file: string, args: string[], cwd?: string) => Promise<string>;
@@ -28,9 +28,9 @@ export function slugOf(checkout: string): Promise<string | null> {
 }
 
 const FIELDS = `number title url state isDraft reviewDecision mergeable mergeStateStatus additions deletions changedFiles
-  headRefName baseRefName updatedAt author { login } mergeCommit { oid }
+  headRefName headRefOid baseRefName updatedAt author { login } mergeCommit { oid }
   reviewThreads(first: 100) { nodes { isResolved isOutdated path line comments(first: 1) { totalCount nodes { author { login } body url } } } }
-  latestReviews(first: 30) { nodes { state author { login } } }
+  latestReviews(first: 30) { nodes { state author { login } body submittedAt commit { oid } } }
   reviewRequests(first: 20) { nodes { requestedReviewer { ... on User { login } ... on Bot { login } } } }
   commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 100) { nodes {
     __typename
@@ -64,6 +64,11 @@ export function shape(repo: string, pr: Raw): PrDetails {
   const failed = checks.filter((c) => FAILED.includes(c.result));
   const pending = checks.filter((c) => !FAILED.includes(c.result) && !PASSED.includes(c.result));
   const reviews = (pr.latestReviews?.nodes ?? []).map((r: Raw) => ({ state: r.state as string, author: r.author?.login as string }));
+  // Copilot's latest review: its verdict heading, and whether it saw the latest commit.
+  const byCopilot = (pr.latestReviews?.nodes ?? []).filter((r: Raw) => /copilot/i.test(r.author?.login ?? "")).at(-1);
+  const copilot: CopilotReview | undefined = byCopilot
+    ? { ...copilotVerdict(String(byCopilot.body ?? "")), at: byCopilot.submittedAt ?? "", current: !pr.headRefOid || byCopilot.commit?.oid === pr.headRefOid }
+    : undefined;
   return {
     repo,
     number: pr.number,
@@ -85,6 +90,7 @@ export function shape(repo: string, pr: Raw): PrDetails {
     changesRequested: reviews.filter((r: { state: string }) => r.state === "CHANGES_REQUESTED").map((r: { author: string }) => r.author),
     requested: (pr.reviewRequests?.nodes ?? []).map((n: Raw) => n.requestedReviewer?.login).filter(Boolean),
     ...(pr.mergeCommit?.oid ? { mergeCommit: pr.mergeCommit.oid as string } : {}),
+    ...(copilot ? { copilot } : {}),
     checks: {
       state: !checks.length ? "none" : failed.length ? "failing" : pending.length ? "pending" : "passing",
       total: checks.length,

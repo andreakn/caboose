@@ -1130,3 +1130,8 @@ button.fix-ci:hover { background: color-mix(in srgb, var(--danger) 85%, black); 
 .scope-panel .view-tabs > button { border-bottom: 1px solid transparent; background-clip: padding-box; margin-bottom: 0; }
 .scope-panel .view-tabs > button:not(.active) { background-color: color-mix(in srgb, var(--bg) 60%, transparent); }
 .scope-panel .view-tabs > button.active { border-bottom: 1px solid var(--card); background-clip: border-box; }
+.chip.copilot-verdict { font-size: 11px; white-space: nowrap; }
+.chip.copilot-verdict.v-approve { background: color-mix(in srgb, var(--ok) 20%, transparent); }
+.chip.copilot-verdict.v-changes { background: color-mix(in srgb, var(--danger) 18%, transparent); }
+.chip.copilot-verdict.v-comments { background: color-mix(in srgb, var(--warn) 20%, transparent); }
+.chip.copilot-verdict.outdated { opacity: 0.65; }

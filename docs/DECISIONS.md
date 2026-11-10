@@ -1025,6 +1025,15 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      asks" / "needs your approval" / "is done" / "stopped"); body: the
      question asked, what the approval is for and why it asks, the first
      line of the final answer, or the error (`noticeBody`, tested).
+185. **Copilot's verdict is shown, and asking again only when it helps.**
+     Copilot reviews as comments (never GitHub "approvals"), with its verdict
+     as the review's heading ("### 🟢 Approval recommended"). Caboose reads
+     its latest review (body, time, the commit it reviewed) and shows a chip:
+     "Copilot 🟢 Approval recommended" (🟡 issues, 🔴 changes), faded with
+     "(older commit)" when there are newer commits it has not seen. The
+     Copilot review buttons (per repo, and "all" for the feature) only offer
+     PRs it has not reviewed at their latest commit and has not been asked
+     to; then the per-repo one reads "Copilot review again".
 
 ## Answered (2026-11-05)
 

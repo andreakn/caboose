@@ -1,7 +1,7 @@
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import type { Chat } from "../../shared/chat.ts";
 import type { PrDetails } from "../../shared/github.ts";
-import { copilotPending, type Feature, type FeatureOverview, type JiraStatus, type RepoOverview } from "../../shared/types.ts";
+import { copilotWanted, type Feature, type FeatureOverview, type JiraStatus, type RepoOverview } from "../../shared/types.ts";
 import { activityOf, useActivityVersion } from "./activity.ts";
 import { StatusChip } from "./Plan.tsx";
 import { repoLabel } from "./labels.ts";
@@ -150,11 +150,11 @@ export function PrTiles({ ov, loading, refresh, featureId, extra }: { ov: Featur
         <span className="spacer" />
         {asking && <span className="muted small">{asking}</span>}
         {extra}
-        {featureId && live.some((p) => !copilotPending(p)) && (
+        {featureId && live.some((p) => copilotWanted(p)) && (
           <button
             className="copilot-review"
             disabled={!!asking}
-            title={`Ask GitHub Copilot to review every open PR in the feature where it has not been asked already (${live.filter((p) => !copilotPending(p)).length})`}
+            title={`Ask GitHub Copilot to review every open PR in the feature that it has not reviewed at their latest commit, nor been asked to (${live.filter((p) => copilotWanted(p)).length})`}
             onClick={async () => {
               setAsking("Asking Copilot…");
               const r = await window.caboose.requestCopilotReview(featureId);
@@ -163,7 +163,7 @@ export function PrTiles({ ov, loading, refresh, featureId, extra }: { ov: Featur
               setTimeout(() => setAsking(null), 6000);
             }}
           >
-            Copilot review all ({live.filter((p) => !copilotPending(p)).length})
+            Copilot review all ({live.filter((p) => copilotWanted(p)).length})
           </button>
         )}
         <button onClick={refresh} disabled={loading} title="Ask GitHub and Jira again (answers are cached for a minute)">

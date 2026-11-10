@@ -367,6 +367,7 @@ ipcMain.handle("github:copilotReview", (_e, featureId: string, repo?: string) =>
           if (!pr) return void out.skipped.push({ repo: r.name, why: "no PR" });
           if (pr.state !== "OPEN" && pr.state !== "DRAFT") return void out.skipped.push({ repo: r.name, why: `PR #${pr.number} is ${pr.state.toLowerCase()}` });
           if (copilotPending(pr)) return void out.skipped.push({ repo: r.name, why: "a Copilot review is already pending" });
+          if (pr.copilot?.current) return void out.skipped.push({ repo: r.name, why: `Copilot already reviewed the latest commit (${pr.copilot.summary})` });
           try {
             await github.requestCopilotReview(r.path, pr.number);
             out.requested.push(r.name);
