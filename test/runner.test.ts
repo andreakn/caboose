@@ -272,6 +272,7 @@ test("a program signed in to an Azure tenant starts with that tenant's store; th
     return "";
   };
   assert.equal(await read("azure.txt"), store);
-  assert.equal(await read("azure-stock.txt"), "none", "a program with no tenant keeps the usual store");
+  // The usual store: whatever the environment says (GitHub's Windows runners set one), else none.
+  assert.equal(await read("azure-stock.txt"), process.env.AZURE_CONFIG_DIR || "none", "a program with no tenant keeps the usual store");
   await runner.stopAll(f.id, 1000);
 });
