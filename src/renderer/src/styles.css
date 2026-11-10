@@ -1114,3 +1114,19 @@ button.copilot-review { white-space: nowrap; }
 /* Fix CI: failing builds, for the agent to look into. */
 button.fix-ci { background: var(--danger); border-color: var(--danger); color: var(--card); font-weight: 600; white-space: nowrap; }
 button.fix-ci:hover { background: color-mix(in srgb, var(--danger) 85%, black); }
+
+/* Tabs as sheets of paper: the active one is in front, the same colour as its panel and with no line
+   under it (it covers the panel's top edge); the others sit behind, a neutral grey, with the panel's
+   edge running under them (their bottom border is see-through and their background stops above it). */
+.scope-tabs { margin-bottom: -1px; }
+.scope-tabs button { border-bottom: 1px solid transparent; background-clip: padding-box; color: var(--muted); }
+.scope-tabs button:not(.active) { background-color: color-mix(in srgb, var(--text) 6%, var(--bg)); border-color: color-mix(in srgb, var(--text) 10%, var(--border)); border-bottom-color: transparent; }
+.scope-tabs button.active {
+  color: var(--text);
+  border-bottom-color: color-mix(in srgb, var(--tint) 6%, color-mix(in srgb, var(--card) 45%, var(--bg)));
+  background-clip: border-box;
+}
+.scope-panel .view-tabs { margin-bottom: -1px; }
+.scope-panel .view-tabs > button { border-bottom: 1px solid transparent; background-clip: padding-box; margin-bottom: 0; }
+.scope-panel .view-tabs > button:not(.active) { background-color: color-mix(in srgb, var(--bg) 60%, transparent); }
+.scope-panel .view-tabs > button.active { border-bottom: 1px solid var(--card); background-clip: border-box; }
