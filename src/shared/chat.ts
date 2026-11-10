@@ -286,3 +286,42 @@ export function currentActivity(items: ChatItem[]): ChatItem | undefined {
   }
   return undefined;
 }
+
+/** "Bash", "Edit", or an MCP tool's own name ("mcp__caboose__AddTodo" → "AddTodo"). */
+const shortTool = (name: string) => name.replace(/^mcp__[^_]+__/, "");
+const firstLine = (s: string, max = 160) => {
+  const line = s.split("\n").find((l) => l.trim())?.trim() ?? "";
+  return line.length > max ? `${line.slice(0, max - 1)}…` : line;
+};
+
+/**
+ * What a notification says about a chat event: the question asked, what
+ * approval is for (and why it asks), or how the turn ended (the start of
+ * its last message, or the error). `lastText` is the chat's latest message.
+ */
+export function noticeBody(e: LastingEvent, lastText?: string): string {
+  switch (e.t) {
+    case "question": {
+      const q = e.questions[0]?.question ?? "A question";
+      return e.questions.length > 1 ? `${firstLine(q)} (and ${e.questions.length - 1} more)` : firstLine(q);
+    }
+    case "permission": {
+      const input = (e.input ?? {}) as Record<string, unknown>;
+      const what =
+        typeof input.description === "string"
+          ? input.description
+          : typeof input.command === "string"
+            ? input.command
+            : typeof input.file_path === "string"
+              ? input.file_path
+              : "";
+      const ask = `Wants to use ${shortTool(e.tool)}${what ? `: ${firstLine(what, 120)}` : ""}`;
+      return e.reason ? `${ask}. ${firstLine(e.reason, 120)}` : ask;
+    }
+    case "result":
+      if (!e.ok) return `Stopped: ${firstLine(e.error ?? "it failed")}`;
+      return lastText ? firstLine(lastText) : "Done.";
+    default:
+      return "";
+  }
+}

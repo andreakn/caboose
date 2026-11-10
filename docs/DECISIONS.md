@@ -1020,6 +1020,11 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      `git commit` can start with `[ -n "$CABOOSE" ] && exit 0;` to let
      Caboose's agents commit on feature branches while still asking
      everywhere else.
+184. **Notifications say what they are about**, not the chat's title (its
+     first message). Title: where and what happened ("Torup · shop: Claude
+     asks" / "needs your approval" / "is done" / "stopped"); body: the
+     question asked, what the approval is for and why it asks, the first
+     line of the final answer, or the error (`noticeBody`, tested).
 
 ## Answered (2026-11-05)
 

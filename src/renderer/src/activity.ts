@@ -1,11 +1,13 @@
 // What every chat is doing, across all workspaces: working, waiting for the
 // user (a permission or a question), or finished while the user looked away.
 import { useSyncExternalStore } from "react";
+import { noticeBody } from "../../shared/chat.ts";
 
 export type Activity = { running: boolean; waiting: number; unread: boolean };
-type Notice = { chatId: string; kind: "done" | "needs" };
+/** `body`: what it is about (the question, what approval is for, the answer's start). */
+type Notice = { chatId: string; kind: "done" | "needs"; what: "question" | "approval" | "done" | "stopped"; body: string };
 
-const chats = new Map<string, { running: boolean; waiting: Set<string>; unread: boolean }>();
+const chats = new Map<string, { running: boolean; waiting: Set<string>; unread: boolean; lastText?: string }>();
 const listeners = new Set<() => void>();
 let version = 0;
 let visibleChat: string | null = null;
@@ -28,10 +30,13 @@ window.caboose.onChatEvent((chatId, e) => {
     case "status":
       c.running = e.running;
       break;
+    case "text":
+      c.lastText = e.text;
+      return;
     case "permission":
     case "question":
       c.waiting.add(e.id);
-      if (!seen(chatId)) onNotice({ chatId, kind: "needs" });
+      if (!seen(chatId)) onNotice({ chatId, kind: "needs", what: e.t === "question" ? "question" : "approval", body: noticeBody(e) });
       break;
     case "permission_answer":
     case "question_answer":
@@ -40,7 +45,7 @@ window.caboose.onChatEvent((chatId, e) => {
     case "result":
       if (!seen(chatId)) {
         c.unread = true;
-        onNotice({ chatId, kind: "done" });
+        onNotice({ chatId, kind: "done", what: e.ok ? "done" : "stopped", body: noticeBody(e, c.lastText) });
       }
       break;
     default:

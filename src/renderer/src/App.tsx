@@ -100,7 +100,7 @@ export function App() {
   stateRef.current = state;
   useEffect(
     () =>
-      onActivityNotice(({ chatId, kind }) => {
+      onActivityNotice(({ chatId, kind, what, body }) => {
         notifySound(kind);
         if (!notificationsOn() || document.hasFocus()) return;
         const s = stateRef.current;
@@ -108,10 +108,10 @@ export function App() {
         const f = chat && s.features.find((x) => x.id === chat.featureId);
         if (!chat || !f) return;
         const who = chat.agent === "copilot" ? "Copilot" : "Claude";
-        const n = new Notification(kind === "done" ? `${stationLabel(f.name)}: ${who} is done` : `${stationLabel(f.name)}: ${who} needs you`, {
-          body: chat.title,
-          silent: kind === "done",
-        });
+        // "Torup · shop: Claude asks", and in the body what it is about, not the chat's first message.
+        const where = `${stationLabel(f.name)}${chat.repo ? ` · ${repoLabel(chat.repo)}` : ""}`;
+        const happened = { question: `${who} asks`, approval: `${who} needs your approval`, done: `${who} is done`, stopped: `${who} stopped` }[what];
+        const n = new Notification(`${where}: ${happened}`, { body, silent: kind === "done" });
         n.onclick = () => {
           api.focusWindow();
           openChatAnywhere(f.id, chat.id);

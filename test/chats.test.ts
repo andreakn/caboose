@@ -361,3 +361,18 @@ test("Claude sessions are marked as Caboose's (CABOOSE=1, the feature, the repo)
   assert.equal(env.CABOOSE_REPO, "web");
   assert.equal(env.PATH, process.env.PATH, "the rest of the environment is kept");
 });
+
+test("a notification says what it is about: the question, what approval is for, how the turn ended", async () => {
+  const { noticeBody } = await import("../src/shared/chat.ts");
+  assert.equal(
+    noticeBody({ t: "question", id: "q", questions: [{ question: "Which currency should the receipt use?", header: "", options: [], multiSelect: false }] }),
+    "Which currency should the receipt use?",
+  );
+  assert.equal(
+    noticeBody({ t: "permission", id: "p", tool: "Bash", input: { command: "git push", description: "Push the fix" }, reason: "Commit requires your approval." }),
+    "Wants to use Bash: Push the fix. Commit requires your approval.",
+  );
+  assert.equal(noticeBody({ t: "permission", id: "p", tool: "mcp__caboose__AddTodo", input: {} }), "Wants to use AddTodo");
+  assert.equal(noticeBody({ t: "result", id: "r", ok: true, durationMs: 1, turns: 1 }, "Fixed: the date was off by one.\n\nDetails…"), "Fixed: the date was off by one.");
+  assert.equal(noticeBody({ t: "result", id: "r", ok: false, durationMs: 1, turns: 1, error: "Credit balance too low" }), "Stopped: Credit balance too low");
+});
