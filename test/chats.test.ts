@@ -359,7 +359,9 @@ test("Claude sessions are marked as Caboose's (CABOOSE=1, the feature, the repo)
   assert.equal(env.CABOOSE, "1");
   assert.equal(env.CABOOSE_FEATURE, "finse");
   assert.equal(env.CABOOSE_REPO, "web");
-  assert.equal(env.PATH, process.env.PATH, "the rest of the environment is kept");
+  // Windows spells it "Path": process.env does not mind the case, a copied object does.
+  const path = Object.keys(process.env).find((k) => k.toUpperCase() === "PATH")!;
+  assert.equal(env[path], process.env[path], "the rest of the environment is kept");
 });
 
 test("a notification says what it is about: the question, what approval is for, how the turn ended", async () => {
