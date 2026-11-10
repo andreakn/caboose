@@ -1126,6 +1126,11 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      line, merging and archiving look the PR up by the upstream's name on
      origin (else the local name), and Push pushes to that name again instead
      of making a second remote branch with the local name.
+198. **Going to the feature or a repo opens its chat.** Clicking the Feature
+     tab or a repo's tab opens its Chat tab (now the leftmost of a repo's
+     tabs too) on its default chat: the feature's central chat (its first)
+     or the repo's first chat. Other tabs are a click away; a new repo view
+     starts on Chat as well.
 
 ## Answered (2026-11-05)
 

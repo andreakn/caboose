@@ -21,7 +21,7 @@ import {
 } from "../../shared/types.ts";
 import { type Activity, activityOf, attentionOf, onActivityNotice, useActivityVersion } from "./activity.ts";
 import { ChangesView, useFeatureChanges } from "./Changes.tsx";
-import { activeChat, ChatArea } from "./Chat.tsx";
+import { activeChat, ChatArea, rememberChat } from "./Chat.tsx";
 import { dispatch, useCommand } from "./commands.ts";
 import { Configure } from "./Configure.tsx";
 import { JiraChip, RepoRow } from "./GitHub.tsx";
@@ -478,7 +478,7 @@ function FeatureView(props: {
   };
   const tab = scopeRepo ? null : featureTab;
   const [repoTab, setRepoTabRaw] = useState<RepoTab>(() =>
-    location.hash === "#changes" ? "changes" : ((localStorage.getItem("caboose-repo-tab") as RepoTab | null) ?? "files"),
+    location.hash === "#changes" ? "changes" : ((localStorage.getItem("caboose-repo-tab") as RepoTab | null) ?? "chat"),
   );
   const setRepoTab = (t: RepoTab) => {
     setRepoTabRaw(t);
@@ -487,6 +487,18 @@ function FeatureView(props: {
   const openRepo = (repo: string, t?: RepoTab) => {
     setScope(repo);
     if (t) setRepoTab(t);
+  };
+  /**
+   * Going to the feature or a repo (its tab above): its Chat tab, on its
+   * default chat, the feature's central one (its first) or the repo's first.
+   */
+  const goTo = (repo?: string) => {
+    const chat = repo ? props.chats.find((c) => c.repo === repo) : (props.chats.find((c) => !c.repo) ?? props.chats[0]);
+    if (chat) rememberChat(f, chat.id, repo);
+    if (repo) openRepo(repo, "chat");
+    else setTab("chat");
+    // The feature's chat area may already be there (another feature tab was open): tell it too.
+    if (chat) setTimeout(() => dispatch(`selectChat:${chat.id}`));
   };
   /** The repo's own chat when it has one, else the feature's. */
   const showChat = (repo?: string) => {
@@ -799,7 +811,7 @@ function FeatureView(props: {
       <div className="scope-tabs">
         <button
           className={scopeRepo ? "" : "active"}
-          onClick={() => setScope("feature")}
+          onClick={() => goTo()}
           title="What the repos share: the central chat, the plan, every program, the PRs, all activity"
         >
           Feature
@@ -809,7 +821,7 @@ function FeatureView(props: {
           const n = diff.byRepo[r.name]?.files.length ?? 0;
           const rov = overview.ov?.repos.find((x) => x.name === r.name);
           return (
-            <button key={r.name} className={scopeRepo?.name === r.name ? "active" : ""} onClick={() => setScope(r.name)} title={r.path}>
+            <button key={r.name} className={scopeRepo?.name === r.name ? "active" : ""} onClick={() => goTo(r.name)} title={r.path}>
               {rov && <HealthDot r={rov} />}
               {repoLabel(r.name)}
               <AttentionDot chats={props.chats.filter((c) => c.repo === r.name)} />
@@ -869,6 +881,13 @@ function FeatureView(props: {
             {/* The repo's state and actions on their own line, so the tab row stays tabs. */}
             <div className="repo-statusline">{repoRow(scopeRepo, true)}</div>
             <div className="view-tabs">
+              <button className={repoTab === "chat" ? "active" : ""} onClick={() => setRepoTab("chat")}>
+                Chat
+                {(() => {
+                  const n = props.chats.filter((c) => c.repo === scopeRepo.name).length;
+                  return n > 0 ? <span className="badge">{n}</span> : null;
+                })()}
+              </button>
               <button className={repoTab === "files" ? "active" : ""} onClick={() => setRepoTab("files")}>
                 Files
               </button>
@@ -878,13 +897,6 @@ function FeatureView(props: {
                 {(() => {
                   const n = props.comments.filter((c) => c.repo === scopeRepo.name && !c.resolved).length;
                   return n > 0 ? <span className="badge comments">💬{n}</span> : null;
-                })()}
-              </button>
-              <button className={repoTab === "chat" ? "active" : ""} onClick={() => setRepoTab("chat")}>
-                Chat
-                {(() => {
-                  const n = props.chats.filter((c) => c.repo === scopeRepo.name).length;
-                  return n > 0 ? <span className="badge">{n}</span> : null;
                 })()}
               </button>
               <button className={repoTab === "run" ? "active" : ""} onClick={() => setRepoTab("run")}>

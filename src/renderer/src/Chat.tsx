@@ -54,6 +54,11 @@ function useModels(agent: Agent): ModelOption[] {
 const activeKey = (ws: Feature) => `caboose-chat-${ws.id}`;
 
 /** The chat tab the user last had open in a feature. */
+/** Makes a chat the one shown next time the feature's (or a repo's) chats are opened. */
+export function rememberChat(ws: Feature, id: string, repo?: string): void {
+  localStorage.setItem(repo ? `${activeKey(ws)}-${repo}` : activeKey(ws), id);
+}
+
 export function activeChat(ws: Feature, chats: Chat[]): Chat | undefined {
   return chats.find((c) => c.id === localStorage.getItem(activeKey(ws))) ?? chats.at(-1);
 }
