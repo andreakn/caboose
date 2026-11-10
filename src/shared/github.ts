@@ -118,13 +118,22 @@ export function createPrsMessage(
     .join("\n");
 }
 
-export function fixChecksMessage(repo: string, pr: PullRequest): string {
-  const failed = pr.checks.filter((c) => c.state === "failure");
+/** Failing CI on one PR or several: what failed, and how to go about it. */
+export function fixCiMessage(failing: { repo: string; pr: number; checks: { name: string; url?: string }[] }[]): string {
+  const one = failing.length === 1;
   return [
-    `These checks fail on PR #${pr.number} of the ${repo} repo (the ${repo}/ folder):`,
-    ...failed.map((c) => `- ${c.name}${c.url ? ` (${c.url})` : ""}`),
+    one
+      ? `CI fails on PR #${failing[0].pr} of the ${failing[0].repo} repo (the ${failing[0].repo}/ folder):`
+      : "CI fails on these PRs of the feature (each repo's worktree is its folder):",
+    ...failing.flatMap((f) => [
+      ...(one ? [] : [`${f.repo}, PR #${f.pr}:`]),
+      ...f.checks.map((c) => `${one ? "" : "  "}- ${c.name}${c.url ? ` (${c.url})` : ""}`),
+    ]),
     "",
-    "Find out why (`gh pr checks`, `gh run view <run-id> --log-failed`), fix it, run what you can locally, then commit and push.",
+    `${one ? "Find out why" : "For each, find out why"}: \`gh pr checks\`, then \`gh run view <run-id> --log-failed\` in that repo's folder.`,
+    "If the change broke it: fix it, run the same thing locally where you can (tests, build, lint), then commit and push.",
+    "If it has nothing to do with the change (a flaky test, the runner, an outage): say so, and re-run the failed jobs with `gh run rerun <run-id> --failed` instead of changing code.",
+    "Tell me what it was and what you did.",
   ].join("\n");
 }
 

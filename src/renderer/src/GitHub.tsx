@@ -3,7 +3,7 @@ import type { Chat } from "../../shared/chat.ts";
 import {
   checksSummary,
   createPrMessage,
-  fixChecksMessage,
+  fixCiMessage,
   type GitHubStatus,
   mergeConflictsMessage,
   type MergeMethod,
@@ -156,6 +156,8 @@ export function RepoRow(props: {
   const isDraft = pr ? pr.state === "DRAFT" || ("isDraft" in pr && pr.isDraft) : false;
   const failing = ov?.pr ? ov.pr.checks.state === "failing" : ghPr ? checksSummary(ghPr.checks).failed > 0 : false;
   const conflicts = pr?.mergeable === "CONFLICTING";
+  // The failing checks, from whichever PR data is there.
+  const failedChecks = ov?.pr ? ov.pr.checks.failed : ghPr ? ghPr.checks.filter((c) => c.state === "failure").map((c) => ({ name: c.name, ...(c.url ? { url: c.url } : {}) })) : [];
   const canPush = Boolean(b?.upstream && b.ahead > 0);
   // GitHub says CLEAN (or HAS_HOOKS) once required checks and reviews are done and nothing conflicts.
   const mergeState = ov?.pr?.mergeState;
@@ -185,9 +187,7 @@ export function RepoRow(props: {
       ? { label: "Pull", run: () => void mergeLocally("pull") }
       : status?.available && !live && pr?.state !== "MERGED"
       ? { label: "Create PR", run: () => createPr(false) }
-      : live && failing
-        ? { label: "Fix checks", run: () => ghPr && void askAgent(fixChecksMessage(repo.name, ghPr)) }
-        : live && conflicts
+      : live && conflicts
           ? { label: "Resolve conflicts", run: () => ghPr && void askAgent(resolveConflictsMessage(repo.name, ghPr)) }
           : canPush
             ? { label: "Push", run: () => void act("Pushing…", () => api.push(feature.id, repo.name)) }
@@ -212,7 +212,7 @@ export function RepoRow(props: {
         ...(canPush ? [{ label: "Push", onClick: () => void act("Pushing…", () => api.push(feature.id, repo.name)) }] : []),
         ...(b && b.behind > 0 ? [{ label: `Pull ${b.behind} commit(s) from ${b.upstream}`, onClick: () => void mergeLocally("pull") }] : []),
         ...(b && b.behindBase > 0 ? [{ label: `Merge ${repo.baseRef} into this branch (${b.behindBase} new)`, onClick: () => void mergeLocally("base") }] : []),
-        ...(live && ghPr && failing ? [{ label: "Ask the agent to fix the checks", onClick: () => void askAgent(fixChecksMessage(repo.name, ghPr)) }] : []),
+        ...(live && pr && failing ? [{ label: "Fix CI (ask the agent)", onClick: () => void askAgent(fixCiMessage([{ repo: repo.name, pr: pr.number, checks: failedChecks }])) }] : []),
         ...(live && ghPr && conflicts ? [{ label: "Ask the agent to resolve conflicts", onClick: () => void askAgent(resolveConflictsMessage(repo.name, ghPr)) }] : []),
         ...(live && !isDraft && !conflicts
           ? (["squash", "merge", "rebase"] as MergeMethod[]).map((m) => ({ label: `Merge (${m === "merge" ? "merge commit" : m})`, onClick: () => merge(m) }))
@@ -260,6 +260,16 @@ export function RepoRow(props: {
   );
   const actions = (
     <span className="row" onClick={(e) => e.stopPropagation()}>
+      {live && failing && pr && !feature.archived && (
+        <button
+          className="fix-ci"
+          disabled={!!busy}
+          title={`CI fails on PR #${pr.number}: ask ${props.chats.some((c) => c.repo === repo.name) ? `${repo.name}'s chat` : "the feature's chat"} to find out why and fix it`}
+          onClick={() => void askAgent(fixCiMessage([{ repo: repo.name, pr: pr.number, checks: failedChecks }]))}
+        >
+          Fix CI
+        </button>
+      )}
       {live && ov?.pr && !copilotPending(ov.pr) && !feature.archived && (
         <button
           className="copilot-review"

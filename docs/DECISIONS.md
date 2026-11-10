@@ -1002,6 +1002,16 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      task** ("NWP-8259 Feature toggle…"), when the Jira field is empty and
      Jira knows the key (so "UTF-8 everywhere" does not count); New feature
      shows the key it will use and does not warn about a missing task.
+182. **"Fix CI" on failing builds, per repo and for the feature.** A repo
+     whose open PR fails its checks always shows a red "Fix CI" (before, a
+     "Fix checks" main action only appeared when nothing else came first),
+     asking its own chat (or the feature's) to look; the feature's header
+     shows "Fix CI (n)" when any repo fails, one message to the feature's
+     chat for all of them. The message lists each failing check with its
+     link, says how to read the failed run (`gh run view --log-failed`),
+     to fix, check locally and push; and, when a failure is not the
+     change's fault (flaky, runner, outage), to say so and re-run the failed
+     jobs instead of changing code.
 
 ## Answered (2026-11-05)
 

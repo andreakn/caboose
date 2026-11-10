@@ -104,3 +104,18 @@ test("one message asks the feature's chat for a PR in each repo with work", asyn
   assert.match(m, /in which order they should be merged/);
   assert.match(m, /How I want PRs written:\nImperative titles\./);
 });
+
+test("Fix CI: what fails, how to find out why, and re-running what is not the change's fault", async () => {
+  const { fixCiMessage } = await import("../src/shared/github.ts");
+  const one = fixCiMessage([{ repo: "shop-api", pr: 12, checks: [{ name: "build / test", url: "https://github.com/o/r/actions/runs/1" }] }]);
+  assert.match(one, /^CI fails on PR #12 of the shop-api repo \(the shop-api\/ folder\):\n- build \/ test \(https:\/\/github.com\/o\/r\/actions\/runs\/1\)\n/);
+  assert.match(one, /gh run view <run-id> --log-failed/);
+  assert.match(one, /gh run rerun <run-id> --failed/);
+  const two = fixCiMessage([
+    { repo: "shop-api", pr: 12, checks: [{ name: "build" }] },
+    { repo: "web", pr: 7, checks: [{ name: "lint" }, { name: "e2e" }] },
+  ]);
+  assert.match(two, /^CI fails on these PRs of the feature/);
+  assert.match(two, /shop-api, PR #12:\n {2}- build\nweb, PR #7:\n {2}- lint\n {2}- e2e\n/);
+  assert.match(two, /For each, find out why/);
+});

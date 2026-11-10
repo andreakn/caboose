@@ -1110,3 +1110,7 @@ button.copilot-review { white-space: nowrap; }
 .split-button { display: inline-flex; align-items: stretch; }
 .split-button > .open-prs { border-top-right-radius: 0; border-bottom-right-radius: 0; background: var(--ok); border-color: var(--ok); color: var(--card); font-weight: 600; }
 .split-button > button.open-prs-more { border-top-left-radius: 0; border-bottom-left-radius: 0; margin-left: 1px; padding: 0 8px; background: var(--ok); border-color: var(--ok); color: var(--card); }
+
+/* Fix CI: failing builds, for the agent to look into. */
+button.fix-ci { background: var(--danger); border-color: var(--danger); color: var(--card); font-weight: 600; white-space: nowrap; }
+button.fix-ci:hover { background: color-mix(in srgb, var(--danger) 85%, black); }

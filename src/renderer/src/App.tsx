@@ -35,7 +35,7 @@ import { FilesView } from "./Files.tsx";
 import { liveState, MapView } from "./Map.tsx";
 import { ArchivedView } from "./Archived.tsx";
 import { jiraBeforePrs } from "./jiraCheck.ts";
-import { createPrsMessage } from "../../shared/github.ts";
+import { createPrsMessage, fixCiMessage } from "../../shared/github.ts";
 import { TodoView } from "./Todos.tsx";
 import { repoLabel, setRepoLabels } from "./labels.ts";
 import { notifySound } from "./sounds.ts";
@@ -577,6 +577,20 @@ function FeatureView(props: {
     return !pr || pr.state === "CLOSED";
   });
   const allReady = noPrYet.length > 0 && noPrYet.every((r) => reported[r.name]?.status === "ready" && prReady.includes(r));
+  // Repos whose PR fails CI: what the header's "Fix CI" covers.
+  const failingCi = (overview.ov?.repos ?? []).filter((r) => r.pr && (r.pr.state === "OPEN" || r.pr.state === "DRAFT") && r.pr.checks.state === "failing");
+  /** One message to the feature's chat: find out why CI fails in each, fix it (or re-run what is flaky). */
+  const fixCi = async () => {
+    let chat = props.chats.filter((c) => !c.repo).at(-1);
+    if (!chat) {
+      const made = await api.createChat(f.id);
+      if (!made.ok) return alert(made.error);
+      chat = made.value;
+    }
+    const r = await api.send(chat.id, fixCiMessage(failingCi.map((x) => ({ repo: x.name, pr: x.pr!.number, checks: x.pr!.checks.failed }))));
+    if (!r.ok) return alert(r.error);
+    openChat(chat.id);
+  };
   /** One message to the feature's chat, which works across every repo. */
   const createPrs = async (draft: boolean, picked = prReady) => {
     // No Jira issue for the branches: offer to create the task and subtasks first.
@@ -707,6 +721,15 @@ function FeatureView(props: {
             </>
           ) : (
             <>
+              {failingCi.length > 0 && (
+                <button
+                  className="fix-ci"
+                  onClick={() => void fixCi()}
+                  title={`CI fails in ${failingCi.map((r) => repoLabel(r.name)).join(", ")}: ask the feature's chat to find out why and fix it`}
+                >
+                  Fix CI ({failingCi.length})
+                </button>
+              )}
               {allReady && (
                 <span className="split-button" title={`Every repo reported ready: ask the feature's chat to open a PR for ${noPrYet.map((r) => repoLabel(r.name)).join(", ")}`}>
                   <button className="primary open-prs" onClick={() => void createPrs(false, noPrYet)}>
