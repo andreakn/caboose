@@ -253,6 +253,8 @@ export function RepoRow(props: {
           Copilot reviewing…
         </span>
       ) : (
+        // Only while the PR is open: after a merge (or a close) the review has done its job.
+        live &&
         ov?.pr?.copilot && (
           <span
             className={`chip copilot-verdict v-${ov.pr.copilot.verdict}${ov.pr.copilot.current ? "" : " outdated"}`}
