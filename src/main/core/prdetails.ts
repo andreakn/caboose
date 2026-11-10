@@ -31,7 +31,7 @@ const FIELDS = `number title url state isDraft reviewDecision mergeable mergeSta
   headRefName headRefOid baseRefName updatedAt author { login } mergeCommit { oid }
   reviewThreads(first: 100) { nodes { isResolved isOutdated path line comments(first: 1) { totalCount nodes { author { login } body url } } } }
   latestReviews(first: 30) { nodes { state author { login } body submittedAt commit { oid } } }
-  reviewRequests(first: 20) { nodes { requestedReviewer { ... on User { login } ... on Bot { login } } } }
+  reviewRequests(first: 20) { nodes { requestedReviewer { ... on User { login } ... on Bot { login } ... on Team { name } } } }
   commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 100) { nodes {
     __typename
     ... on CheckRun { name conclusion status detailsUrl startedAt checkSuite { workflowRun { workflow { name } } } }
@@ -90,7 +90,8 @@ export function shape(repo: string, pr: Raw): PrDetails {
     threads,
     approvals: reviews.filter((r: { state: string }) => r.state === "APPROVED").map((r: { author: string }) => r.author),
     changesRequested: reviews.filter((r: { state: string }) => r.state === "CHANGES_REQUESTED").map((r: { author: string }) => r.author),
-    requested: (pr.reviewRequests?.nodes ?? []).map((n: Raw) => n.requestedReviewer?.login).filter(Boolean),
+    // People and bots by login, teams by name ("TECH - NWP Commerce Developers").
+    requested: (pr.reviewRequests?.nodes ?? []).map((n: Raw) => n.requestedReviewer?.login ?? n.requestedReviewer?.name).filter(Boolean),
     ...(pr.mergeCommit?.oid ? { mergeCommit: pr.mergeCommit.oid as string } : {}),
     ...(copilot ? { copilot } : {}),
     checks: {

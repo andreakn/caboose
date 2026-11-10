@@ -25,7 +25,7 @@ test("one query for every repo; PRs shaped with threads, checks and reviews; cac
       { state: "COMMENTED", author: { login: "copilot-pull-request-reviewer" }, submittedAt: "2026-11-10T09:29:14Z", commit: { oid: "head1" },
         body: "<!-- ccr-overview-v2 -->\n\n### 🟢 Approval recommended\n\nNo active review issues remain.\n\n**No open issues** 🎉" },
     ] },
-    reviewRequests: { nodes: [{ requestedReviewer: { login: "cid" } }, { requestedReviewer: {} }, { requestedReviewer: { login: "copilot-pull-request-reviewer" } }] },
+    reviewRequests: { nodes: [{ requestedReviewer: { login: "cid" } }, { requestedReviewer: {} }, { requestedReviewer: { login: "copilot-pull-request-reviewer" } }, { requestedReviewer: { name: "TECH - NWP Commerce Developers" } }] },
     commits: { nodes: [{ commit: { statusCheckRollup: { contexts: { nodes: [
       { __typename: "CheckRun", name: "build", conclusion: "SUCCESS", status: "COMPLETED", checkSuite: { workflowRun: { workflow: { name: "CI" } } } },
       { __typename: "CheckRun", name: "test", conclusion: "FAILURE", status: "COMPLETED", detailsUrl: "t" },
@@ -47,7 +47,7 @@ test("one query for every repo; PRs shaped with threads, checks and reviews; cac
   const p = r.prs.web!;
   assert.equal(p.state, "OPEN");
   assert.deepEqual(p.threads, [{ path: "src/a.ts", line: 4, outdated: false, author: "copilot", body: "Null check?", url: "u1", replies: 2 }]);
-  assert.deepEqual([p.approvals, p.changesRequested, p.requested], [["ann"], ["bob"], ["cid", "copilot-pull-request-reviewer"]]);
+  assert.deepEqual([p.approvals, p.changesRequested, p.requested], [["ann"], ["bob"], ["cid", "copilot-pull-request-reviewer", "TECH - NWP Commerce Developers"]], "a team by its name");
   assert.deepEqual(p.copilot, { verdict: "approve", summary: "Approval recommended", at: "2026-11-10T09:29:14Z", current: true }, "Copilot's green light, on the latest commit");
   assert.equal(copilotPending(p), true, "Copilot (a bot) has been asked and not reviewed yet");
   assert.equal(copilotPending({ requested: ["cid"] }), false);

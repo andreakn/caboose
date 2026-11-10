@@ -195,7 +195,7 @@ export function RepoRow(props: {
             ? { label: "Push", run: () => void act("Pushing…", () => api.push(feature.id, repo.name)) }
             : live && !isDraft && !conflicts
               ? {
-                  label: cleared ? "✓ Merge" : "Merge",
+                  label: cleared ? "✓ Merge" : mergeState === "BLOCKED" ? "Merge (blocked)" : "Merge",
                   run: () => merge(method),
                   ready: cleared,
                   title: cleared ? `Cleared for merging: checks and reviews are done (${method})` : (mergeState && notYet[mergeState]) || undefined,
@@ -250,6 +250,15 @@ export function RepoRow(props: {
         </span>
       )}
       {ov?.pr ? <PrChip pr={ov.pr} /> : ghPr && <PrLink pr={ghPr} />}
+      {live && ov?.pr && awaitingApproval(ov.pr) && (
+        <span
+          className="chip awaiting-approval"
+          title={`GitHub will not merge this yet: it needs an approving review${ov.pr.requested.length ? ` (asked: ${ov.pr.requested.join(", ")})` : ""}.`}
+        >
+          ⏳ waiting for approval
+          {humanReviewers(ov.pr).length ? ` · ${humanReviewers(ov.pr).join(", ")}` : ""}
+        </span>
+      )}
       {live && ov?.pr && copilotPending(ov.pr) ? (
         <span className="chip copilot-pending" title="Copilot has been asked to review and has not yet">
           Copilot reviewing…
@@ -416,6 +425,18 @@ export function RepoRow(props: {
 }
 
 /** "🏷 shop_v1.114 · test ✓ · prod –": the first release carrying the merged PR, and which later stages have it. */
+/**
+ * GitHub blocks the merge and what is missing is an approval: blocked, not
+ * failing its checks and with no changes requested (those show themselves),
+ * and nobody has approved yet.
+ */
+function awaitingApproval(pr: { mergeState: string; checks: { state: string }; changesRequested: string[]; approvals: string[]; reviewDecision: string | null }): boolean {
+  return pr.mergeState === "BLOCKED" && pr.checks.state !== "failing" && pr.checks.state !== "pending" && !pr.changesRequested.length && (pr.reviewDecision === "REVIEW_REQUIRED" || !pr.approvals.length);
+}
+
+/** Who was asked to review, other than Copilot (whose review does not unblock a merge). */
+const humanReviewers = (pr: { requested: string[] }) => pr.requested.filter((r) => !/copilot/i.test(r));
+
 /** Components of the repo this feature does not touch (their tags are not shown). */
 function otherComponents(ov: RepoOverview): string[] {
   if (!ov.components?.length) return [];
