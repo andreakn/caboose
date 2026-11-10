@@ -336,7 +336,10 @@ const repoOwn = (source: string) => {
     return {};
   }
 };
-const releaseStrategy = (repo: string, source: string) => strategyOf(localConfig.repos.find((r) => r.name === repo), repoOwn(source));
+const releaseStrategy = (repo: string, source: string) => {
+  const entry = localConfig.repos.find((r) => r.name === repo);
+  return strategyOf(entry, repoOwn(source), entry?.line ? localConfig.lines[entry.line]?.releaseStrategy : undefined);
+};
 const ignoredTags = (repo: string, source: string) => [...(localConfig.repos.find((r) => r.name === repo)?.ignoreTags ?? []), ...(repoOwn(source).ignoreTags ?? [])];
 ipcMain.handle("release:plan", (_e, featureId: string, repo: string) =>
   attempt(() => {

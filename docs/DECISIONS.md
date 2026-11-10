@@ -1034,6 +1034,12 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      Copilot review buttons (per repo, and "all" for the feature) only offer
      PRs it has not reviewed at their latest commit and has not been asked
      to; then the per-repo one reads "Copilot review again".
+186. **A line can set the default release strategy for its repos**
+     (Configure → Lines → "Releases are made by"). A repo's own setting
+     (Configure) wins, then its `.caboose/config.json`, then its line's
+     default; so a line whose repos are mostly tagged sets "tag" once, and
+     only the exceptions ("every merge is a release": bff, storefront) say
+     otherwise. A repo's releases link shows what applies ("as its line").
 
 ## Answered (2026-11-05)
 

@@ -19,6 +19,9 @@ test("the next version: the minor bumped, zero padding kept, a patch dropped, ig
   assert.deepEqual(tagPrefixes(["stock_v2.099", "orders_TEST_v1.5", "orders_v1.10", "stock_v2.098", "v3.0"]), ["stock", "orders"], "stage tags are not release prefixes");
   assert.equal(strategyOf({ name: "x", path: "/x", releaseStrategy: "merge" }, { releaseStrategy: "tag" }), "merge", "this machine's setting wins");
   assert.equal(strategyOf(undefined, { releaseStrategy: "tag" }), "tag");
+  assert.equal(strategyOf({ name: "bff", path: "/b" }, {}, "tag"), "tag", "the line's default");
+  assert.equal(strategyOf({ name: "bff", path: "/b", releaseStrategy: "merge" }, {}, "tag"), "merge", "a repo's own setting beats its line's");
+  assert.equal(strategyOf(undefined, { releaseStrategy: "merge" }, "tag"), "merge", "so does the repo's .caboose/config.json");
 });
 
 test("tagging: origin's base tip gets the next tag, only that tag is pushed, whatever the checkout is on", async () => {

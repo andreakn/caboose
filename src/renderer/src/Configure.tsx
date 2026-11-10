@@ -259,6 +259,7 @@ export function Configure({ onDone, onSaved }: { onDone: () => void; onSaved?: (
                       repo={r}
                       defaults={info.defaults.localFiles}
                       stages={form.releaseStages}
+                    lineStrategy={r.line ? form.lines?.[r.line]?.releaseStrategy : undefined}
                       onChange={(next) => setForm({ ...form, repos: repos.map((x) => (x.path === r.path ? next : x)) })}
                       onRemove={() => setForm({ ...form, repos: repos.filter((x) => x.path !== r.path) })}
                     />
@@ -596,7 +597,15 @@ export function Configure({ onDone, onSaved }: { onDone: () => void; onSaved?: (
 }
 
 /** A configured repo, with its local-file rules and a live preview of what they copy. */
-function RepoItem(props: { repo: RepoEntry; defaults: string[]; stages?: ReleaseStage[]; onChange: (r: RepoEntry) => void; onRemove: () => void }) {
+function RepoItem(props: {
+  repo: RepoEntry;
+  defaults: string[];
+  stages?: ReleaseStage[];
+  /** Its line's default release strategy, if the line has one. */
+  lineStrategy?: RepoEntry["releaseStrategy"];
+  onChange: (r: RepoEntry) => void;
+  onRemove: () => void;
+}) {
   const { repo, defaults } = props;
   const [open, setOpen] = useState(false);
   const [scriptsOpen, setScriptsOpen] = useState(false);
@@ -652,7 +661,7 @@ function RepoItem(props: { repo: RepoEntry; defaults: string[]; stages?: Release
           {scriptsOpen ? "▾" : "▸"} scripts: {[repo.scripts?.setup && "setup", runCount && `${runCount} run`, repo.scripts?.archive && "archive"].filter(Boolean).join(", ") || "none"}
         </button>
         <button className="link" onClick={() => setReleasesOpen(!releasesOpen)} title="Which git tags mark a release of this repo">
-          {releasesOpen ? "▾" : "▸"} releases: {repo.releaseStrategy === "tag" ? "tagged · " : repo.releaseStrategy === "merge" ? "on merge · " : ""}{own === undefined ? (props.stages?.length ? "as all repos" : "off") : own.length ? own.map((s) => s.name).join(", ") : "off"}
+          {releasesOpen ? "▾" : "▸"} releases: {(repo.releaseStrategy ?? props.lineStrategy) === "tag" ? "tagged · " : (repo.releaseStrategy ?? props.lineStrategy) === "merge" ? "on merge · " : ""}{own === undefined ? (props.stages?.length ? "as all repos" : "off") : own.length ? own.map((s) => s.name).join(", ") : "off"}
         </button>
         <span className="spacer" />
         <button className="link" onClick={props.onRemove}>
@@ -700,7 +709,11 @@ function RepoItem(props: { repo: RepoEntry; defaults: string[]; stages?: Release
               onChange={(e) => props.onChange({ ...repo, releaseStrategy: (e.target.value || undefined) as RepoEntry["releaseStrategy"] })}
               title={RELEASE_STRATEGIES.find((s) => s.value === repo.releaseStrategy)?.hint ?? "Not said here (the repo's own .caboose/config.json may say)"}
             >
-              <option value="">not said (or as the repo's .caboose/config.json says)</option>
+              <option value="">
+                {props.lineStrategy
+                  ? `as its line: ${RELEASE_STRATEGIES.find((s) => s.value === props.lineStrategy)?.label.toLowerCase()} (unless its .caboose/config.json says otherwise)`
+                  : "not said (or as the repo's .caboose/config.json says)"}
+              </option>
               {RELEASE_STRATEGIES.map((s) => (
                 <option key={s.value} value={s.value}>
                   {s.label}

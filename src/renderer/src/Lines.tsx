@@ -3,7 +3,7 @@
 // Everything left empty is the general setting, which the placeholders show.
 import { useState } from "react";
 import { formatStages } from "../../shared/stages.ts";
-import { type ConfigInfo, type ConfigInput, JIRA_LEVELS, type JiraInput, type LineInput } from "../../shared/types.ts";
+import { type ConfigInfo, type ConfigInput, JIRA_LEVELS, type JiraInput, type LineInput, RELEASE_STRATEGIES } from "../../shared/types.ts";
 import { StagesEditor } from "./Configure.tsx";
 import { askText } from "./Dialog.tsx";
 
@@ -126,6 +126,20 @@ function LineSection(props: {
             placeholder={form.prInstructions ? `As in general: ${form.prInstructions}` : "How this customer wants PRs written (empty: as in general)"}
             onChange={(e) => props.onChange({ prInstructions: e.target.value || undefined })}
           />
+        </label>
+        <label>
+          <span>Releases are made by</span>
+          <div>
+            <select value={line.releaseStrategy ?? ""} onChange={(e) => props.onChange({ releaseStrategy: (e.target.value || undefined) as LineInput["releaseStrategy"] })}>
+              <option value="">not said (each repo says)</option>
+              {RELEASE_STRATEGIES.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+            <small className="muted"> The default for this line's repos; a repo can say otherwise (its releases link under Repositories, or its .caboose/config.json).</small>
+          </div>
         </label>
         <label>
           <span>Release tags</span>

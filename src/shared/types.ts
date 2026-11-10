@@ -325,9 +325,11 @@ export type LineSettings = {
   branchPrefix?: string;
   prInstructions?: string;
   releaseStages?: ReleaseStage[];
+  /** How its repos' releases are made, unless a repo says otherwise (in Configure or its .caboose/config.json). */
+  releaseStrategy?: ReleaseStrategy;
 };
 /** The settings a line can have of its own, in the order Configure shows them. */
-export const LINE_SETTINGS = ["jira", "featuresRoot", "archiveRoot", "branchPrefix", "prInstructions", "releaseStages"] as const;
+export const LINE_SETTINGS = ["jira", "featuresRoot", "archiveRoot", "branchPrefix", "prInstructions", "releaseStages", "releaseStrategy"] as const;
 
 /** This machine's settings, in `caboose.local.json` in the Caboose checkout (gitignored). */
 export type LocalConfig = {

@@ -46,8 +46,9 @@ export function nextTag(tags: string[], prefix: string, ignore: string[] = []): 
   return { latest, next };
 }
 
-/** A repo's release strategy: the machine's setting, else the repo's own (.caboose/config.json). */
-export const strategyOf = (entry: RepoEntry | undefined, own: RepoConfig): ReleaseStrategy | undefined => entry?.releaseStrategy ?? own.releaseStrategy;
+/** A repo's release strategy: the machine's setting for it, else the repo's own (.caboose/config.json), else its line's default. */
+export const strategyOf = (entry: RepoEntry | undefined, own: RepoConfig, lineDefault?: ReleaseStrategy): ReleaseStrategy | undefined =>
+  entry?.releaseStrategy ?? own.releaseStrategy ?? lineDefault;
 
 const baseBranch = (baseRef: string) => baseRef.replace(/^origin\//, "");
 
