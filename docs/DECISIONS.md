@@ -1048,6 +1048,13 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      as it was before the merge that brought it in (that merge's first
      parent), not with its own tip; a branch with no commits of its own is
      not mistaken for one (every later merge's first parent already has it).
+188. **Approving a prod deploy is a click away.** When a repo's release has
+     reached the stage before a prod-like one (🚀) but not that one, the prod
+     chip reads "prod – approve ↗" and opens, in the browser, the workflow
+     run waiting for approval that one of the release's tags started (`gh run
+     list --status waiting`); if there is none, the repo's Actions list of
+     waiting runs. Never another run: a waiting run of another service's tag
+     is not this release's.
 
 ## Answered (2026-11-05)
 

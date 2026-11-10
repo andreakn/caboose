@@ -49,7 +49,7 @@ import { archivedChatEvents, archivedDocs, listArchived } from "./core/archived.
 import { DEFAULT_LOCAL_FILES, scanLocalFiles } from "./core/localfiles.ts";
 import { cabooseCopilotTools, cabooseInstructions, cabooseMcp } from "./core/mcp.ts";
 import { featureOverview } from "./core/overview.ts";
-import { PrDetailsCache } from "./core/prdetails.ts";
+import { PrDetailsCache, slugOf } from "./core/prdetails.ts";
 import { Store } from "./core/store.ts";
 import { ReleaseWatch, visitReleases } from "./core/releasewatch.ts";
 import { retire, retirePlan } from "./core/retire.ts";
@@ -355,6 +355,16 @@ ipcMain.handle("release:tag", (_e, featureId: string, repo: string, prefix: stri
     appendLog(featureOrThrow(featureId).folder, { from: "user", text: `Tagged ${out.tag} on ${r.baseRef} (${out.commit.slice(0, 8)}) in ${r.name}, after ${out.previous}.` });
     prDetails.forget();
     return out;
+  }),
+);
+ipcMain.handle("github:approval", (_e, featureId: string, repo: string, tags: string[]) =>
+  attempt(async () => {
+    const r = liveRepo(featureId, repo).r;
+    const slug = await slugOf(r.source);
+    if (!slug) throw new Error(`${repo}'s origin is not on GitHub.`);
+    const url = await github.approvalUrl(r.source, slug, tags);
+    await shell.openExternal(url);
+    return url;
   }),
 );
 ipcMain.handle("github:copilotReview", (_e, featureId: string, repo?: string) =>

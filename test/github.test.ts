@@ -119,3 +119,22 @@ test("Fix CI: what fails, how to find out why, and re-running what is not the ch
   assert.match(two, /shop-api, PR #12:\n {2}- build\nweb, PR #7:\n {2}- lint\n {2}- e2e\n/);
   assert.match(two, /For each, find out why/);
 });
+
+test("approving a prod deploy: the waiting run the release's tag started, else the list of waiting runs", async () => {
+  // gh lists the newest first.
+  const runs = [
+    { url: "https://github.com/o/r/actions/runs/2", headBranch: "cdsws_v1.338", createdAt: "2026-11-10" },
+    { url: "https://github.com/o/r/actions/runs/1", headBranch: "cdsws_v1.337", createdAt: "2026-11-09" },
+  ];
+  const asked: string[][] = [];
+  const gh = new GitHub(async (_f, args) => (asked.push(args), JSON.stringify(runs)));
+  assert.equal(await gh.approvalUrl("/w", "o/r", ["cdsws_v1.337", "cdsws_TEST_v1.337"]), "https://github.com/o/r/actions/runs/1", "this release's run");
+  assert.deepEqual(asked[0].slice(0, 4), ["run", "list", "--status", "waiting"]);
+  assert.equal(await gh.approvalUrl("/w", "o/r", ["orders_v1.2"]), "https://github.com/o/r/actions?query=is%3Awaiting", "another service's waiting run is not this release's");
+  const none = new GitHub(async () => "[]");
+  assert.equal(await none.approvalUrl("/w", "o/r", []), "https://github.com/o/r/actions?query=is%3Awaiting");
+  const broken = new GitHub(async () => {
+    throw new Error("gh: not logged in");
+  });
+  assert.equal(await broken.approvalUrl("/w", "o/r", []), "https://github.com/o/r/actions?query=is%3Awaiting");
+});

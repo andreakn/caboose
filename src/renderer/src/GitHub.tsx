@@ -18,6 +18,7 @@ import { StatusChip } from "./Plan.tsx";
 import { repoLabel } from "./labels.ts";
 import { jiraBeforePrs } from "./jiraCheck.ts";
 import { RunningChips } from "./Running.tsx";
+import { stageEmoji } from "../../shared/stages.ts";
 import { TagReleaseDialog } from "./TagRelease.tsx";
 
 const api = window.caboose;
@@ -266,7 +267,17 @@ export function RepoRow(props: {
           </span>
         )
       )}
-      {ov?.release && <ReleaseChips release={ov.release} hide={otherComponents(ov)} />}
+      {ov?.release && (
+        <ReleaseChips
+          release={ov.release}
+          hide={otherComponents(ov)}
+          onApprove={
+            feature.archived
+              ? undefined
+              : (tags) => void api.openApproval(feature.id, repo.name, tags).then((r) => !r.ok && alert(r.error))
+          }
+        />
+      )}
       {ov?.running && <RunningChips feature={feature} ov={ov} onChanged={props.onChanged} />}
       {ov?.jira ? <JiraStatusChip j={ov.jira} site={props.jiraSite} /> : props.subtask && <JiraStatusChip j={{ key: props.subtask }} site={props.jiraSite} />}
     </>
@@ -412,7 +423,7 @@ function otherComponents(ov: RepoOverview): string[] {
   return [...all].filter((c) => !ov.components!.includes(c));
 }
 
-function ReleaseChips({ release: all, hide = [] }: { release: StageRelease[]; hide?: string[] }) {
+function ReleaseChips({ release: all, hide = [], onApprove }: { release: StageRelease[]; hide?: string[]; onApprove?: (tags: string[]) => void }) {
   // Tags of components this feature does not touch (orders_v1.2 when only stock matters) are left out.
   const other = (tag: string) => hide.some((c) => tag.startsWith(`${c}_`) || tag.startsWith(`${c}-`));
   const release = all.map((r) => ({ ...r, tags: r.tags.filter((t) => !other(t)) }));
@@ -422,11 +433,28 @@ function ReleaseChips({ release: all, hide = [] }: { release: StageRelease[]; hi
   return (
     <span className="release-chips" title={title}>
       <span className={`chip release${first.tags.length ? "" : " pending"}`}>🏷 {first.tags.length ? first.tags.join(", ") : `no ${first.stage} yet`}</span>
-      {later.map((r) => (
-        <span key={r.stage} className={`chip stage${r.tags.length ? " ok" : " pending"}`}>
-          {r.stage} {r.tags.length ? "✓" : "–"}
-        </span>
-      ))}
+      {later.map((r, i) => {
+        // A prod stage the release has not reached yet, while the stage before it has: approving is a click away.
+        const before = i === 0 ? first : later[i - 1];
+        const approvable = onApprove && !r.tags.length && before.tags.length > 0 && stageEmoji(r.stage) === "🚀";
+        return approvable ? (
+          <button
+            key={r.stage}
+            className="chip stage pending approvable"
+            title={`Not in ${r.stage} yet: open the deploy waiting for approval in GitHub Actions`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onApprove(release.flatMap((x) => x.tags));
+            }}
+          >
+            {r.stage} – approve ↗
+          </button>
+        ) : (
+          <span key={r.stage} className={`chip stage${r.tags.length ? " ok" : " pending"}`}>
+            {r.stage} {r.tags.length ? "✓" : "–"}
+          </span>
+        );
+      })}
     </span>
   );
 }

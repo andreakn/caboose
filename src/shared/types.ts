@@ -566,6 +566,8 @@ export type CabooseApi = {
   tagRelease(featureId: string, repo: string, prefix: string): Promise<Result<{ tag: string; previous: string; commit: string }>>;
   /** Asks Copilot to review the open PRs of one repo or of all (skipping PRs where a Copilot review is already pending). */
   requestCopilotReview(featureId: string, repo?: string): Promise<Result<CopilotRequestOutcome>>;
+  /** Opens where a release's prod deploy is approved: its waiting workflow run (by the release's tags), else the waiting runs. */
+  openApproval(featureId: string, repo: string, tags: string[]): Promise<Result<string>>;
   /** Archived features (from the archive folders), newest first. */
   archivedFeatures(): Promise<ArchivedFeature[]>;
   /** An archived chat's events, and the archived feature's own files. */

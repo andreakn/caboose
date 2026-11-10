@@ -40,6 +40,7 @@ const api: CabooseApi = {
   releasePlan: invoke("release:plan"),
   tagRelease: invoke("release:tag"),
   requestCopilotReview: invoke("github:copilotReview"),
+  openApproval: invoke("github:approval"),
   archivedFeatures: invoke("archived:list"),
   archivedChat: invoke("archived:chat"),
   archivedDocs: invoke("archived:docs"),

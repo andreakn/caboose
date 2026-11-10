@@ -1135,3 +1135,6 @@ button.fix-ci:hover { background: color-mix(in srgb, var(--danger) 85%, black); 
 .chip.copilot-verdict.v-changes { background: color-mix(in srgb, var(--danger) 18%, transparent); }
 .chip.copilot-verdict.v-comments { background: color-mix(in srgb, var(--warn) 20%, transparent); }
 .chip.copilot-verdict.outdated { opacity: 0.65; }
+/* "prod – approve ↗": a release in test whose prod deploy waits for approval in GitHub Actions. */
+.chip.approvable { cursor: pointer; border: 1px dashed color-mix(in srgb, var(--warn) 60%, var(--border)); background: color-mix(in srgb, var(--warn) 14%, transparent); color: var(--text); }
+.chip.approvable:hover { background: color-mix(in srgb, var(--warn) 26%, transparent); }

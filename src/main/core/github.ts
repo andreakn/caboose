@@ -110,6 +110,23 @@ export class GitHub {
     await this.run("gh", ["pr", "close", String(pr)], wsPath);
   }
 
+  /**
+   * Where to approve a release's deploy: the workflow run waiting for approval
+   * that the release's tag started, else the repo's Actions list of waiting
+   * runs (another service's waiting run is not this release's).
+   */
+  async approvalUrl(wsPath: string, slug: string, tags: string[]): Promise<string> {
+    const list = `https://github.com/${slug}/actions?query=${encodeURIComponent("is:waiting")}`;
+    try {
+      const out = await this.run("gh", ["run", "list", "--status", "waiting", "--limit", "30", "--json", "url,headBranch,createdAt"], wsPath);
+      const runs = JSON.parse(out) as { url: string; headBranch: string; createdAt: string }[];
+      const mine = runs.filter((r) => tags.includes(r.headBranch));
+      return mine[0]?.url ?? list;
+    } catch {
+      return list;
+    }
+  }
+
   /** Asks Copilot to review the PR (again, if it already has: it then reviews what is new). */
   async requestCopilotReview(wsPath: string, pr: number): Promise<void> {
     await this.run("gh", ["pr", "edit", String(pr), "--add-reviewer", "@copilot"], wsPath);
