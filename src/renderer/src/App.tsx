@@ -834,6 +834,8 @@ function FeatureView(props: {
       <div className={`scope-panel ${scopeRepo ? "in-repo" : "in-feature"}`}>
         {scopeRepo ? (
           <>
+            {/* The repo's state and actions on their own line, so the tab row stays tabs. */}
+            <div className="repo-statusline">{repoRow(scopeRepo, true)}</div>
             <div className="view-tabs">
               <button className={repoTab === "files" ? "active" : ""} onClick={() => setRepoTab("files")}>
                 Files
@@ -861,8 +863,6 @@ function FeatureView(props: {
                 })()}
               </button>
               <OpenAppButton path={scopeRepo.path} what={repoLabel(scopeRepo.name)} />
-              <span className="spacer" />
-              {repoRow(scopeRepo, true)}
             </div>
             <div className="view-panel">
               {repoTab === "files" && (

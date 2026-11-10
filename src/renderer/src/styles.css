@@ -1139,3 +1139,9 @@ button.fix-ci:hover { background: color-mix(in srgb, var(--danger) 85%, black); 
 .chip.approvable { cursor: pointer; border: 1px dashed color-mix(in srgb, var(--warn) 60%, var(--border)); background: color-mix(in srgb, var(--warn) 14%, transparent); color: var(--text); }
 .chip.approvable:hover { background: color-mix(in srgb, var(--warn) 26%, transparent); }
 .chip.awaiting-approval { font-size: 11px; white-space: nowrap; background: color-mix(in srgb, var(--warn) 22%, transparent); }
+
+/* A repo's state and actions: a line of their own above its Files/Changes/Chat/Run tabs. */
+.repo-statusline { padding: 2px 8px 6px; min-width: 0; }
+.repo-statusline .repo-inline { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; width: 100%; }
+.repo-statusline .repo-inline > .row { margin-left: auto; }
+.repo-statusline .repo-local { white-space: nowrap; flex: 0 0 auto; max-width: none; }
