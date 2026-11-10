@@ -1040,6 +1040,14 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      default; so a line whose repos are mostly tagged sets "tag" once, and
      only the exceptions ("every merge is a release": bff, storefront) say
      otherwise. A repo's releases link shows what applies ("as its line").
+187. **After a merge, a repo shows what is still relevant.** Copilot's
+     verdict and "N behind <base>" (status line, details, the merge-base
+     action) only while the PR is open. The Changes view keeps showing what
+     the branch brought in after a merge with a merge commit: where a
+     branch's tip is already part of its base, it is compared with the base
+     as it was before the merge that brought it in (that merge's first
+     parent), not with its own tip; a branch with no commits of its own is
+     not mistaken for one (every later merge's first parent already has it).
 
 ## Answered (2026-11-05)
 

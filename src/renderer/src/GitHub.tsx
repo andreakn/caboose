@@ -176,7 +176,8 @@ export function RepoRow(props: {
         b.uncommitted > 0 && `${b.uncommitted} uncommitted`,
         b.upstream ? b.ahead > 0 && `${b.ahead} to push` : b.ahead > 0 ? `${b.ahead} unpushed` : "",
         b.behind > 0 && `${b.behind} to pull`,
-        b.behindBase > 0 && `${b.behindBase} behind ${base}`,
+        // Once merged, being behind the base says nothing: the change is in it.
+        b.behindBase > 0 && pr?.state !== "MERGED" && `${b.behindBase} behind ${base}`,
       ].filter(Boolean)
     : [];
 
@@ -211,7 +212,7 @@ export function RepoRow(props: {
         ...(status?.available && !live ? [{ label: "Create draft PR", onClick: () => createPr(true) }, { label: "Create PR", onClick: () => createPr(false) }] : []),
         ...(canPush ? [{ label: "Push", onClick: () => void act("Pushing…", () => api.push(feature.id, repo.name)) }] : []),
         ...(b && b.behind > 0 ? [{ label: `Pull ${b.behind} commit(s) from ${b.upstream}`, onClick: () => void mergeLocally("pull") }] : []),
-        ...(b && b.behindBase > 0 ? [{ label: `Merge ${repo.baseRef} into this branch (${b.behindBase} new)`, onClick: () => void mergeLocally("base") }] : []),
+        ...(b && b.behindBase > 0 && pr?.state !== "MERGED" ? [{ label: `Merge ${repo.baseRef} into this branch (${b.behindBase} new)`, onClick: () => void mergeLocally("base") }] : []),
         ...(live && pr && failing ? [{ label: "Fix CI (ask the agent)", onClick: () => void askAgent(fixCiMessage([{ repo: repo.name, pr: pr.number, checks: failedChecks }])) }] : []),
         ...(live && ghPr && conflicts ? [{ label: "Ask the agent to resolve conflicts", onClick: () => void askAgent(resolveConflictsMessage(repo.name, ghPr)) }] : []),
         ...(live && !isDraft && !conflicts
@@ -311,7 +312,7 @@ export function RepoRow(props: {
             {b.ahead ? ` · ${b.ahead} commit(s) ahead` : ""}
             {b.uncommitted ? ` · ${b.uncommitted} uncommitted` : ""}
             {b.behind ? ` · ${b.behind} to pull` : ""}
-            {b.behindBase ? ` · ${b.behindBase} behind ${repo.baseRef}` : ""}
+            {b.behindBase && pr?.state !== "MERGED" ? ` · ${b.behindBase} behind ${repo.baseRef}` : ""}
           </span>
         )}
       </div>

@@ -7,12 +7,33 @@ import { git } from "./run.ts";
 
 const MAX_TEXT_BYTES = 1024 * 1024;
 
+/**
+ * Where the branch left its base: what its changes are compared with. Once
+ * the branch has been merged with a merge commit, its tip is part of the
+ * base and that point is the tip itself (nothing to show); then it is where
+ * the branch left the base as it was before that merge (the merge's first
+ * parent), so the Changes view still shows what the PR brought in. A branch
+ * with no commits of its own is part of the base too, but no merge brought
+ * it in (every later merge's first parent already has it), so it is left alone.
+ */
 export async function mergeBase(wsPath: string, baseRef: string): Promise<string> {
+  let base: string;
   try {
-    return await git(wsPath, "merge-base", "HEAD", baseRef);
+    base = await git(wsPath, "merge-base", "HEAD", baseRef);
   } catch {
     return baseRef;
   }
+  const head = await git(wsPath, "rev-parse", "HEAD").catch(() => "");
+  if (!head || base !== head) return base;
+  const merges = (await git(wsPath, "rev-list", "--ancestry-path", "--merges", "--reverse", `HEAD..${baseRef}`).catch(() => "")).split("\n").filter(Boolean).slice(0, 50);
+  for (const m of merges) {
+    const inFirstParent = await git(wsPath, "merge-base", "--is-ancestor", "HEAD", `${m}^1`).then(
+      () => true,
+      () => false,
+    );
+    if (!inFirstParent) return git(wsPath, "merge-base", "HEAD", `${m}^1`).catch(() => base);
+  }
+  return base;
 }
 
 export async function changes(wsPath: string, baseRef: string): Promise<WorkspaceChanges> {

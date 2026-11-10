@@ -56,7 +56,8 @@ test("a shell takes input, and stop ends a long-running process", async () => {
   assert.equal(t.title, "web");
   assert.equal(terms.openShell("w2", where).title, "feature");
   terms.write(t.id, "echo hello-$((40+2))\r");
-  await until(() => terms.output(t.id).includes("hello-42"));
+  // A real shell (PowerShell on Windows) can take a while to start on a CI machine.
+  await until(() => terms.output(t.id).includes("hello-42"), 30_000);
   const run = await terms.run("w2", "web", "while true; do echo tick; sleep 0.1; done", where);
   await until(() => terms.output(run.id).includes("tick"));
   terms.stop(run.id);
@@ -77,7 +78,7 @@ test("Claude reads the run terminal by default, or one by title", async () => {
   const shell = terms.openShell("w3", where, "web");
   terms.write(shell.id, "echo from-shell\r");
   const run = await terms.run("w3", "web", "echo server listening; sleep 5", where);
-  await until(() => terms.output(run.id).includes("listening") && terms.output(shell.id).includes("from-shell"));
+  await until(() => terms.output(run.id).includes("listening") && terms.output(shell.id).includes("from-shell"), 30_000);
   assert.match(h.getTerminalOutput({}), /Terminal "run web" \(running[\s\S]*server listening/);
   assert.match(h.getTerminalOutput({ terminal: "web" }), /server listening/);
   assert.match(h.getTerminalOutput({ terminal: shell.id }), /from-shell/);

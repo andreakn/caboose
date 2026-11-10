@@ -98,3 +98,38 @@ test("line marks: changed where lines were replaced, new where only added, a tic
     removedBefore: [5],
   });
 });
+
+test("after a merge with a merge commit, the changes are still what the branch brought in; a branch with no commits shows none", async () => {
+  const { mkdtempSync, writeFileSync, rmSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { execFileSync } = await import("node:child_process");
+  const { changes } = await import("../src/main/core/diff.ts");
+  const dir = mkdtempSync(join(tmpdir(), "caboose-merged-"));
+  const sh = (...a: string[]) => execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: "pipe" }).trim();
+  const commit = (m: string) => sh("-c", "user.email=t@e", "-c", "user.name=T", "commit", "-q", "-m", m);
+  try {
+    sh("init", "-q", "-b", "main");
+    writeFileSync(join(dir, "a.txt"), "a\n");
+    sh("add", ".");
+    commit("start");
+    const fresh = sh("rev-parse", "HEAD");
+    sh("checkout", "-q", "-b", "feature");
+    writeFileSync(join(dir, "sms.txt"), "European numbers only\n");
+    sh("add", ".");
+    commit("Only send SMS to European numbers");
+    // main moves on, then the PR is merged with a merge commit.
+    sh("checkout", "-q", "main");
+    writeFileSync(join(dir, "other.txt"), "someone else\n");
+    sh("add", ".");
+    commit("another PR");
+    sh("-c", "user.email=t@e", "-c", "user.name=T", "merge", "-q", "--no-ff", "-m", "Merge pull request #202", "feature");
+    sh("checkout", "-q", "feature");
+    assert.deepEqual((await changes(dir, "main")).files.map((f) => f.path), ["sms.txt"], "what the PR brought in, not nothing");
+    // A branch with no commits of its own, behind main: nothing to show (not someone else's merge).
+    sh("checkout", "-q", "-b", "empty", fresh);
+    assert.deepEqual((await changes(dir, "main")).files, []);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
