@@ -1131,6 +1131,9 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      tabs too) on its default chat: the feature's central chat (its first)
      or the repo's first chat. Other tabs are a click away; a new repo view
      starts on Chat as well.
+199. **🤖💭 in the sidebar while Copilot reviews** one of a feature's open
+     PRs (it was asked and has not answered), gently pulsing (still for
+     reduced motion); the tooltip names the repos and PRs.
 
 ## Answered (2026-11-05)
 

@@ -1194,3 +1194,8 @@ button.copilot-review { white-space: nowrap; }
 .platform-jira { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
 .platform-bars { display: flex; align-items: center; gap: 4px; }
 .platform-bars-label { font-size: 10px; color: var(--muted); }
+
+/* The sidebar: Copilot is reviewing one of the feature's PRs. */
+.copilot-ind { margin-left: 6px; font-size: 11px; animation: copilot-think 1.6s ease-in-out infinite; }
+@keyframes copilot-think { 50% { opacity: 0.45; } }
+@media (prefers-reduced-motion: reduce) { .copilot-ind { animation: none; } }

@@ -4,6 +4,7 @@ import type { DiffComment } from "../../shared/diff.ts";
 import {
   type ArchivedFeature,
   type ConfigInfo,
+  copilotPending,
   EMPTY_SIDEBAR,
   type Feature,
   type FeatureRepo,
@@ -387,6 +388,15 @@ function FeatureRow(props: { f: Feature; activity?: Activity; run?: RunSummary; 
             ▶ {props.run.running}/{props.run.total}
           </span>
         )}
+        {(() => {
+          // Copilot asked to review an open PR, and not done yet.
+          const reviewing = (ov?.repos ?? []).filter((r) => r.pr && (r.pr.state === "OPEN" || r.pr.state === "DRAFT") && copilotPending(r.pr));
+          return reviewing.length > 0 ? (
+            <span className="copilot-ind" title={`Copilot is reviewing ${reviewing.map((r) => `${repoLabel(r.name)} #${r.pr!.number}`).join(", ")}`}>
+              🤖💭
+            </span>
+          ) : null;
+        })()}
         {ov && ov.todosOpen > 0 && (
           <span className="todo-ind" title={`${ov.todosOpen} step${ov.todosOpen === 1 ? "" : "s"} waiting for you (the To do tab)`}>
             ☐ {ov.todosOpen}
