@@ -84,6 +84,20 @@ export class ReleaseWatch {
           found.push({ key: `${f.id}:${stage}`, news: { featureId: f.id, station: f.name, ...(f.title ? { title: f.title } : {}), stage, repos, ...(running ? { running } : {}) } });
         }
       }
+      // Live features' earlier platforms (not superseded) still on their way: read their tags again.
+      for (const f of s.features.filter((x) => !x.archived && x.platforms?.some((p) => !p.superseded && p.releases?.length))) {
+        const next = await Promise.all(f.platforms!.map(async (p) => (p.superseded || !p.releases?.length ? p : { ...p, releases: await this.refreshReleases(p.releases) })));
+        const changed = next.some((p, i) => p.releases !== f.platforms![i].releases);
+        if (changed) this.d.store.update((x) => ({ ...x, features: x.features.map((y) => (y.id === f.id ? { ...y, platforms: next } : y)) }));
+        for (const p of next.filter((x) => !x.superseded && x.releases?.length)) {
+          const repos = visitRepos({ releases: p.releases } as StationVisit);
+          for (const { stage, running } of complete(repos)) {
+            const total = deployProgress(repos).find((x) => x.stage === stage)?.total ?? 0;
+            const title = `platform ${p.n}${p.goal ? `: ${p.goal}` : ""}`;
+            found.push({ key: `${f.id}:p${p.n}:${stage}`, news: { featureId: f.id, station: f.name, title, stage, repos: total, ...(running ? { running } : {}) } });
+          }
+        }
+      }
       // Ended features still on their way: read their tags again.
       const visits = await Promise.all(s.visits.map((v) => this.refresh(v)));
       if (visits.some((v, i) => v !== s.visits[i])) this.d.store.update((x) => ({ ...x, visits: x.visits.map((v) => visits.find((n) => n.featureId === v.featureId) ?? v) }));
@@ -108,9 +122,15 @@ export class ReleaseWatch {
   /** An ended feature with its tags (and what runs) read again, unless it has got everywhere already. */
   private async refresh(v: StationVisit): Promise<StationVisit> {
     const rs = v.releases ?? [];
+    const next = await this.refreshReleases(rs);
+    return next === rs ? v : { ...v, releases: next };
+  }
+
+  /** Merged repos' tags (and what runs) read again; the same array when nothing changed or all have got everywhere. */
+  private async refreshReleases(rs: VisitRelease[]): Promise<VisitRelease[]> {
     const tagsPending = (r: VisitRelease) => r.stages.some((stage) => !r.release.some((x) => x.stage === stage && x.tags.length));
     const runPending = (r: VisitRelease) => Boolean(r.running && (r.running.error || relevantVersions(r.running, r.components).some((x) => !x.contains)));
-    if (!rs.some((r) => tagsPending(r) || runPending(r))) return v;
+    if (!rs.some((r) => tagsPending(r) || runPending(r))) return rs;
     const next = await Promise.all(
       rs.map(async (r) => {
         let out = r;
@@ -130,7 +150,7 @@ export class ReleaseWatch {
         return out;
       }),
     );
-    return next.every((r, i) => r === rs[i]) ? v : { ...v, releases: next };
+    return next.every((r, i) => r === rs[i]) ? rs : next;
   }
 }
 

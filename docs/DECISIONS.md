@@ -1101,6 +1101,24 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      told a repo is linked only once it succeeds; before, a chat could only
      write "linked" in the log, which linked nothing. The window re-reads the
      links whenever the overview refreshes, so an agent's link shows up.
+196. **Platforms: a feature delivered in waves, one after another.** The
+     station (folder, chats, log, plan, to-dos, Jira task) stays; each
+     platform has its own goal, repos and branches. The next one starts once
+     the current one's work is merged or closed (an open PR, commits without
+     a PR or uncommitted changes block it). Repos that stay get a new branch
+     from their base, `<prefix>/<KEY>-<station>-p<n>`, in the same worktree,
+     so their chats keep their folder and carry on (unlike Continue, which
+     needs new sessions); repos that leave lose their worktree, new ones are
+     added. Jira, as chosen per platform: new subtasks named after the goal,
+     or the same subtasks and the task moved back to In Progress (through a
+     transition to an in-progress status, preferring one named so). The
+     ended platform is kept on the feature with its PRs and merged repos'
+     releases, followed like an ended feature's (and announced as
+     "platform n"), unless marked superseded; archiving carries the counted
+     ones over to the station visit. `plan.md` gets a section per platform,
+     and the agents' instructions and GetFeatureStatus say which platform it
+     is and what the earlier ones did. Platforms side by side (their own
+     worktrees, stacked branches) come later.
 
 ## Answered (2026-11-05)
 

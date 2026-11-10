@@ -1178,3 +1178,19 @@ button.copilot-review { white-space: nowrap; }
 .line-head .line-repos { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .jira-link-box { width: 110px; font-size: 12px; padding: 3px 6px; }
 .jira-link-box:focus { width: 160px; }
+
+/* Platforms: the header's P1 · P2 · ＋ tabs, an earlier platform's popover, the next-platform dialog. */
+.platform-strip { display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; margin-left: 6px; font-size: 12px; font-weight: 500; }
+.platform-chip { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); border-radius: 6px; padding: 1px 7px; font-size: 12px; background: transparent; color: var(--text); white-space: nowrap; }
+.platform-chip.current { border-color: var(--accent); background: var(--accent-soft); }
+.platform-chip.superseded { opacity: 0.55; text-decoration: line-through; }
+.platform-chip.next { color: var(--accent); border-style: dashed; }
+.platform-goal { color: var(--muted); max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+.platform-popover { left: 0; right: auto; width: min(560px, 80vw); font-weight: 400; }
+.platform-repos { margin: 8px 0; border-collapse: collapse; width: 100%; }
+.platform-repos td { padding: 2px 8px 2px 0; vertical-align: top; }
+.platform-stage { margin-right: 8px; white-space: nowrap; opacity: 0.6; }
+.platform-stage.reached { opacity: 1; }
+.platform-jira { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
+.platform-bars { display: flex; align-items: center; gap: 4px; }
+.platform-bars-label { font-size: 10px; color: var(--muted); }

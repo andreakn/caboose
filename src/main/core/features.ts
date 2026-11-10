@@ -9,16 +9,22 @@ import type {
   Feature,
   FeatureDetails,
   FeatureJira,
+  FeatureOverview,
   FeatureRepo,
   FeatureStatus,
   JiraAlignment,
   NewFeature,
+  NextPlatform,
+  NextPlatformResult,
+  ReleaseStage,
   RepoEntry,
   RepoScripts,
   Result,
 } from "../../shared/types.ts";
 import { type Effective, featureRoots, forLine, loadRepoConfig, type ResolvedLocalConfig } from "./config.ts";
+import { addPlatformToPlan, appendLog } from "./docs.ts";
 import * as g from "./git.ts";
+import { currentPlatform, endedPlatform, platformBlockers, platformBranch } from "./platforms.ts";
 import { type Jira, leadingKey, parseKey, readFeatureJira, writeFeatureJira } from "./jira.ts";
 import { copyLocalFiles, DEFAULT_LOCAL_FILES, findLocalFiles } from "./localfiles.ts";
 import { servesLine } from "../../shared/lines.ts";
@@ -426,9 +432,111 @@ export class Features {
     return ok(undefined);
   }
 
-  /** `<prefix>/<KEY>-<station>` with a Jira key, else `<prefix>/<station>`. */
+  /** `<prefix>/<KEY>-<station>` with a Jira key, else `<prefix>/<station>`; `-p<n>` from platform 2 on. */
   private branchName(f: Feature, key?: string): string {
-    return `${this.eff(f.line).branchPrefix}/${key ? `${key}-` : ""}${f.name}`;
+    return platformBranch(this.eff(f.line).branchPrefix, f.name, key, currentPlatform(f).n);
+  }
+
+  /**
+   * Ends the current platform and starts the next one, with its goal and
+   * repos. The current one's work must be merged or closed (see
+   * platformBlockers; `ov` is a fresh overview). Repos that stay get a new
+   * branch from their base in the same worktree, so their chats carry on;
+   * repos that leave have their worktree removed; new ones are added.
+   */
+  async nextPlatform(featureId: string, input: NextPlatform, ov: FeatureOverview, stagesFor: (repo: string) => ReleaseStage[]): Promise<Result<NextPlatformResult>> {
+    const f = this.get(featureId);
+    if (!f || f.archived) return fail("Unknown or archived feature.");
+    const repos = [...new Set(input.repos)];
+    if (!repos.length) return fail("Pick the repos the next platform works in.");
+    const blockers = platformBlockers(f, ov);
+    if (blockers.length) return fail(`Platform ${currentPlatform(f).n} is not finished: ${blockers.join("; ")}.`);
+    for (const name of repos.filter((n) => !f.repos.some((r) => r.name === n))) {
+      const entry = this.config.repos.find((r) => r.name === name);
+      if (!entry) return fail(`${name} is not a configured repo.`);
+      if (!servesLine(entry, f.line)) return fail(`${name} is on the ${entry.line} line, and this feature is on ${f.line}.`);
+    }
+    const warnings: string[] = [];
+    const jira = readFeatureJira(f.folder);
+    const ended = endedPlatform(f, ov, jira, stagesFor);
+    const n = ended.n + 1;
+    const goal = input.goal?.trim() || undefined;
+    this.patch(featureId, (x) => ({ ...x, status: "active", platforms: [...(x.platforms ?? []), ended], platform: { n, ...(goal ? { goal } : {}), startedAt: new Date().toISOString() } }));
+
+    // Jira: new subtasks for the platform, or the old ones (and the task) back in progress.
+    const level = this.eff(f.line).jira.level;
+    const j = jira.task && level !== "off" ? this.jira(f.line) : null;
+    if (jira.task && level !== "off") {
+      if (input.jira === "reuse") {
+        if (j) {
+          const keys = [jira.task, ...repos.map((r) => jira.subtasks[r]).filter((k): k is string => Boolean(k))];
+          for (const k of keys) await j.startProgress(k).catch((e: Error) => warnings.push(`${k}: ${e.message}`));
+        } else warnings.push("Jira is not connected: move the task and subtasks back to in progress yourself.");
+      } else {
+        for (const r of repos) delete jira.subtasks[r];
+        writeFeatureJira(f.folder, jira);
+        if (j) {
+          const summary = goal ?? (await j.issue(jira.task).then((i) => i.summary, () => f.title ?? f.name));
+          for (const r of repos.filter((x) => f.repos.some((y) => y.name === x))) {
+            try {
+              jira.subtasks[r] = await j.createSubtask(jira.task, `${r}: ${summary}`);
+              writeFeatureJira(f.folder, jira);
+            } catch (e) {
+              warnings.push(`${r}'s subtask: ${(e as Error).message}`);
+            }
+          }
+        }
+      }
+    }
+
+    const merged = (repo: string) => ov.repos.find((x) => x.name === repo)?.pr?.state === "MERGED";
+    const now = this.get(featureId)!;
+    for (const r of now.repos) {
+      try {
+        if (repos.includes(r.name)) {
+          // Same worktree, new branch from the (fetched) base: the repo's chat keeps its folder.
+          await g.fetchOrigin(r.source).catch(() => {});
+          const branch = await this.freeBranch(r.source, this.branchName(now, jira.subtasks[r.name] ?? jira.task));
+          await g.switchToNewBranch(r.path, branch, r.baseRef);
+          this.setBranch(featureId, r.name, branch);
+          if (merged(r.name)) await g.deleteBranch(r.source, r.branch).catch(() => {});
+          appendLog(f.folder, { from: r.name, status: "queued", text: `Platform ${n}${goal ? `: ${goal}` : ""}. New branch ${branch} from ${r.baseRef}.` });
+        } else {
+          // Not in the next platform: its worktree goes (its work is merged or closed; the chat stays).
+          await g.removeWorktree(r.source, r.path);
+          if (merged(r.name)) await g.deleteBranch(r.source, r.branch).catch(() => {});
+          this.patch(featureId, (x) => ({ ...x, repos: x.repos.filter((y) => y.name !== r.name) }));
+        }
+      } catch (e) {
+        warnings.push(`${r.name}: ${(e as Error).message}`);
+      }
+    }
+    for (const name of repos.filter((x) => !now.repos.some((y) => y.name === x))) {
+      const r = await this.addRepo(featureId, name, goal);
+      if (!r.ok) warnings.push(`${name}: ${r.error}`);
+      else appendLog(f.folder, { from: name, status: "queued", text: `Joins in platform ${n}${goal ? `: ${goal}` : ""}.` });
+    }
+    appendLog(f.folder, {
+      from: "caboose",
+      text: `Platform ${ended.n}${ended.goal ? ` (${ended.goal})` : ""} ended; platform ${n}${goal ? `: ${goal}` : ""} starts with ${repos.join(", ")}.${warnings.length ? ` Problems: ${warnings.join("; ")}` : ""}`,
+    });
+    addPlatformToPlan(f.folder, n, goal);
+    return ok({ n, warnings });
+  }
+
+  /** Marks an earlier platform superseded (its releases stop counting), or counted again. */
+  setPlatformSuperseded(featureId: string, n: number, superseded: boolean): Result<void> {
+    const f = this.get(featureId);
+    if (!f?.platforms?.some((p) => p.n === n)) return fail(`No earlier platform ${n}.`);
+    this.patch(featureId, (x) => ({
+      ...x,
+      platforms: x.platforms!.map((p) => {
+        if (p.n !== n) return p;
+        const { superseded: _s, ...rest } = p;
+        return superseded ? { ...rest, superseded: true } : rest;
+      }),
+    }));
+    return ok(undefined);
   }
 
   /** A repo's scripts: the config's, plus what its caboose.json adds (setup/archive only where the config has none). */

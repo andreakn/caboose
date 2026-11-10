@@ -133,3 +133,25 @@ test("a description that starts with a key names the task", async () => {
   assert.equal(leadingKey("Feature toggle for NWP-8259"), null, "only at the start");
   assert.equal(leadingKey("UTF-8 everywhere"), "UTF-8", "looks like one: creating the feature checks it with Jira");
 });
+
+test("an issue goes back in progress through a transition to an in-progress status, preferring \"In Progress\"", async () => {
+  const f = fakeFetch({
+    "GET /rest/api/3/issue/ABC-1?fields=status": () => [200, { fields: { status: { name: "Done", statusCategory: { key: "done" } } } }],
+    "GET /rest/api/3/issue/ABC-1/transitions": () => [
+      200,
+      {
+        transitions: [
+          { id: "11", name: "Review", to: { name: "In Review", statusCategory: { key: "indeterminate" } } },
+          { id: "21", name: "Reopen", to: { name: "In Progress", statusCategory: { key: "indeterminate" } } },
+          { id: "31", name: "Close", to: { name: "Closed", statusCategory: { key: "done" } } },
+        ],
+      },
+    ],
+    "POST /rest/api/3/issue/ABC-1/transitions": () => [200, {}],
+    "GET /rest/api/3/issue/ABC-2?fields=status": () => [200, { fields: { status: { name: "In Progress", statusCategory: { key: "indeterminate" } } } }],
+  });
+  const j = new Jira(auth, f.fn);
+  assert.equal(await j.startProgress("ABC-1"), "In Progress");
+  assert.deepEqual(f.calls.at(-1)!.body, { transition: { id: "21" } });
+  assert.equal(await j.startProgress("ABC-2"), null, "already in progress: nothing to do");
+});

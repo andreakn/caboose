@@ -7,6 +7,7 @@ import {
   EMPTY_SIDEBAR,
   type Feature,
   type FeatureRepo,
+  type PastPlatform,
   type RepoOverview,
   type RunSummary,
   type UpdateInfo,
@@ -32,7 +33,7 @@ import { NewFeature } from "./NewFeature.tsx";
 import { PlanView, StatusChip, useDocs } from "./Plan.tsx";
 import { notificationsOn } from "./prefs.ts";
 import { FilesView } from "./Files.tsx";
-import { liveState, MapView } from "./Map.tsx";
+import { liveState, MapView, shippedAll } from "./Map.tsx";
 import { ArchivedView } from "./Archived.tsx";
 import { jiraBeforePrs } from "./jiraCheck.ts";
 import { createPrsMessage, fixCiMessage } from "../../shared/github.ts";
@@ -47,6 +48,7 @@ import { RunView, useRunOverview } from "./Run.tsx";
 import { TerminalPanel, useTerminals } from "./Terminals.tsx";
 import { lineConfig, linesOf, reposFor } from "../../shared/lines.ts";
 import { stationLabel } from "../../shared/stations.ts";
+import { NextPlatformDialog, PlatformStrip } from "./Platforms.tsx";
 
 const api = window.caboose;
 
@@ -394,10 +396,22 @@ function FeatureRow(props: { f: Feature; activity?: Activity; run?: RunSummary; 
       <span className="ws-branch" title={f.repos.map((r) => repoLabel(r.name)).join(" · ")}>
         {f.title || f.repos.map((r) => repoLabel(r.name)).join(" · ") || "no repos"}
       </span>
+      {(f.platforms ?? [])
+        .filter((p) => !p.superseded && p.releases?.length && !shippedAll(platformRepos(p)))
+        .map((p) => (
+          <span key={p.n} className="platform-bars" title={`Platform ${p.n}${p.goal ? `: ${p.goal}` : ""}, still on its way`}>
+            <span className="platform-bars-label">P{p.n}</span>
+            <DeployBars repos={platformRepos(p)} />
+          </span>
+        ))}
       {ov && <DeployBars repos={ov.repos} />}
     </button>
   );
 }
+
+/** An earlier platform's merged repos, as overview repos for the deploy bars. */
+const platformRepos = (p: PastPlatform): RepoOverview[] =>
+  (p.releases ?? []).map((r) => ({ name: r.repo, branch: "", pr: { state: "MERGED" } as RepoOverview["pr"], stages: r.stages, release: r.release, ...(r.running ? { running: r.running } : {}), ...(r.components ? { components: r.components } : {}) }));
 
 /**
  * How deployed a feature is: per environment (release stage), a segment per
@@ -495,6 +509,7 @@ function FeatureView(props: {
   const site = own.jira?.site;
 
   const [jira, setJira] = useState<FeatureJira>({ subtasks: {} });
+  const [nextPlatform, setNextPlatform] = useState(false);
   const loadJira = () => api.featureJira(f.id).then(setJira);
   // Again whenever the overview refreshes: an agent may have linked an issue (LinkJira).
   useEffect(() => void loadJira(), [f.id, overview.ov]);
@@ -710,6 +725,7 @@ function FeatureView(props: {
                 />
               ))}
             <FeatureTitle f={f} />
+            <PlatformStrip f={f} ov={overview.ov} onNext={() => setNextPlatform(true)} />
           </h1>
         </div>
         <div className="actions">
@@ -761,7 +777,22 @@ function FeatureView(props: {
         </div>
       </header>
 
-      {!f.archived && allMerged(overview.ov) && <MergedOffer f={f} prs={overview.ov!.repos.map((r) => r.pr!.number)} onArchive={props.onArchive} />}
+      {!f.archived && allMerged(overview.ov) && (
+        <MergedOffer f={f} prs={overview.ov!.repos.map((r) => r.pr!.number)} onArchive={props.onArchive} onNextPlatform={() => setNextPlatform(true)} />
+      )}
+      {nextPlatform && (
+        <NextPlatformDialog
+          f={f}
+          ov={overview.ov}
+          hasTask={Boolean(jira.task) && level !== "off"}
+          onCancel={() => setNextPlatform(false)}
+          onDone={() => {
+            setNextPlatform(false);
+            void loadJira();
+            void overview.reload();
+          }}
+        />
+      )}
 
       <NeedsYou f={f} chats={props.chats} reported={reported} onOpenChat={(id) => dispatch(`openChat:${id}`)} />
 
@@ -1040,7 +1071,7 @@ function FeatureInfo({ f }: { f: Feature }) {
 }
 
 /** Every branch is merged: offer to archive (once per set of PRs; "Not now" hides it until another PR is merged). */
-function MergedOffer({ f, prs, onArchive }: { f: Feature; prs: number[]; onArchive: () => void }) {
+function MergedOffer({ f, prs, onArchive, onNextPlatform }: { f: Feature; prs: number[]; onArchive: () => void; onNextPlatform: () => void }) {
   const key = `caboose-merged-offer-${f.id}`;
   const value = [...prs].sort((a, b) => a - b).join(",");
   const [hidden, setHidden] = useState(() => localStorage.getItem(key) === value);
@@ -1049,10 +1080,13 @@ function MergedOffer({ f, prs, onArchive }: { f: Feature; prs: number[]; onArchi
     <div className="merged-offer">
       <span className="hdot h-merged" />
       <span>
-        {f.repos.length === 1 ? "Its branch is merged." : `All ${f.repos.length} branches are merged.`} Archive the feature?
-        <span className="muted"> Its releases are still followed afterwards.</span>
+        {f.repos.length === 1 ? "Its branch is merged." : `All ${f.repos.length} branches are merged.`} Archive the feature, or go on with a next platform?
+        <span className="muted"> Its releases are still followed either way.</span>
       </span>
       <span className="spacer" />
+      <button onClick={onNextPlatform} title="A new wave of this feature: new branches, the same chats, log and plan">
+        Next platform…
+      </button>
       <button className="primary" onClick={onArchive}>
         Archive…
       </button>

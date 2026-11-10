@@ -16,6 +16,7 @@ import type { Coordinator } from "./coordination.ts";
 import { changes, fullPatch } from "./diff.ts";
 import { addTodo, readDocs } from "./docs.ts";
 import { readFeatureJira } from "./jira.ts";
+import { platformText } from "./platforms.ts";
 import { repoFile } from "./mainline.ts";
 import { RUNNING_SCRIPT } from "./running.ts";
 import { runnables } from "./runscripts.ts";
@@ -587,6 +588,7 @@ export function cabooseInstructions(f: Feature, agent: "claude" | "copilot" = "c
   const common = [
     jira.task ? `The feature is Jira task ${jira.task} (see jira.txt in the feature folder); each repo's branch carries its own subtask key.` : "",
     "To link a repo to its Jira issue, use the LinkJira tool; a repo is only linked once it succeeds.",
+    ...(platformText(f) ? [platformText(f)] : []),
     ...(f.continuedFrom
       ? [
           `This feature continues ${f.continuedFrom.name}, which was archived on ${f.continuedFrom.archivedAt.slice(0, 10)} (its branches were deleted; these are new ones). Its chats are in ${f.folder}/history/ (one markdown file per chat, the repo in its name): read the ones you need for what was decided and done before. The user sees that earlier conversation above yours.`,
@@ -634,3 +636,4 @@ export function cabooseInstructions(f: Feature, agent: "claude" | "copilot" = "c
     .filter(Boolean)
     .join("\n");
 }
+

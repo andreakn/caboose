@@ -77,3 +77,13 @@ export async function renameBranch(path: string, from: string, to: string): Prom
   await git(path, "check-ref-format", "--branch", to);
   await git(path, "branch", "-m", from, to);
 }
+
+/** A new branch from `baseRef` in an existing worktree; --no-track, as in addWorktree. */
+export async function switchToNewBranch(path: string, branch: string, baseRef: string): Promise<void> {
+  await git(path, "check-ref-format", "--branch", branch);
+  await git(path, "switch", "--no-track", "-c", branch, baseRef);
+}
+
+export async function deleteBranch(root: string, branch: string): Promise<void> {
+  await git(root, "branch", "-D", branch);
+}

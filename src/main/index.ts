@@ -10,7 +10,7 @@ import { commentsMessage } from "../shared/diff.ts";
 import type { MergeMethod } from "../shared/github.ts";
 import { reposFor } from "../shared/lines.ts";
 import { copilotPending, type CopilotRequestOutcome } from "../shared/types.ts";
-import type { AppId, AzureTenant, ConfigInput, Feature, FeatureDetails, HomeArea, NewFeature, RetireMode, Sidebar, State, Theme } from "../shared/types.ts";
+import type { AppId, AzureTenant, ConfigInput, Feature, NextPlatform, FeatureDetails, HomeArea, NewFeature, RetireMode, Sidebar, State, Theme } from "../shared/types.ts";
 import { CopilotClient } from "@github/copilot-sdk";
 import { ClaudeProvider, Inbox } from "./core/agents/claude.ts";
 import { copilotEnv, CopilotProvider } from "./core/agents/copilot.ts";
@@ -56,6 +56,7 @@ import { retire, retirePlan } from "./core/retire.ts";
 import { git } from "./core/run.ts";
 import { Runner } from "./core/runner.ts";
 import { AzureSignIns, azureEnv } from "./core/azure.ts";
+import { countedPlatforms } from "./core/platforms.ts";
 import { Terminals } from "./core/terminals.ts";
 import { checkForUpdate, update } from "./core/updater.ts";
 import { installMenu } from "./menu.ts";
@@ -518,7 +519,8 @@ ipcMain.handle("feature:retire", (_e, id: string, mode: RetireMode) =>
     const f = featureOrThrow(id);
     // Its merge commits, so its releases can still be followed after it ends.
     const ov = await overviewOf(f.id).catch(() => null);
-    const releases = ov ? visitReleases(ov, Object.fromEntries(f.repos.map((r) => [r.name, r.source])), stagesFor) : [];
+    // Earlier platforms' (not superseded) too: they are still on their way.
+    const releases = [...countedPlatforms(f).flatMap((p) => p.releases ?? []), ...(ov ? visitReleases(ov, Object.fromEntries(f.repos.map((r) => [r.name, r.source])), stagesFor) : [])];
     const out = await retire(f, mode, {
       github,
       archiveRoot: forLine(localConfig, f.line).archiveRoot,
@@ -841,6 +843,14 @@ ipcMain.on("term:write", (_e, id: string, data: string) => terminals.write(id, d
 ipcMain.on("term:resize", (_e, id: string, cols: number, rows: number) => terminals.resize(id, cols, rows));
 
 // --- the Run tab
+// --- platforms: a feature delivered in waves
+ipcMain.handle("platform:next", async (_e, featureId: string, input: NextPlatform) => {
+  const ov = await overviewOf(featureId, true).catch(() => null);
+  if (!ov) return { ok: false, error: "Could not read the feature's PRs and branches; try again." };
+  return features.nextPlatform(featureId, input, ov, stagesFor);
+});
+ipcMain.handle("platform:supersede", (_e, featureId: string, n: number, superseded: boolean) => features.setPlatformSuperseded(featureId, n, superseded));
+
 // --- Azure sign-ins (the feature's line's tenants)
 ipcMain.handle("azure:status", async (_e, featureId: string, fresh?: boolean) => {
   const f = featureById(featureId);

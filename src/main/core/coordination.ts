@@ -7,6 +7,7 @@ import type { Feature, FeatureJira, FeatureRepo, RepoEntry, RepoStatus, Result }
 import type { Chats } from "./chats.ts";
 import { appendLog, readDocs, reportedStatuses } from "./docs.ts";
 import type { Store } from "./store.ts";
+import { platformText } from "./platforms.ts";
 
 /** Live facts about a repo's worktree (git and PR), for the status overview. */
 export type RepoFacts = {
@@ -185,6 +186,7 @@ export class Coordinator {
       `Feature ${f.name}${f.title ? ` — ${f.title}` : ""} [${f.status ?? "active"}]` +
         `${docs.progress.total ? ` · plan ${docs.progress.done}/${docs.progress.total}` : ""}${jira.task ? ` · Jira ${jira.task}` : ""}`,
       `Folder: ${f.folder}`,
+      ...(platformText(f) ? [platformText(f)] : []),
       "",
       "Repos:",
     ];

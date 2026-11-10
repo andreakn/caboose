@@ -75,6 +75,24 @@ export class Jira {
     );
   }
 
+  /**
+   * Moves an issue back to work: through a transition to a status in
+   * progress (Jira's "indeterminate" category), one named "In Progress" if
+   * there is one. Null when it already is in progress; else the status now.
+   */
+  async startProgress(key: string): Promise<string | null> {
+    const k = encodeURIComponent(key);
+    const now = await this.call<{ fields?: { status?: { name?: string; statusCategory?: { key?: string } } } }>("GET", `/rest/api/3/issue/${k}?fields=status`);
+    if (now.fields?.status?.statusCategory?.key === "indeterminate") return null;
+    type Transition = { id: string; name: string; to?: { name?: string; statusCategory?: { key?: string } } };
+    const { transitions } = await this.call<{ transitions: Transition[] }>("GET", `/rest/api/3/issue/${k}/transitions`);
+    const working = transitions.filter((t) => t.to?.statusCategory?.key === "indeterminate");
+    const pick = working.find((t) => /in progress/i.test(t.to?.name ?? t.name)) ?? working[0];
+    if (!pick) throw new Error(`${key} (${now.fields?.status?.name ?? "?"}) has no transition to a status in progress.`);
+    await this.call("POST", `/rest/api/3/issue/${k}/transitions`, { transition: { id: pick.id } });
+    return pick.to?.name ?? pick.name;
+  }
+
   async createTask(project: string, summary: string): Promise<string> {
     const types = await this.issueTypes(project);
     const type =

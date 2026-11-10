@@ -127,3 +127,12 @@ function stamp(d: Date): string {
   const p = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
+
+/** A section for a new platform at the end of plan.md, so its steps go under it. */
+export function addPlatformToPlan(folder: string, n: number, goal?: string): void {
+  const file = docPath(folder, "plan");
+  const heading = `## Platform ${n}${goal ? `: ${goal}` : ""}`;
+  const text = existsSync(file) ? readFileSync(file, "utf8") : "";
+  if (text.includes(heading)) return;
+  writeFileSync(file, `${text.trimEnd()}${text.trim() ? "\n\n" : ""}${heading}\n\n`);
+}

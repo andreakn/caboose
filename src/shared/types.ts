@@ -91,7 +91,37 @@ export type Feature = {
   components?: Record<string, string[]>;
   /** The archived feature this one continues (its chats' history is in history/). */
   continuedFrom?: { name: string; folder: string; archivedAt: string };
+  /** The platform it is on now (absent: platform 1, with no goal of its own). */
+  platform?: CurrentPlatform;
+  /** Its earlier platforms, oldest first. */
+  platforms?: PastPlatform[];
 };
+
+/**
+ * A feature is delivered in one or more platforms (waves): each has its own
+ * goal, repos and branches, while the station keeps its chats, log, plan,
+ * to-dos and Jira task. A staged rollout (contracts, data, cleanup) is one
+ * platform per stage; a revision of something already merged is a new one.
+ */
+export type CurrentPlatform = { n: number; goal?: string; startedAt: string };
+
+/** An earlier platform: what it delivered, its releases still followed (unless superseded). */
+export type PastPlatform = CurrentPlatform & {
+  endedAt: string;
+  /** No longer counted: a wrong revision fixed by a later platform, or work that was dropped. */
+  superseded?: boolean;
+  repos: { name: string; branch: string; pr?: { number: number; url: string; state: "OPEN" | "DRAFT" | "MERGED" | "CLOSED" }; jira?: string }[];
+  /** Its merged repos, with what is needed to keep reading their release tags. */
+  releases?: VisitRelease[];
+};
+
+/**
+ * Starting a feature's next platform. `jira`: "own" gives each repo a new
+ * subtask (the platform tracked on its own), "reuse" keeps the subtasks and
+ * moves them and the task back to in progress.
+ */
+export type NextPlatform = { goal?: string; repos: string[]; jira?: "own" | "reuse" };
+export type NextPlatformResult = { n: number; warnings: string[] };
 
 /** An archived feature, read from its archive folder (feature.json, chats/, its files). */
 export type ArchivedFeature = {
@@ -634,6 +664,10 @@ export type CabooseApi = {
   /** Closes its open PRs, deletes its branches (here and on origin), then moves its folder and chat logs to the archive, or deletes them. */
   retireFeature(featureId: string, mode: RetireMode): Promise<Result<RetireOutcome>>;
   restoreFeature(featureId: string): Promise<Result<void>>;
+  /** Ends the current platform (its work merged or closed) and starts the next, with its goal and repos. */
+  nextPlatform(featureId: string, input: NextPlatform): Promise<Result<NextPlatformResult>>;
+  /** Marks an earlier platform superseded (its releases stop counting), or counted again. */
+  supersedePlatform(featureId: string, n: number, superseded: boolean): Promise<Result<void>>;
   openPath(path: string): Promise<void>;
   setupLog(featureId: string, repo: string): Promise<string>;
 

@@ -90,6 +90,19 @@ a stop button, as is whatever holds a port a script declares. An optional
 **moniker file** (Configure → Terminals; `moniker path description` per line)
 labels repos and their `run_<moniker>.sh`.
 
+**Platforms: a feature in waves.** Some features ship in steps (contracts,
+then data, then removing the old hacks), and sometimes what was merged and
+deployed turns out wrong and needs a new revision. Once a feature's PRs are
+merged (or closed), **＋ platform** in its header (or "Next platform…" on the
+all-merged banner) starts its next platform: a goal, the repos (others from
+the line can join, and repos can leave), and for Jira either new subtasks
+for the platform or the same ones moved back to In Progress. Each repo gets
+a new branch from its base (`…-p2`) in the same folder, so its chat carries
+on; the station keeps its chats, log, to-dos and plan (`plan.md` gets a
+section per platform), and the agents are told which platform they are on.
+The earlier platform is kept (P1 in the header: its PRs and releases) and
+followed to prod in the sidebar, unless you mark it superseded.
+
 **Azure tenants.** Programs that sign in to Azure (az, AzureCliCredential) in
 more than one tenant: list a line's tenants in Configure → Lines (a name, the
 tenant id or domain, and optionally its store; default

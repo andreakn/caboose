@@ -67,6 +67,8 @@ const api: CabooseApi = {
   retirePlan: invoke("feature:retirePlan"),
   retireFeature: invoke("feature:retire"),
   restoreFeature: invoke("feature:restore"),
+  nextPlatform: invoke("platform:next"),
+  supersedePlatform: invoke("platform:supersede"),
   openPath: invoke("shell:openPath"),
   setupLog: invoke("feature:setupLog"),
 
