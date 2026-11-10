@@ -1168,3 +1168,11 @@ button.copilot-review { white-space: nowrap; }
 .azure-tenant input { flex: 1; min-width: 0; }
 .azure-tenant input.tenant-id { flex: 2; }
 .azure-tenant input.tenant-dir { flex: 2; }
+
+/* Configure → Lines: each line in a frame of its own, its name kept in view while scrolling through it. */
+.settings section.line-section { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); padding: 0 16px 14px; }
+.line-section > .line-head { position: sticky; top: 0; z-index: 3; background: var(--card); margin: 0 -16px 8px; padding: 10px 16px 8px; border-bottom: 1px solid var(--border); border-radius: var(--radius) var(--radius) 0 0; }
+.line-section > .line-head h2 { margin: 0; }
+.line-head { flex-wrap: nowrap; }
+.line-head h2 { white-space: nowrap; }
+.line-head .line-repos { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

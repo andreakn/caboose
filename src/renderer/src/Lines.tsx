@@ -105,10 +105,11 @@ function LineSection(props: {
 
   return (
     <section className="line-section">
-      <div className="row">
+      <div className="row line-head">
         <h2>{name} line</h2>
-        <span className="muted">{props.repos.join(", ")}</span>
-        <span className="spacer" />
+        <span className="muted line-repos" title={props.repos.join(", ")}>
+          {props.repos.join(", ")}
+        </span>
         <button className="link" onClick={props.onRename}>
           Rename…
         </button>
