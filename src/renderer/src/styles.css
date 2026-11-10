@@ -1077,8 +1077,6 @@ button.primary.merge-ready:hover { background: color-mix(in srgb, var(--ok) 85%,
 .working code { font-size: 11.5px; }
 
 /* Asking GitHub Copilot for a review. */
-button.copilot-review { white-space: nowrap; }
-.chip.copilot-pending { background: color-mix(in srgb, var(--info) 18%, transparent); font-size: 11px; }
 
 /* Files git ignores (.env, bin/, node_modules/): there, but faded. */
 .tree-file.ignored .tree-name, .tree-dir.ignored .tree-name { opacity: 0.5; font-style: italic; }
@@ -1130,20 +1128,22 @@ button.fix-ci:hover { background: color-mix(in srgb, var(--danger) 85%, black); 
 .scope-panel .view-tabs > button { border-bottom: 1px solid transparent; background-clip: padding-box; margin-bottom: 0; }
 .scope-panel .view-tabs > button:not(.active) { background-color: color-mix(in srgb, var(--bg) 60%, transparent); }
 .scope-panel .view-tabs > button.active { border-bottom: 1px solid var(--card); background-clip: border-box; }
-.chip.copilot-verdict { font-size: 11px; white-space: nowrap; }
-.chip.copilot-verdict.v-approve { background: color-mix(in srgb, var(--ok) 20%, transparent); }
-.chip.copilot-verdict.v-changes { background: color-mix(in srgb, var(--danger) 18%, transparent); }
-.chip.copilot-verdict.v-comments { background: color-mix(in srgb, var(--warn) 20%, transparent); }
-.chip.copilot-verdict.outdated { opacity: 0.65; }
 /* "prod – approve ↗": a release in test whose prod deploy waits for approval in GitHub Actions. */
 .chip.approvable { cursor: pointer; border: 1px dashed color-mix(in srgb, var(--warn) 60%, var(--border)); background: color-mix(in srgb, var(--warn) 14%, transparent); color: var(--text); }
 .chip.approvable:hover { background: color-mix(in srgb, var(--warn) 26%, transparent); }
-.chip.awaiting-approval { font-size: 11px; white-space: nowrap; background: color-mix(in srgb, var(--warn) 22%, transparent); }
 
 /* A repo's state and actions: a line of their own above its Files/Changes/Chat/Run tabs. */
 .repo-statusline { padding: 2px 8px 6px; min-width: 0; }
 .repo-statusline .repo-inline { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; width: 100%; }
 .repo-statusline .repo-inline > .row { margin-left: auto; }
 .repo-statusline .repo-local { white-space: nowrap; flex: 0 0 auto; max-width: none; }
-.chip .chip-dismiss { margin-left: 4px; padding: 0 2px; font-size: 12px; line-height: 1; color: var(--muted); text-decoration: none; }
-.chip .chip-dismiss:hover { color: var(--text); }
+
+/* The status line's icons: the agent's report, the PR's merge state, Copilot. */
+.agent-icon, .pr-merge-mark { font-size: 13px; line-height: 1; cursor: default; }
+.pr-merge-mark { margin-left: 3px; }
+.copilot-icon { font-size: 13px; line-height: 1; white-space: nowrap; padding: 2px 4px; border-radius: 6px; text-decoration: none; color: var(--text); }
+button.copilot-icon:hover { background: var(--tint); }
+.copilot-icon.v-changes { background: color-mix(in srgb, var(--danger) 18%, transparent); }
+.copilot-popover { left: 0; right: auto; width: min(420px, 80vw); }
+.copilot-popover .row { margin-top: 8px; }
+button.copilot-review { white-space: nowrap; }

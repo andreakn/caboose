@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Chat } from "../../shared/chat.ts";
+import type { PrDetails } from "../../shared/github.ts";
 import {
   checksSummary,
   createPrMessage,
@@ -9,7 +10,7 @@ import {
   type MergeMethod,
   resolveConflictsMessage,
 } from "../../shared/github.ts";
-import { copilotPending, copilotWanted, type Feature, type FeatureRepo, type JiraLevel, type RepoOverview, type StageRelease } from "../../shared/types.ts";
+import { copilotPending, copilotWanted, type Feature, type RepoStatus, type FeatureRepo, type JiraLevel, type RepoOverview, type StageRelease } from "../../shared/types.ts";
 import { activeChat } from "./Chat.tsx";
 import { askText } from "./Dialog.tsx";
 import { MenuButton, type MenuItem, useApps } from "./Menu.tsx";
@@ -93,7 +94,6 @@ export function RepoRow(props: {
   const [busy, setBusy] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [tagging, setTagging] = useState(false);
-  const [, setDismissTick] = useState(0);
   const apps = useApps();
 
   async function act(label: string, fn: () => Promise<{ ok: boolean; error?: string } | void>) {
@@ -245,50 +245,10 @@ export function RepoRow(props: {
 
   const chips = (
     <>
-      {ov?.reported?.status && (
-        <span title={`${ov.reported.at}: ${ov.reported.text}`}>
-          <StatusChip status={ov.reported.status} />
-        </span>
-      )}
+      {ov?.reported?.status && <AgentIcon status={ov.reported.status} at={ov.reported.at} text={ov.reported.text} />}
       {ov?.pr ? <PrChip pr={ov.pr} /> : ghPr && <PrLink pr={ghPr} />}
-      {live && ov?.pr && awaitingApproval(ov.pr) && (
-        <span
-          className="chip awaiting-approval"
-          title={`GitHub will not merge this yet: it needs an approving review${ov.pr.requested.length ? ` (asked: ${ov.pr.requested.join(", ")})` : ""}.`}
-        >
-          ⏳ waiting for approval
-        </span>
-      )}
-      {live && ov?.pr && copilotPending(ov.pr) ? (
-        <span className="chip copilot-pending" title="Copilot has been asked to review and has not yet">
-          Copilot reviewing…
-        </span>
-      ) : (
-        // Only while the PR is open: after a merge (or a close) the review has done its job.
-        live &&
-        ov?.pr?.copilot &&
-        !copilotDismissed(ov.pr) && (
-          <span
-            className={`chip copilot-verdict v-${ov.pr.copilot.verdict}${ov.pr.copilot.current ? "" : " outdated"}`}
-            title={`Copilot's review, ${ov.pr.copilot.at.slice(0, 16).replace("T", " ")}: ${ov.pr.copilot.summary}${ov.pr.copilot.current ? "" : "\nOf an older commit: there are newer commits it has not seen."}`}
-          >
-            Copilot {{ approve: "🟢", comments: "🟡", changes: "🔴", reviewed: "💬" }[ov.pr.copilot.verdict]} {ov.pr.copilot.summary}
-            {ov.pr.copilot.current ? "" : " (older commit)"}
-            {ov.pr.copilot.verdict !== "approve" && (
-              <button
-                className="link chip-dismiss"
-                title="I have looked at it: hide this verdict (a newer Copilot review shows again)"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  dismissCopilot(ov.pr!);
-                  setDismissTick((t) => t + 1);
-                }}
-              >
-                ×
-              </button>
-            )}
-          </span>
-        )
+      {live && ov?.pr && !feature.archived && (
+        <CopilotIcon pr={ov.pr} busy={!!busy} onRequest={() => void act("Asking Copilot…", () => requestCopilot(feature.id, repo.name))} />
       )}
       {ov?.release && (
         <ReleaseChips
@@ -315,16 +275,6 @@ export function RepoRow(props: {
           onClick={() => void askAgent(fixCiMessage([{ repo: repo.name, pr: pr.number, checks: failedChecks }]))}
         >
           Fix CI
-        </button>
-      )}
-      {live && ov?.pr && copilotWanted(ov.pr) && !feature.archived && (
-        <button
-          className="copilot-review"
-          disabled={!!busy}
-          title={`Ask GitHub Copilot to review PR #${ov.pr.number} (again, if it already has: it reviews what is new)`}
-          onClick={() => void act("Asking Copilot…", () => requestCopilot(feature.id, repo.name))}
-        >
-          {ov.pr.copilot ? "Copilot review again" : "Copilot review"}
         </button>
       )}
       {primary && (
@@ -439,15 +389,6 @@ export function RepoRow(props: {
 }
 
 /** "🏷 shop_v1.114 · test ✓ · prod –": the first release carrying the merged PR, and which later stages have it. */
-/**
- * GitHub blocks the merge and what is missing is an approval: blocked, not
- * failing its checks and with no changes requested (those show themselves),
- * and nobody has approved yet.
- */
-function awaitingApproval(pr: { mergeState: string; checks: { state: string }; changesRequested: string[]; approvals: string[]; reviewDecision: string | null }): boolean {
-  return pr.mergeState === "BLOCKED" && pr.checks.state !== "failing" && pr.checks.state !== "pending" && !pr.changesRequested.length && (pr.reviewDecision === "REVIEW_REQUIRED" || !pr.approvals.length);
-}
-
 /** Copilot's verdicts the user has looked at and dismissed: per PR, the time of the review dismissed (a newer one shows). */
 const DISMISSED = "caboose-copilot-dismissed";
 const dismissedReviews = (): Record<string, string> => {
@@ -616,6 +557,104 @@ export function JiraChip(props: {
         <button className="link" onClick={props.onCreate}>
           create
         </button>
+      )}
+    </span>
+  );
+}
+
+/**
+ * What the repo's agent reported, as an icon, only where Caboose cannot see
+ * it otherwise: working (🧠), waiting for you, blocked, queued. ("ready",
+ * "in-review" and "done" are what git and GitHub show already.)
+ */
+function AgentIcon({ status, at, text }: { status: RepoStatus; at: string; text: string }) {
+  const icon = ({ working: "🧠", "needs-input": "✋", blocked: "⛔", queued: "⏸" } as Partial<Record<RepoStatus, string>>)[status];
+  if (!icon) return null;
+  return (
+    <span className={`agent-icon st-${status}`} title={`The agent reported ${status} (${at}): ${text}`}>
+      {icon}
+    </span>
+  );
+}
+
+/**
+ * Copilot in one icon: 🤖 with its verdict (🟢 / 🟡 / 🔴 / 💬; a ↻ when there
+ * are commits it has not seen), 🤖… while it reviews, 🤖↻ when it has not
+ * reviewed the latest commit. A click shows the verdict (dismiss it, ask
+ * again), or, with no verdict to show, asks for a review.
+ */
+function CopilotIcon({ pr, busy, onRequest }: { pr: PrDetails; busy: boolean; onRequest: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [, setTick] = useState(0);
+  if (copilotPending(pr)) {
+    return (
+      <span className="copilot-icon" title="Copilot is reviewing">
+        🤖…
+      </span>
+    );
+  }
+  const review = pr.copilot && !copilotDismissed(pr) ? pr.copilot : undefined;
+  const wanted = copilotWanted(pr);
+  if (!review && !wanted) return null;
+  if (!review) {
+    return (
+      <button className="copilot-icon link" disabled={busy} title={`Ask GitHub Copilot to review PR #${pr.number}${pr.copilot ? " (it has not seen the latest commits)" : ""}`} onClick={onRequest}>
+        🤖↻
+      </button>
+    );
+  }
+  const verdict = ({ approve: "🟢", comments: "🟡", changes: "🔴", reviewed: "💬" } as const)[review.verdict as "approve" | "comments" | "changes" | "reviewed"];
+  return (
+    <span className="info-wrap">
+      <button className={`copilot-icon link v-${review.verdict}`} title={`Copilot: ${review.summary}${review.current ? "" : " (on an older commit)"}`} onClick={() => setOpen(!open)}>
+        🤖{verdict}
+        {review.current ? "" : "↻"}
+      </button>
+      {open && (
+        <>
+          <div className="popover-backdrop" onClick={() => setOpen(false)} />
+          <div className="popover copilot-popover">
+            <div>
+              <b>
+                Copilot {verdict} {review.summary}
+              </b>
+            </div>
+            <div className="muted small">
+              {review.at.slice(0, 16).replace("T", " ")}
+              {review.current ? ", on the latest commit" : ", on an older commit: newer commits are not reviewed"}
+            </div>
+            <div className="row">
+              <button className="link" onClick={() => void api.openUrl(pr.url)}>
+                Open the PR ↗
+              </button>
+              <span className="spacer" />
+              {review.verdict !== "approve" && (
+                <button
+                  onClick={() => {
+                    dismissCopilot(pr);
+                    setOpen(false);
+                    setTick((t) => t + 1);
+                  }}
+                  title="I have looked at it: hide this verdict (a newer Copilot review shows again)"
+                >
+                  Dismiss
+                </button>
+              )}
+              {wanted && (
+                <button
+                  className="primary"
+                  disabled={busy}
+                  onClick={() => {
+                    setOpen(false);
+                    onRequest();
+                  }}
+                >
+                  Review again
+                </button>
+              )}
+            </div>
+          </div>
+        </>
       )}
     </span>
   );

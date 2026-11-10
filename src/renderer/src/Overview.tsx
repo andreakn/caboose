@@ -76,13 +76,29 @@ export function HealthDot({ r }: { r: RepoOverview }) {
 }
 
 /** "#12 ✓ 💬2" — the PR's number with its checks and open threads; click opens it on GitHub. */
+/**
+ * What stands between an open PR and its merge, as GitHub has it: conflicts,
+ * changes requested, a missing approval, or nothing (ready to merge).
+ */
+export function mergeMark(pr: PrDetails): { icon: string; text: string } | null {
+  if (pr.state !== "OPEN" && pr.state !== "DRAFT") return null;
+  if (pr.mergeable === "CONFLICTING") return { icon: "⚠️", text: "conflicts with its base" };
+  if (pr.changesRequested.length) return { icon: "✋", text: `changes requested by ${pr.changesRequested.join(", ")}` };
+  const blocked = pr.mergeState === "BLOCKED" && pr.checks.state !== "failing" && pr.checks.state !== "pending";
+  if (blocked && (pr.reviewDecision === "REVIEW_REQUIRED" || !pr.approvals.length))
+    return { icon: "⏳", text: `waiting for approval${pr.requested.length ? ` (asked: ${pr.requested.join(", ")})` : ""}` };
+  if (pr.mergeState === "CLEAN" || pr.mergeState === "HAS_HOOKS") return { icon: "🟢", text: "ready to merge" };
+  return null;
+}
+
 export function PrChip({ pr }: { pr: PrDetails }) {
   const icon = { passing: "✓", failing: "✗", pending: "●", none: "" }[pr.checks.state];
+  const mark = mergeMark(pr);
   return (
     <a
       className={`pr-chip pr-${pr.state.toLowerCase()} checks-${pr.checks.state}`}
       href="#"
-      title={`${pr.title}\n${pr.state.toLowerCase()} · checks ${pr.checks.state}${pr.reviewDecision ? ` · ${pr.reviewDecision.toLowerCase().replace("_", " ")}` : ""}`}
+      title={`${pr.title}\n${pr.state.toLowerCase()} · checks ${pr.checks.state}${mark ? ` · ${mark.text}` : ""}`}
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -94,6 +110,7 @@ export function PrChip({ pr }: { pr: PrDetails }) {
       {pr.state === "MERGED" && " merged"}
       {pr.state === "CLOSED" && " closed"}
       {icon && <span className="pr-checks">{icon}</span>}
+      {mark && <span className="pr-merge-mark">{mark.icon}</span>}
       {pr.threads.length > 0 && <span className="pr-threads">💬{pr.threads.length}</span>}
     </a>
   );

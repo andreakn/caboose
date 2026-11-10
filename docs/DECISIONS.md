@@ -1070,6 +1070,15 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      once the user has looked at it. The dismissal is for that review (kept
      per PR with the review's time, on this machine): a newer Copilot review
      shows again.
+192. **The repo status line says it in icons.** The agent's report shows only
+     where git and GitHub cannot: 🧠 working, ✋ needs input, ⛔ blocked,
+     ⏸ queued ("ready", "in review" and "done" are hidden). The PR's merge
+     state is a mark on the PR chip (⚠️ conflicts, ✋ changes requested,
+     ⏳ waiting for approval, 🟢 ready to merge), not a chip of its own. Copilot
+     is one icon, which replaces its button too: 🤖… reviewing, 🤖 plus its
+     verdict (🟢 / 🟡 / 🔴 / 💬, ↻ when it has not seen the latest commit; a
+     click shows the verdict to dismiss or ask again), or 🤖↻ to ask for a
+     review. Tooltips carry the words.
 
 ## Answered (2026-11-05)
 
