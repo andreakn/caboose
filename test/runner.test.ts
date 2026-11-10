@@ -2,7 +2,7 @@
 // stopping them, and programs listening from a worktree that it did not start.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
@@ -227,4 +227,51 @@ test("the same program running in another feature is flagged, and each feature's
   assert.deepEqual([sum[a.id].running, sum[a.id].total], [1, 2]);
   assert.equal(sum[b.id].running, 0);
   await runner.stopAll(a.id, 1000);
+});
+
+test("a program signed in to an Azure tenant starts with that tenant's store; the overview says which", async () => {
+  const path = join(dir, "azure", "api");
+  mkdirSync(path, { recursive: true });
+  writeFileSync(join(path, "run_orders.sh"), 'printf "%s" "$AZURE_CONFIG_DIR" > azure.txt\n');
+  writeFileSync(join(path, "run_stock.sh"), 'printf "%s" "${AZURE_CONFIG_DIR:-none}" > azure-stock.txt\n');
+  const f = { id: "f-az", name: "voss", folder: join(dir, "azure"), port: 41000, createdAt: "", archived: false, line: "shop", repos: [{ name: "api", source: join(dir, "src"), path, branch: "caboose/voss", baseRef: "main", setup: "none", copied: [] }] } as Feature;
+  const store = join(dir, "az-ops");
+  const runner = new Runner({
+    terminals: terms,
+    features: () => [f],
+    repos: () => [],
+    scriptsFor: () => ({}),
+    scriptEnv: () => ({}),
+    monikersFile: () => undefined,
+    system: async () => ({ procs: new Map(), ports: new Map() }),
+    azure: {
+      tenants: () => ["ops", "tech"],
+      of: (repo, script) => (repo === "api" && script === "run_orders.sh" ? "ops" : undefined),
+      env: (_f, _repo, script): Record<string, string> => (script === "run_orders.sh" ? { AZURE_CONFIG_DIR: store } : {}),
+    },
+  });
+  const ov = await runner.overview(f.id);
+  assert.deepEqual(ov.azureTenants, ["ops", "tech"]);
+  assert.deepEqual(
+    ov.repos[0].scripts.map((s) => [s.id, s.azure]),
+    [
+      ["run_orders.sh", "ops"],
+      ["run_stock.sh", undefined],
+    ],
+  );
+  await runner.start(f.id, "api", "run_orders.sh");
+  await runner.start(f.id, "api", "run_stock.sh");
+  const read = async (file: string) => {
+    for (let i = 0; i < 100; i++) {
+      try {
+        const text = readFileSync(join(path, file), "utf8");
+        if (text) return text;
+      } catch {}
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    return "";
+  };
+  assert.equal(await read("azure.txt"), store);
+  assert.equal(await read("azure-stock.txt"), "none", "a program with no tenant keeps the usual store");
+  await runner.stopAll(f.id, 1000);
 });

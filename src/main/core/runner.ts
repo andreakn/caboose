@@ -21,6 +21,12 @@ export type RunnerDeps = {
   system?: System;
   /** Caboose's own pid. */
   self?: number;
+  /** Azure tenants: the feature's line's, which one a program signs in with, and the environment that gives it that. */
+  azure?: {
+    tenants: (f: Feature) => string[];
+    of: (repo: string, script: string) => string | undefined;
+    env: (f: Feature, repo: string, script: string) => Record<string, string>;
+  };
 };
 
 /** The port a URL uses, if it is on this machine. */
@@ -93,6 +99,7 @@ export class Runner {
     } catch (e) {
       strayError = (e as Error).message;
     }
+    const tenants = this.deps.azure?.tenants(f) ?? [];
     const repos = f.repos.map((r) => {
       const names = monikersOf(monikers, r.source);
       const scripts = runnables(r.path, this.deps.scriptsFor(r.name, r.source).run).map((s): RunScript => {
@@ -102,6 +109,7 @@ export class Runner {
         const busy = state === "running" ? [] : all.filter((l) => l.ports.some((p) => ports.includes(p))).map((l) => this.holder(l));
         const description = s.id.startsWith("config:") ? undefined : names.describe(s.moniker);
         const elsewhere = others.filter((o) => o.repo === r.name && o.script === s.id).map((o) => ({ featureId: o.featureId, feature: featureName(o.featureId) }));
+        const azure = tenants.length ? this.deps.azure?.of(r.name, s.id) : undefined;
         return {
           id: s.id,
           label: s.label,
@@ -113,6 +121,7 @@ export class Runner {
           ...(t?.exitCode !== undefined ? { exitCode: t.exitCode } : {}),
           ...(busy.length ? { busy } : {}),
           ...(elsewhere.length ? { elsewhere } : {}),
+          ...(azure && tenants.includes(azure) ? { azure } : {}),
         };
       });
       const strays = all.filter((l) => !l.terminalId && runsFrom(l.command, [r.path])).map((l) => this.holder(l));
@@ -125,7 +134,7 @@ export class Runner {
         strays,
       };
     });
-    return { repos, ...(strayError ? { strayError } : {}) };
+    return { repos, ...(strayError ? { strayError } : {}), ...(tenants.length ? { azureTenants: tenants } : {}) };
   }
 
   /** Every live feature's programs: how many run, of how many. Cheap: a directory listing per repo. */
@@ -151,7 +160,8 @@ export class Runner {
     if (!s) throw new Error(id ? `${repo} has no run script ${id}.` : `${repo} has no run.sh or run_*.sh, and no run script in Configure.`);
     const running = this.deps.terminals.list(f.id).find((t) => t.kind === "run" && t.repo === r.name && t.script === s.id && t.exitCode === undefined);
     if (running) return running;
-    const where: TerminalEnv = { cwd: r.path, env: this.deps.scriptEnv(f.id, r.name) };
+    // A program that signs in to an Azure tenant gets that tenant's store (AZURE_CONFIG_DIR).
+    const where: TerminalEnv = { cwd: r.path, env: { ...this.deps.scriptEnv(f.id, r.name), ...this.deps.azure?.env(f, r.name, s.id) } };
     this.cache = null;
     return this.deps.terminals.run(f.id, r.name, s.command, where, s.id, s.label);
   }

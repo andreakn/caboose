@@ -1084,6 +1084,17 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      method last used if the repo allows it, else the first it does, and the
      menu offers only those. Before, it always squashed, which repos that
      allow only merge commits refuse.
+194. **Azure sign-ins per tenant, per line.** A line lists its Azure tenants
+     (name, tenant id, store folder); each program (run script) picks one in
+     the Run tab, kept per repo in the machine's config, and starts with that
+     tenant's store as `AZURE_CONFIG_DIR`. That is what a shell script that
+     sets the variable before starting a service does, done in Caboose so it
+     works on machines without the script. A store is "signed in" only if
+     `az account get-access-token --tenant` succeeds: `az account show` keeps
+     answering after the sign-in has run out. Checks are cached a minute and
+     repeated every 5 minutes while the Run tab is open; Sign in runs `az
+     login --tenant` into the store (the browser opens). Starting a program
+     whose tenant is not signed in offers to sign in first.
 
 ## Answered (2026-11-05)
 

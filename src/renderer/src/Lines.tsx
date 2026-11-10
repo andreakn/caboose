@@ -3,7 +3,7 @@
 // Everything left empty is the general setting, which the placeholders show.
 import { useState } from "react";
 import { formatStages } from "../../shared/stages.ts";
-import { type ConfigInfo, type ConfigInput, JIRA_LEVELS, type JiraInput, type LineInput, RELEASE_STRATEGIES } from "../../shared/types.ts";
+import { type AzureTenant, type ConfigInfo, type ConfigInput, JIRA_LEVELS, type JiraInput, type LineInput, RELEASE_STRATEGIES } from "../../shared/types.ts";
 import { StagesEditor } from "./Configure.tsx";
 import { askText } from "./Dialog.tsx";
 
@@ -152,6 +152,9 @@ function LineSection(props: {
         </label>
       </div>
 
+      <h3>Azure tenants</h3>
+      <AzureTenantsEditor value={line.azureTenants ?? []} onChange={(t) => props.onChange({ azureTenants: t.length ? t : undefined })} />
+
       <h3>Jira</h3>
       <div className="segmented small">
         {(
@@ -221,5 +224,43 @@ function LineSection(props: {
         </>
       )}
     </section>
+  );
+}
+
+/**
+ * The Azure tenants a line's programs sign in to. Each gets its own Azure CLI
+ * store (AZURE_CONFIG_DIR); each program picks its tenant in the Run tab,
+ * which also shows whether each store is still signed in.
+ */
+function AzureTenantsEditor({ value, onChange }: { value: AzureTenant[]; onChange: (t: AzureTenant[]) => void }) {
+  const set = (i: number, patch: Partial<AzureTenant>) => onChange(value.map((t, j) => (j === i ? { ...t, ...patch } : t)));
+  const slug = (name: string) => name.toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "tenant";
+  return (
+    <div className="azure-tenants">
+      <p className="muted small">
+        For programs that sign in to Azure (az, AzureCliCredential) in more than one tenant. Each tenant has its own Azure CLI store, so you can be
+        signed in to all of them at once; a program started from the Run tab gets its tenant's store as <code>AZURE_CONFIG_DIR</code>. Pick each
+        program's tenant in the Run tab, which also shows whether each sign-in still works and signs you in.
+      </p>
+      {value.map((t, i) => (
+        <div className="row azure-tenant" key={i}>
+          <input value={t.name} placeholder="name, e.g. ops" onChange={(e) => set(i, { name: e.target.value })} />
+          <input className="tenant-id" value={t.tenantId} placeholder="tenant id (GUID) or domain" onChange={(e) => set(i, { tenantId: e.target.value })} />
+          <input
+            className="tenant-dir"
+            value={t.configDir ?? ""}
+            placeholder={`~/.azure-tenant-${slug(t.name)}`}
+            title="The Azure CLI store for this tenant (AZURE_CONFIG_DIR); empty: the one shown"
+            onChange={(e) => set(i, { configDir: e.target.value || undefined })}
+          />
+          <button className="icon" title="Remove" onClick={() => onChange(value.filter((_, j) => j !== i))}>
+            ×
+          </button>
+        </div>
+      ))}
+      <button className="link" onClick={() => onChange([...value, { name: "", tenantId: "" }])}>
+        + Add a tenant
+      </button>
+    </div>
   );
 }

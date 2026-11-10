@@ -39,6 +39,8 @@ export type RepoEntry = {
   releaseStrategy?: ReleaseStrategy;
   /** Release tags never counted nor produced as "next" (a mistyped version that would outrank the real ones). */
   ignoreTags?: string[];
+  /** The Azure tenant (of its line's) each of its programs signs in with, by run script id (run_orders.sh). */
+  azure?: Record<string, string>;
   path: string;
   scripts?: RepoScripts;
   /**
@@ -191,6 +193,8 @@ export type RunScript = {
   busy?: PortHolder[];
   /** The same program (repo and script) running in other features: it likely holds the port this one needs. */
   elsewhere?: { featureId: string; feature: string }[];
+  /** The Azure tenant it signs in with (its store is its AZURE_CONFIG_DIR). */
+  azure?: string;
 };
 
 /** A feature's programs at a glance, for the sidebar. */
@@ -210,7 +214,32 @@ export type RunOverview = {
   repos: RunRepo[];
   /** Why programs outside the Run tab cannot be seen (lsof/ss/PowerShell missing). */
   strayError?: string;
+  /** The Azure tenants of the feature's line, by name, that its programs can sign in with. */
+  azureTenants?: string[];
 };
+
+/**
+ * An Azure tenant a line works with. Each has its own Azure CLI store (its
+ * AZURE_CONFIG_DIR), so being signed in to one does not sign out the other;
+ * a program started with that folder (az, AzureCliCredential) uses that
+ * tenant's sign-in.
+ */
+export type AzureTenant = {
+  /** What it is called in Caboose (ops, tech…). */
+  name: string;
+  /** The tenant's id (a GUID) or domain, for az login --tenant. */
+  tenantId: string;
+  /** The store; default ~/.azure-tenant-<name>. */
+  configDir?: string;
+};
+
+/**
+ * Whether a tenant's store has a sign-in that still works: "ok" (a token can
+ * be had), "expired" (signed in once, but the sign-in has run out), "none"
+ * (never signed in), "no-cli" (no az), "error" (anything else).
+ */
+export type AzureState = "ok" | "expired" | "none" | "no-cli" | "error";
+export type AzureStatus = { tenant: string; tenantId: string; configDir: string; state: AzureState; user?: string; detail?: string; checkedAt: string };
 
 /** A merged repo of an ended feature, with what is needed to keep reading its release tags. */
 export type VisitRelease = {
@@ -327,9 +356,11 @@ export type LineSettings = {
   releaseStages?: ReleaseStage[];
   /** How its repos' releases are made, unless a repo says otherwise (in Configure or its .caboose/config.json). */
   releaseStrategy?: ReleaseStrategy;
+  /** The Azure tenants its programs sign in to; each program picks one in the Run tab. */
+  azureTenants?: AzureTenant[];
 };
 /** The settings a line can have of its own, in the order Configure shows them. */
-export const LINE_SETTINGS = ["jira", "featuresRoot", "archiveRoot", "branchPrefix", "prInstructions", "releaseStages", "releaseStrategy"] as const;
+export const LINE_SETTINGS = ["jira", "featuresRoot", "archiveRoot", "branchPrefix", "prInstructions", "releaseStages", "releaseStrategy", "azureTenants"] as const;
 
 /** This machine's settings, in `caboose.local.json` in the Caboose checkout (gitignored). */
 export type LocalConfig = {
@@ -705,6 +736,12 @@ export type CabooseApi = {
   runStopHolder(featureId: string, pid: number): Promise<Result<void>>;
   /** Opens a URL a run script declares. */
   runBrowse(featureId: string, repo: string, script: string, url: string): Promise<Result<void>>;
+  /** The sign-in of each Azure tenant of the feature's line (checked at most every minute unless `fresh`). */
+  azureStatus(featureId: string, fresh?: boolean): Promise<AzureStatus[]>;
+  /** az login to the tenant, into its own store (opens the browser); its status after. */
+  azureLogin(featureId: string, tenant: string): Promise<Result<AzureStatus>>;
+  /** Which tenant a repo's program signs in with (null: none); kept in the config. */
+  azureSubscribe(featureId: string, repo: string, script: string, tenant: string | null): Promise<Result<void>>;
   stopTerminal(id: string): Promise<void>;
   closeTerminal(id: string): Promise<void>;
   termWrite(id: string, data: string): void;

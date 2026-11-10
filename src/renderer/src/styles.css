@@ -1151,3 +1151,20 @@ button.copilot-icon:hover { background: var(--tint); }
 .copilot-popover { left: 0; right: auto; width: min(420px, 80vw); }
 .copilot-popover .row { margin-top: 8px; }
 button.copilot-review { white-space: nowrap; }
+
+/* Azure tenants: the Run tab's sign-ins, each program's tenant, and a line's list in Configure. */
+.azure-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 2px 0 8px; }
+.azure-chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; font-size: 12px; white-space: nowrap; }
+.az-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: 0 0 auto; }
+.az-ok .az-dot { background: var(--ok); }
+.az-expired .az-dot, .az-none .az-dot { background: var(--warn); }
+.az-error .az-dot, .az-no-cli .az-dot { background: var(--danger); }
+.azure-chip.az-expired, .azure-chip.az-none { border-color: color-mix(in srgb, var(--warn) 60%, var(--border)); }
+.azure-pick { display: inline-flex; align-items: center; gap: 4px; }
+.azure-pick select { font-size: 11px; padding: 1px 4px; }
+.azure-pick.az-off select { opacity: 0.6; }
+.azure-tenants { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; margin-bottom: 12px; }
+.azure-tenant { width: 100%; }
+.azure-tenant input { flex: 1; min-width: 0; }
+.azure-tenant input.tenant-id { flex: 2; }
+.azure-tenant input.tenant-dir { flex: 2; }

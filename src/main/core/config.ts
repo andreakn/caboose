@@ -4,7 +4,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { mainLineFile } from "./mainline.ts";
-import type { ConfigInput, ConfigView, HomeArea, JiraConfig, JiraInput, JiraView, LineSettings, LocalConfig, RepoConfig, RepoEntry, Secret } from "../../shared/types.ts";
+import type { AzureTenant, ConfigInput, ConfigView, HomeArea, JiraConfig, JiraInput, JiraView, LineSettings, LocalConfig, RepoConfig, RepoEntry, Secret } from "../../shared/types.ts";
 
 /** Encrypts secrets for the config file (Electron's safeStorage in the app). */
 export type SecretCodec = { canEncrypt: boolean; encrypt(s: string): string; decrypt(s: string): string };
@@ -147,10 +147,12 @@ export function applyConfigInput(stored: LocalConfig, input: ConfigInput, codec:
     for (const [rawName, l] of Object.entries(lines)) {
       const name = rawName.trim();
       if (!name) continue;
-      const { jira: lj, renamedFrom, releaseStages, ...plain } = l;
+      const { jira: lj, renamedFrom, releaseStages, azureTenants, ...plain } = l;
+      const tenants = azureTenantsOf(azureTenants);
       const settings: LineSettings = {
         ...cleanStrings(plain),
         ...(releaseStages ? { releaseStages } : {}),
+        ...(tenants.length ? { azureTenants: tenants } : {}),
         ...(lj ? { jira: jiraOf(lj, stored.lines?.[renamedFrom ?? rawName]?.jira, codec) } : {}),
       };
       if (Object.keys(settings).length) saved[name] = settings;
@@ -171,6 +173,18 @@ export function applyConfigInput(stored: LocalConfig, input: ConfigInput, codec:
         const out: RepoEntry = { ...rest, ...(label?.trim() ? { label: label.trim() } : {}), ...(line?.trim() ? { line: line.trim() } : {}) };
         return out.localFiles ? { ...out, localFiles: out.localFiles.map((p) => p.trim()).filter(Boolean) } : out;
       });
+  }
+  return out;
+}
+
+/** A line's Azure tenants as saved: trimmed, each with a name and a tenant id, names unique. */
+export function azureTenantsOf(list: AzureTenant[] | undefined): AzureTenant[] {
+  const out: AzureTenant[] = [];
+  for (const t of list ?? []) {
+    const name = t.name?.trim();
+    const tenantId = t.tenantId?.trim();
+    if (!name || !tenantId || out.some((x) => x.name === name)) continue;
+    out.push({ name, tenantId, ...(t.configDir?.trim() ? { configDir: t.configDir.trim() } : {}) });
   }
   return out;
 }
@@ -221,6 +235,6 @@ function parseJson<T>(text: string, where: string): T {
   }
 }
 
-function expandHome(p: string): string {
+export function expandHome(p: string): string {
   return p === "~" || p.startsWith("~/") || p.startsWith("~\\") ? join(homedir(), p.slice(1)) : p;
 }

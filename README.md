@@ -90,6 +90,17 @@ a stop button, as is whatever holds a port a script declares. An optional
 **moniker file** (Configure → Terminals; `moniker path description` per line)
 labels repos and their `run_<moniker>.sh`.
 
+**Azure tenants.** Programs that sign in to Azure (az, AzureCliCredential) in
+more than one tenant: list a line's tenants in Configure → Lines (a name, the
+tenant id or domain, and optionally its store; default
+`~/.azure-tenant-<name>`). Each tenant has its own Azure CLI store, so you can
+be signed in to all of them at once. In the Run tab, each program picks its
+tenant and starts with that store as `AZURE_CONFIG_DIR` (as does a repo
+terminal whose programs all use one tenant). The Run tab also shows each
+tenant's sign-in: signed in (as whom), expired (the account is there but az
+can no longer get a token, e.g. after a conditional-access limit), or not
+signed in, with a button that runs `az login --tenant …` into that store.
+
 **What runs where.** A tag starts a deploy, but an approval step or pods that
 will not start can keep new code from running. A repo can say what actually
 runs with `.caboose/running.sh`, which prints one line per component (a

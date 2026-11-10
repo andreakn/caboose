@@ -10,7 +10,7 @@ import { commentsMessage } from "../shared/diff.ts";
 import type { MergeMethod } from "../shared/github.ts";
 import { reposFor } from "../shared/lines.ts";
 import { copilotPending, type CopilotRequestOutcome } from "../shared/types.ts";
-import type { AppId, ConfigInput, Feature, FeatureDetails, HomeArea, NewFeature, RetireMode, Sidebar, State, Theme } from "../shared/types.ts";
+import type { AppId, AzureTenant, ConfigInput, Feature, FeatureDetails, HomeArea, NewFeature, RetireMode, Sidebar, State, Theme } from "../shared/types.ts";
 import { CopilotClient } from "@github/copilot-sdk";
 import { ClaudeProvider, Inbox } from "./core/agents/claude.ts";
 import { copilotEnv, CopilotProvider } from "./core/agents/copilot.ts";
@@ -55,6 +55,7 @@ import { ReleaseWatch, visitReleases } from "./core/releasewatch.ts";
 import { retire, retirePlan } from "./core/retire.ts";
 import { git } from "./core/run.ts";
 import { Runner } from "./core/runner.ts";
+import { AzureSignIns, azureEnv } from "./core/azure.ts";
 import { Terminals } from "./core/terminals.ts";
 import { checkForUpdate, update } from "./core/updater.ts";
 import { installMenu } from "./menu.ts";
@@ -130,7 +131,29 @@ const terminals = new Terminals({
   },
   onChange: () => win?.webContents.send("term:list", terminals.list()),
 });
+const azure = new AzureSignIns();
+/** The Azure tenants a feature's programs can sign in to: its line's. */
+const azureTenantsOf = (f: Feature): AzureTenant[] => (f.line && localConfig.lines[f.line]?.azureTenants) || [];
+/** The tenant a repo's program signs in with, if it is one of the feature's line's. */
+const azureTenantFor = (f: Feature, repo: string, script: string): AzureTenant | undefined => {
+  const name = localConfig.repos.find((r) => r.name === repo)?.azure?.[script];
+  return name ? azureTenantsOf(f).find((t) => t.name === name) : undefined;
+};
+/** A repo's shell signs in like its programs, when they all sign in to the same tenant. */
+const repoShellAzure = (f: Feature, repo: string): Record<string, string> => {
+  const names = [...new Set(Object.values(localConfig.repos.find((r) => r.name === repo)?.azure ?? {}))];
+  const t = names.length === 1 ? azureTenantsOf(f).find((x) => x.name === names[0]) : undefined;
+  return t ? azureEnv(t) : {};
+};
 const runner = new Runner({
+  azure: {
+    tenants: (f) => azureTenantsOf(f).map((t) => t.name),
+    of: (repo, script) => localConfig.repos.find((r) => r.name === repo)?.azure?.[script],
+    env: (f, repo, script) => {
+      const t = azureTenantFor(f, repo, script);
+      return t ? azureEnv(t) : {};
+    },
+  },
   terminals,
   features: () => store.get().features,
   repos: () => localConfig.repos,
@@ -807,7 +830,7 @@ ipcMain.handle("term:openShell", (_e, featureId: string, repo?: string) =>
     const f = featureById(featureId);
     if (!f || f.archived) throw new Error("This feature is archived.");
     const cwd = repo ? liveRepo(featureId, repo).r.path : f.folder;
-    return terminals.openShell(f.id, { cwd, env: features.scriptEnv(f.id, repo) }, repo);
+    return terminals.openShell(f.id, { cwd, env: { ...features.scriptEnv(f.id, repo), ...(repo ? repoShellAzure(f, repo) : {}) } }, repo);
   }),
 );
 ipcMain.handle("term:stop", (_e, id: string) => terminals.stop(id));
@@ -817,6 +840,38 @@ ipcMain.on("term:write", (_e, id: string, data: string) => terminals.write(id, d
 ipcMain.on("term:resize", (_e, id: string, cols: number, rows: number) => terminals.resize(id, cols, rows));
 
 // --- the Run tab
+// --- Azure sign-ins (the feature's line's tenants)
+ipcMain.handle("azure:status", async (_e, featureId: string, fresh?: boolean) => {
+  const f = featureById(featureId);
+  return f ? Promise.all(azureTenantsOf(f).map((t) => azure.status(t, fresh))) : [];
+});
+ipcMain.handle("azure:login", (_e, featureId: string, tenant: string) =>
+  attempt(() => {
+    const f = featureById(featureId);
+    const t = f && azureTenantsOf(f).find((x) => x.name === tenant);
+    if (!t) throw new Error(`${tenant} is not an Azure tenant of this feature's line.`);
+    return azure.login(t);
+  }),
+);
+ipcMain.handle("azure:subscribe", (_e, featureId: string, repo: string, script: string, tenant: string | null) =>
+  attempt(() => {
+    const f = featureById(featureId);
+    if (!f) throw new Error("Unknown feature.");
+    if (tenant !== null && !azureTenantsOf(f).some((t) => t.name === tenant)) throw new Error(`${tenant} is not an Azure tenant of this feature's line.`);
+    const stored = readLocalConfig(configDir);
+    if (!stored.repos?.some((r) => r.name === repo)) throw new Error(`${repo} is not a configured repo.`);
+    stored.repos = stored.repos.map((r) => {
+      if (r.name !== repo) return r;
+      const { [script]: _old, ...others } = r.azure ?? {};
+      const azure = tenant ? { ...others, [script]: tenant } : others;
+      const { azure: _a, ...rest } = r;
+      return Object.keys(azure).length ? { ...rest, azure } : rest;
+    });
+    saveLocalConfig(configDir, stored);
+    localConfig = loadLocalConfig(configDir);
+    features.setConfig(localConfig);
+  }),
+);
 ipcMain.handle("run:overview", (_e, featureId: string) => runner.overview(featureId));
 ipcMain.handle("run:summary", () => runner.summary());
 ipcMain.handle("run:start", (_e, featureId: string, repo: string, script?: string) => attempt(() => runner.start(featureId, repo, script)));
