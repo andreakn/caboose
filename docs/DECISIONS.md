@@ -1063,7 +1063,7 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
 190. **A PR waiting for an approval says so.** When GitHub blocks the merge
      and what is missing is an approving review (blocked, checks not failing
      or running, no changes requested, nobody approved), the repo shows
-     "⏳ waiting for approval · <who was asked>" and its Merge button reads
+     "⏳ waiting for approval" (who was asked in its tooltip) and its Merge button reads
      "Merge (blocked)". Review requests to teams are read too (by name);
      before, only people and bots were, so a request to a team was invisible.
 

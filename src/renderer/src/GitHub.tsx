@@ -256,7 +256,6 @@ export function RepoRow(props: {
           title={`GitHub will not merge this yet: it needs an approving review${ov.pr.requested.length ? ` (asked: ${ov.pr.requested.join(", ")})` : ""}.`}
         >
           ⏳ waiting for approval
-          {humanReviewers(ov.pr).length ? ` · ${humanReviewers(ov.pr).join(", ")}` : ""}
         </span>
       )}
       {live && ov?.pr && copilotPending(ov.pr) ? (
@@ -433,9 +432,6 @@ export function RepoRow(props: {
 function awaitingApproval(pr: { mergeState: string; checks: { state: string }; changesRequested: string[]; approvals: string[]; reviewDecision: string | null }): boolean {
   return pr.mergeState === "BLOCKED" && pr.checks.state !== "failing" && pr.checks.state !== "pending" && !pr.changesRequested.length && (pr.reviewDecision === "REVIEW_REQUIRED" || !pr.approvals.length);
 }
-
-/** Who was asked to review, other than Copilot (whose review does not unblock a merge). */
-const humanReviewers = (pr: { requested: string[] }) => pr.requested.filter((r) => !/copilot/i.test(r));
 
 /** Components of the repo this feature does not touch (their tags are not shown). */
 function otherComponents(ov: RepoOverview): string[] {
