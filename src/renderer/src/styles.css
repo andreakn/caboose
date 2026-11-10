@@ -1145,3 +1145,5 @@ button.fix-ci:hover { background: color-mix(in srgb, var(--danger) 85%, black); 
 .repo-statusline .repo-inline { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; width: 100%; }
 .repo-statusline .repo-inline > .row { margin-left: auto; }
 .repo-statusline .repo-local { white-space: nowrap; flex: 0 0 auto; max-width: none; }
+.chip .chip-dismiss { margin-left: 4px; padding: 0 2px; font-size: 12px; line-height: 1; color: var(--muted); text-decoration: none; }
+.chip .chip-dismiss:hover { color: var(--text); }

@@ -93,6 +93,7 @@ export function RepoRow(props: {
   const [busy, setBusy] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [tagging, setTagging] = useState(false);
+  const [, setDismissTick] = useState(0);
   const apps = useApps();
 
   async function act(label: string, fn: () => Promise<{ ok: boolean; error?: string } | void>) {
@@ -265,13 +266,27 @@ export function RepoRow(props: {
       ) : (
         // Only while the PR is open: after a merge (or a close) the review has done its job.
         live &&
-        ov?.pr?.copilot && (
+        ov?.pr?.copilot &&
+        !copilotDismissed(ov.pr) && (
           <span
             className={`chip copilot-verdict v-${ov.pr.copilot.verdict}${ov.pr.copilot.current ? "" : " outdated"}`}
             title={`Copilot's review, ${ov.pr.copilot.at.slice(0, 16).replace("T", " ")}: ${ov.pr.copilot.summary}${ov.pr.copilot.current ? "" : "\nOf an older commit: there are newer commits it has not seen."}`}
           >
             Copilot {{ approve: "🟢", comments: "🟡", changes: "🔴", reviewed: "💬" }[ov.pr.copilot.verdict]} {ov.pr.copilot.summary}
             {ov.pr.copilot.current ? "" : " (older commit)"}
+            {ov.pr.copilot.verdict !== "approve" && (
+              <button
+                className="link chip-dismiss"
+                title="I have looked at it: hide this verdict (a newer Copilot review shows again)"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  dismissCopilot(ov.pr!);
+                  setDismissTick((t) => t + 1);
+                }}
+              >
+                ×
+              </button>
+            )}
           </span>
         )
       )}
@@ -431,6 +446,23 @@ export function RepoRow(props: {
  */
 function awaitingApproval(pr: { mergeState: string; checks: { state: string }; changesRequested: string[]; approvals: string[]; reviewDecision: string | null }): boolean {
   return pr.mergeState === "BLOCKED" && pr.checks.state !== "failing" && pr.checks.state !== "pending" && !pr.changesRequested.length && (pr.reviewDecision === "REVIEW_REQUIRED" || !pr.approvals.length);
+}
+
+/** Copilot's verdicts the user has looked at and dismissed: per PR, the time of the review dismissed (a newer one shows). */
+const DISMISSED = "caboose-copilot-dismissed";
+const dismissedReviews = (): Record<string, string> => {
+  try {
+    return JSON.parse(localStorage.getItem(DISMISSED) ?? "{}") as Record<string, string>;
+  } catch {
+    return {};
+  }
+};
+function copilotDismissed(pr: { url: string; copilot?: { at: string } }): boolean {
+  return Boolean(pr.copilot && dismissedReviews()[pr.url] === pr.copilot.at);
+}
+function dismissCopilot(pr: { url: string; copilot?: { at: string } }): void {
+  if (!pr.copilot) return;
+  localStorage.setItem(DISMISSED, JSON.stringify({ ...dismissedReviews(), [pr.url]: pr.copilot.at }));
 }
 
 /** Components of the repo this feature does not touch (their tags are not shown). */

@@ -1066,6 +1066,10 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      "⏳ waiting for approval" (who was asked in its tooltip) and its Merge button reads
      "Merge (blocked)". Review requests to teams are read too (by name);
      before, only people and bots were, so a request to a team was invisible.
+191. **A Copilot verdict that is not a green light can be dismissed** (×),
+     once the user has looked at it. The dismissal is for that review (kept
+     per PR with the review's time, on this machine): a newer Copilot review
+     shows again.
 
 ## Answered (2026-11-05)
 
