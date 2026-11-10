@@ -30,12 +30,13 @@ test("the overview joins reports, git, PRs and Jira per repo", async () => {
   };
   const asked: unknown[] = [];
   const ov = await featureOverview(f, {
-    github: { branchStatus: async (p: string) => ({ uncommitted: p === src ? 1 : 0, ahead: 2, behind: 0, behindBase: 3, aheadBase: 4, upstream: "origin/x" }) } as never,
+    github: { branchStatus: async (p: string) => ({ uncommitted: p === src ? 1 : 0, ahead: 2, behind: 0, behindBase: 3, aheadBase: 4, upstream: p === src ? "origin/ABC-2_GiftReceipts" : "origin/caboose/ABC-3-finse" }) } as never,
     prs: { get: async (qs: unknown) => (asked.push(qs), { prs: { web: { number: 7 } } }) } as never,
     jira: () => ({ statuses: async (keys: string[]) => ({ "ABC-1": { key: "ABC-1", status: "In Progress", category: "indeterminate" }, ...(keys.includes("ABC-2") ? { "ABC-2": { key: "ABC-2", status: "Done", category: "done" } } : {}) }) }) as never,
     jiraOf: () => ({ task: "ABC-1", subtasks: { web: "ABC-2", api: "ABC-3" } }),
   });
-  assert.deepEqual(asked, [[{ repo: "web", slug: "o/web", branch: "caboose/ABC-2-finse" }]], "only repos on GitHub are asked about");
+  assert.deepEqual(asked, [[{ repo: "web", slug: "o/web", branch: "ABC-2_GiftReceipts" }]], "only repos on GitHub are asked about, by the name their branch was pushed under");
+  assert.equal(ov.repos[0].branch, "caboose/ABC-2-finse", "the local branch is still the one shown");
   assert.deepEqual(ov.progress, { done: 1, total: 2 });
   assert.equal((ov.task as { status: string }).status, "In Progress");
   const [web, api] = ov.repos;

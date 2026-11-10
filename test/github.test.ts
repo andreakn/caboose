@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { GitHub, normalizePr } from "../src/main/core/github.ts";
+import { GitHub, normalizePr, pushedName, remoteBranch } from "../src/main/core/github.ts";
 import { checksSummary, createPrMessage } from "../src/shared/github.ts";
 
 const tmp = mkdtempSync(join(tmpdir(), "caboose-gh-"));
@@ -152,4 +152,29 @@ test("a check run again on the same commit counts by its latest run (a fixed PR 
   } as never);
   assert.deepEqual(pr.checks.map((c) => [c.name, c.state]).sort(), [["PR title", "success"], ["build", "success"]]);
   assert.deepEqual(latestRuns([{ n: "a", v: 1 }, { n: "a", v: 2 }], (x) => x.n, () => undefined), [{ n: "a", v: 2 }], "no times: the later in the list");
+});
+
+test("a branch pushed under another name: its PR is looked up, and it is pushed again, under that name", async () => {
+  sh(ws, "switch", "-q", "--no-track", "-c", "caboose/bolstad", "origin/main");
+  writeFileSync(join(ws, "c.txt"), "c");
+  sh(ws, "add", "c.txt");
+  sh(ws, "commit", "-q", "-m", "c");
+  sh(ws, "push", "-q", "-u", "origin", "caboose/bolstad:ABC-1_Thing");
+  assert.equal(await pushedName(ws, "caboose/bolstad"), "ABC-1_Thing");
+  assert.equal(await pushedName(ws, "caboose/finse"), "caboose/finse");
+  assert.equal(await pushedName(ws, "never-pushed"), "never-pushed");
+  assert.equal(remoteBranch("origin/ABC-1_Thing"), "ABC-1_Thing");
+  assert.equal(remoteBranch("upstream/x"), null);
+
+  const asked: string[][] = [];
+  const gh = new GitHub(async (_f, args) => (asked.push(args), "[]"));
+  await gh.pr(ws, "caboose/bolstad");
+  assert.deepEqual(asked[0].slice(0, 4), ["pr", "list", "--head", "ABC-1_Thing"]);
+
+  writeFileSync(join(ws, "d.txt"), "d");
+  sh(ws, "add", "d.txt");
+  sh(ws, "commit", "-q", "-m", "d");
+  await new GitHub().push(ws, "caboose/bolstad");
+  assert.equal(sh(ws, "rev-parse", "origin/ABC-1_Thing"), sh(ws, "rev-parse", "HEAD"), "pushed to the name it already had");
+  assert.equal(sh(origin, "branch", "--list", "caboose/bolstad"), "", "no second branch on origin");
 });

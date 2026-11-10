@@ -47,9 +47,10 @@ export class GitHub {
     };
   }
 
-  /** The newest PR whose head is this branch, or null. */
+  /** The newest PR whose head is this branch (by the name it was pushed under), or null. */
   async pr(wsPath: string, branch: string): Promise<PullRequest | null> {
-    const out = await this.run("gh", ["pr", "list", "--head", branch, "--state", "all", "--limit", "1", "--json", PR_FIELDS], wsPath);
+    const head = await pushedName(wsPath, branch);
+    const out = await this.run("gh", ["pr", "list", "--head", head, "--state", "all", "--limit", "1", "--json", PR_FIELDS], wsPath);
     const list = JSON.parse(out) as RawPr[];
     return list[0] ? normalizePr(list[0]) : null;
   }
@@ -95,8 +96,10 @@ export class GitHub {
     }
   }
 
+  /** Pushes to the branch's name on origin: its own, or the one it was first pushed under. */
   async push(wsPath: string, branch: string): Promise<void> {
-    await git(wsPath, "push", "-u", "origin", branch);
+    const remote = await pushedName(wsPath, branch);
+    await git(wsPath, "push", "-u", "origin", remote === branch ? branch : `${branch}:${remote}`);
   }
 
   /** Merges on GitHub. The branch is kept: the worktree still has it checked out. */
@@ -194,3 +197,17 @@ function checkState(c: RawCheck): CheckState {
       return "failure"; // FAILURE, CANCELLED, TIMED_OUT, ACTION_REQUIRED, STARTUP_FAILURE, STALE
   }
 }
+
+/**
+ * The branch's name on origin, which is what a PR's head is: a branch can be
+ * pushed under another name (git push origin caboose/x:ABC-1_Thing, so the
+ * remote name carries a Jira key), and then its upstream says so. The local
+ * name when it tracks nothing on origin.
+ */
+export async function pushedName(wsPath: string, branch: string): Promise<string> {
+  const upstream = await git(wsPath, "rev-parse", "--abbrev-ref", `${branch}@{upstream}`).catch(() => "");
+  return remoteBranch(upstream) ?? branch;
+}
+
+/** "origin/ABC-1_Thing" -> "ABC-1_Thing"; null for another remote or none. */
+export const remoteBranch = (upstream: string | undefined) => (upstream?.startsWith("origin/") ? upstream.slice("origin/".length) || null : null);

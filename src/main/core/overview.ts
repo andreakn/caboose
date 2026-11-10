@@ -6,7 +6,7 @@ import { stageEmoji } from "../../shared/stages.ts";
 import { readDocs } from "./docs.ts";
 import { releasesOf } from "./releases.ts";
 import { resolveRunning } from "./running.ts";
-import type { GitHub } from "./github.ts";
+import { type GitHub, remoteBranch } from "./github.ts";
 import type { Jira } from "./jira.ts";
 import { type PrDetailsCache, slugOf } from "./prdetails.ts";
 
@@ -50,10 +50,12 @@ export async function featureOverview(f: Feature, d: OverviewDeps, fresh = false
     Promise.all(f.repos.map((r) => (live ? d.github.branchStatus(r.path, r.baseRef).catch(() => null) : null))),
     Promise.all(f.repos.map((r) => slugOf(r.source))),
   ]);
-  // PRs are looked up by the branch checked out now, not the one Caboose made the worktree with.
+  // PRs are looked up by the branch checked out now, not the one Caboose made the worktree with,
+  // and by the name it was pushed under (a remote name with the Jira key in it, say).
   const branches = f.repos.map((r, i) => locals[i]?.head ?? r.branch);
   f.repos.forEach((r, i) => branches[i] !== r.branch && d.onBranch?.(f.id, r.name, branches[i]));
-  const queries = f.repos.flatMap((r, i) => (slugs[i] ? [{ repo: r.name, slug: slugs[i]!, branch: branches[i] }] : []));
+  const heads = f.repos.map((_, i) => remoteBranch(locals[i]?.upstream) ?? branches[i]);
+  const queries = f.repos.flatMap((r, i) => (slugs[i] ? [{ repo: r.name, slug: slugs[i]!, branch: heads[i] }] : []));
   const prs = await d.prs.get(queries, fresh).catch((e: Error) => ({ prs: {}, error: e.message }) as { prs: Record<string, never>; error?: string });
   if (prs.error) errors.push(`GitHub: ${prs.error}`);
 

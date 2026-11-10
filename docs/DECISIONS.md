@@ -1119,6 +1119,13 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      and the agents' instructions and GetFeatureStatus say which platform it
      is and what the earlier ones did. Platforms side by side (their own
      worktrees, stacked branches) come later.
+197. **A branch's PR is found by the name it was pushed under.** A branch can
+     be pushed to origin under another name (`git push -u origin
+     caboose/x:ABC-1_Thing`, so the remote name carries a Jira key for
+     reporting); a PR's head is that remote name. The overview, the status
+     line, merging and archiving look the PR up by the upstream's name on
+     origin (else the local name), and Push pushes to that name again instead
+     of making a second remote branch with the local name.
 
 ## Answered (2026-11-05)
 
