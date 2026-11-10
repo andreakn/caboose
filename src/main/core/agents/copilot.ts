@@ -259,7 +259,8 @@ function describe(req: PermissionRequest): { tool: string; input: unknown } {
  * would hide the user's real login (gh's keyring or the Copilot CLI's own).
  */
 export function copilotEnv(env: NodeJS.ProcessEnv = process.env): Record<string, string | undefined> {
-  const out = { ...env };
+  // CABOOSE=1: hooks and scripts can tell Caboose's sessions from others.
+  const out: Record<string, string | undefined> = { ...env, CABOOSE: "1" };
   for (const k of ["GH_TOKEN", "GITHUB_TOKEN"]) if (out[k]?.startsWith("ghp_")) delete out[k];
   return out;
 }

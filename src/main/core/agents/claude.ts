@@ -41,6 +41,11 @@ export function chatCommands(list: SlashCommand[]): ChatCommand[] {
   });
 }
 
+/** What marks an agent session as Caboose's, for the user's hooks and scripts. */
+export function cabooseEnv(feature: Feature, chat: Chat): Record<string, string> {
+  return { CABOOSE: "1", CABOOSE_FEATURE: feature.name, ...(chat.repo ? { CABOOSE_REPO: chat.repo } : {}) };
+}
+
 export class ClaudeProvider implements AgentProvider {
   private query: QueryFn;
   private extras: ExtraOptions;
@@ -87,6 +92,8 @@ export class ClaudeProvider implements AgentProvider {
       options: {
         ...this.extras(chat, feature),
         cwd: chatCwd(chat, feature),
+        // Hooks and scripts can tell a Caboose session (and which feature) from others: CABOOSE=1.
+        env: { ...process.env, ...cabooseEnv(feature, chat) },
         // A repo chat also reads the feature's files (brief, plan, its brief) one folder up.
         ...(chat.repo ? { additionalDirectories: [feature.folder] } : {}),
         resume: chat.sessionId,

@@ -202,5 +202,5 @@ test("models come from the plan, without disabled ones; effort only where suppor
 
 test("classic tokens are hidden from the Copilot runtime, other tokens are kept", () => {
   const env = copilotEnv({ GH_TOKEN: "ghp_x", GITHUB_TOKEN: "github_pat_y", PATH: "/bin" });
-  assert.deepEqual(env, { GITHUB_TOKEN: "github_pat_y", PATH: "/bin" });
+  assert.deepEqual(env, { GITHUB_TOKEN: "github_pat_y", PATH: "/bin", CABOOSE: "1" }, "and marked as Caboose's");
 });

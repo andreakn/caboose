@@ -1012,6 +1012,14 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      to fix, check locally and push; and, when a failure is not the
      change's fault (flaky, runner, outage), to say so and re-run the failed
      jobs instead of changing code.
+183. **Caboose's agent sessions are marked: `CABOOSE=1`** in their
+     environment (Claude sessions also `CABOOSE_FEATURE` and, for a repo
+     chat, `CABOOSE_REPO`; the Copilot client, shared by all chats, only
+     `CABOOSE=1`). Hooks inherit it, so the user's own hooks can treat
+     Caboose's sessions differently; e.g. a hook that asks before every
+     `git commit` can start with `[ -n "$CABOOSE" ] && exit 0;` to let
+     Caboose's agents commit on feature branches while still asking
+     everywhere else.
 
 ## Answered (2026-11-05)
 

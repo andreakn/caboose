@@ -345,3 +345,19 @@ test("how chatty: answers and what needs the user always; notes, thinking and to
   assert.equal(currentActivity(items)?.id, "x2");
   assert.equal(currentActivity(items.slice(0, 8)), undefined, "a new turn has done nothing yet");
 });
+
+test("Claude sessions are marked as Caboose's (CABOOSE=1, the feature, the repo) for the user's hooks", async () => {
+  const fake = fakeQuery();
+  const store = new Store(join(tmp, `${Math.random()}`, "state.json"));
+  store.update((s) => ({ ...s, features: [{ id: "w1", name: "finse", folder: tmp, createdAt: "", archived: false, port: 41000, repos: [{ name: "web", source: tmp, path: tmp, branch: "b", baseRef: "main", setup: "none" }] }] }));
+  const chats = new Chats(store, join(tmp, `${Math.random()}`), { claude: new ClaudeProvider(fake.fn) }, () => {});
+  const chat = chats.create("w1", undefined, "web");
+  assert.ok(chat.ok);
+  chats.send(chat.value.id, "hi");
+  await new Promise((r) => setTimeout(r, 20));
+  const env = fake.calls.options.env as Record<string, string>;
+  assert.equal(env.CABOOSE, "1");
+  assert.equal(env.CABOOSE_FEATURE, "finse");
+  assert.equal(env.CABOOSE_REPO, "web");
+  assert.equal(env.PATH, process.env.PATH, "the rest of the environment is kept");
+});
