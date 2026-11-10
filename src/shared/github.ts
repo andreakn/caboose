@@ -38,6 +38,12 @@ export type GitHubStatus =
 
 export type MergeMethod = "squash" | "merge" | "rebase";
 
+/** The method to merge with: the one last used if the repo allows it, else the first the repo allows (squash when unknown). */
+export function pickMergeMethod(preferred: MergeMethod | null, allowed: MergeMethod[] | undefined): MergeMethod {
+  if (!allowed?.length) return preferred ?? "squash";
+  return preferred && allowed.includes(preferred) ? preferred : allowed[0];
+}
+
 /** An unresolved review thread on a PR. */
 export type PrThread = { path: string; line: number | null; outdated: boolean; author: string; body: string; url: string; replies: number };
 
@@ -66,6 +72,8 @@ export type PrDetails = {
   checks: { state: "none" | "passing" | "pending" | "failing"; total: number; passed: number; failed: { name: string; url?: string }[]; pending: number };
   /** The commit a merged PR became on its base (a merge or squash commit). */
   mergeCommit?: string;
+  /** The merge methods the repo allows (squash, merge commit, rebase); unknown when absent. */
+  mergeMethods?: MergeMethod[];
   /** Copilot's latest review, if it has reviewed. */
   copilot?: CopilotReview;
 };

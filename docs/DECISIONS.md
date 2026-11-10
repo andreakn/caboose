@@ -1079,6 +1079,11 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      verdict (🟢 / 🟡 / 🔴 / 💬, ↻ when it has not seen the latest commit; a
      click shows the verdict to dismiss or ask again), or 🤖↻ to ask for a
      review. Tooltips carry the words.
+193. **Merge uses a method the repo allows.** The PR query reads the repo's
+     allowed merge methods (squash, merge commit, rebase); Merge uses the
+     method last used if the repo allows it, else the first it does, and the
+     menu offers only those. Before, it always squashed, which repos that
+     allow only merge commits refuse.
 
 ## Answered (2026-11-05)
 

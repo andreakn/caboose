@@ -1,6 +1,7 @@
 import { copilotPending } from "../src/shared/types.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { pickMergeMethod } from "../src/shared/github.ts";
 import { buildQuery, githubSlug, PrDetailsCache } from "../src/main/core/prdetails.ts";
 
 test("slugs from GitHub remotes", () => {
@@ -36,7 +37,7 @@ test("one query for every repo; PRs shaped with threads, checks and reviews; cac
     calls++;
     assert.equal(file, "gh");
     assert.match(args[3], /r0: repository\(owner: "o", name: "web"\)[\s\S]*headRefName: "caboose\/ABC-2-finse"[\s\S]*r1: repository/);
-    return JSON.stringify({ data: { r0: { pullRequests: { nodes: [pr] } }, r1: { pullRequests: { nodes: [] } } } });
+    return JSON.stringify({ data: { r0: { squashMergeAllowed: false, mergeCommitAllowed: true, rebaseMergeAllowed: false, pullRequests: { nodes: [pr] } }, r1: { pullRequests: { nodes: [] } } } });
   });
   const qs = [
     { repo: "web", slug: "o/web", branch: "caboose/ABC-2-finse" },
@@ -51,6 +52,7 @@ test("one query for every repo; PRs shaped with threads, checks and reviews; cac
   assert.deepEqual(p.copilot, { verdict: "approve", summary: "Approval recommended", at: "2026-11-10T09:29:14Z", current: true }, "Copilot's green light, on the latest commit");
   assert.equal(copilotPending(p), true, "Copilot (a bot) has been asked and not reviewed yet");
   assert.equal(copilotPending({ requested: ["cid"] }), false);
+  assert.deepEqual(p.mergeMethods, ["merge"], "the repo allows merge commits only");
   assert.deepEqual(p.checks, { state: "failing", total: 3, passed: 1, failed: [{ name: "test", url: "t" }], pending: 1 });
   await cache.get(qs);
   assert.equal(calls, 1, "cached");
@@ -70,4 +72,12 @@ test("Copilot's verdict from its review heading; asking again only helps when it
   assert.equal(copilotWanted({ requested: [], copilot: { current: true } }), false, "already reviewed the latest commit");
   assert.equal(copilotWanted({ requested: [], copilot: { current: false } }), true, "new commits since");
   assert.equal(copilotWanted({ requested: ["copilot-pull-request-reviewer"] }), false, "pending");
+});
+
+test("merging uses the method last used if the repo allows it, else one it allows", () => {
+  assert.equal(pickMergeMethod("squash", ["merge"]), "merge", "squash not available: a merge commit");
+  assert.equal(pickMergeMethod("rebase", ["squash", "rebase"]), "rebase");
+  assert.equal(pickMergeMethod(null, ["merge", "rebase"]), "merge");
+  assert.equal(pickMergeMethod(null, undefined), "squash", "not known: squash, as before");
+  assert.equal(pickMergeMethod("merge", []), "merge");
 });

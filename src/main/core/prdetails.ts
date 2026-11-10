@@ -1,7 +1,7 @@
 // Everything about a feature's pull requests in one GitHub GraphQL call (via
 // `gh api graphql`): per repo the newest PR on its branch, with review threads,
 // reviews, checks, merge state and size. Cached 60 s; refresh bypasses it.
-import { type CopilotReview, copilotVerdict, latestRuns, type PrDetails, type PrThread } from "../../shared/github.ts";
+import { type CopilotReview, copilotVerdict, latestRuns, type MergeMethod, type PrDetails, type PrThread } from "../../shared/github.ts";
 import { git, run } from "./run.ts";
 
 export type Runner = (file: string, args: string[], cwd?: string) => Promise<string>;
@@ -41,6 +41,7 @@ export function buildQuery(qs: PrQuery[]): string {
   const parts = qs.map((q, i) => {
     const [owner, name] = q.slug.split("/");
     return `r${i}: repository(owner: ${JSON.stringify(owner)}, name: ${JSON.stringify(name)}) {
+      squashMergeAllowed mergeCommitAllowed rebaseMergeAllowed
       pullRequests(headRefName: ${JSON.stringify(q.branch)}, first: 1, states: [OPEN, MERGED, CLOSED], orderBy: { field: CREATED_AT, direction: DESC }) { nodes { ${FIELDS} } } }`;
   });
   return `query {\n${parts.join("\n")}\n}`;
@@ -48,7 +49,16 @@ export function buildQuery(qs: PrQuery[]): string {
 
 type Raw = Record<string, any>;
 
-export function shape(repo: string, pr: Raw): PrDetails {
+/** The merge methods the repo's settings allow, in the order squash, merge commit, rebase. */
+function allowedMergeMethods(r: Raw): MergeMethod[] {
+  const out: MergeMethod[] = [];
+  if (r.squashMergeAllowed) out.push("squash");
+  if (r.mergeCommitAllowed) out.push("merge");
+  if (r.rebaseMergeAllowed) out.push("rebase");
+  return out;
+}
+
+export function shape(repo: string, pr: Raw, repository?: Raw): PrDetails {
   const threads: PrThread[] = (pr.reviewThreads?.nodes ?? [])
     .filter((t: Raw) => !t.isResolved)
     .map((t: Raw) => {
@@ -94,6 +104,7 @@ export function shape(repo: string, pr: Raw): PrDetails {
     requested: (pr.reviewRequests?.nodes ?? []).map((n: Raw) => n.requestedReviewer?.login ?? n.requestedReviewer?.name).filter(Boolean),
     ...(pr.mergeCommit?.oid ? { mergeCommit: pr.mergeCommit.oid as string } : {}),
     ...(copilot ? { copilot } : {}),
+    ...(repository ? { mergeMethods: allowedMergeMethods(repository) } : {}),
     checks: {
       state: !checks.length ? "none" : failed.length ? "failing" : pending.length ? "pending" : "passing",
       total: checks.length,
@@ -140,8 +151,9 @@ export class PrDetailsCache {
     }
     const prs: Record<string, PrDetails | null> = {};
     qs.forEach((q, i) => {
-      const pr = body.data?.[`r${i}`]?.pullRequests?.nodes?.[0];
-      prs[q.repo] = pr ? shape(q.repo, pr) : null;
+      const repository = body.data?.[`r${i}`];
+      const pr = repository?.pullRequests?.nodes?.[0];
+      prs[q.repo] = pr ? shape(q.repo, pr, repository) : null;
     });
     return { prs, error: body.errors?.[0]?.message };
   }

@@ -8,6 +8,7 @@ import {
   type GitHubStatus,
   mergeConflictsMessage,
   type MergeMethod,
+  pickMergeMethod,
   resolveConflictsMessage,
 } from "../../shared/github.ts";
 import { copilotPending, copilotWanted, type Feature, type RepoStatus, type FeatureRepo, type JiraLevel, type RepoOverview, type StageRelease } from "../../shared/types.ts";
@@ -171,7 +172,8 @@ export function RepoRow(props: {
     DRAFT: "Still a draft.",
     UNKNOWN: "GitHub is still working out whether it can be merged.",
   };
-  const method = (localStorage.getItem("caboose-merge-method") as MergeMethod) || "squash";
+  // The method last used, if this repo allows it (some allow only merge commits).
+  const method = pickMergeMethod(localStorage.getItem("caboose-merge-method") as MergeMethod | null, ov?.pr?.mergeMethods);
 
   const local = b
     ? [
@@ -218,7 +220,7 @@ export function RepoRow(props: {
         ...(live && pr && failing ? [{ label: "Fix CI (ask the agent)", onClick: () => void askAgent(fixCiMessage([{ repo: repo.name, pr: pr.number, checks: failedChecks }])) }] : []),
         ...(live && ghPr && conflicts ? [{ label: "Ask the agent to resolve conflicts", onClick: () => void askAgent(resolveConflictsMessage(repo.name, ghPr)) }] : []),
         ...(live && !isDraft && !conflicts
-          ? (["squash", "merge", "rebase"] as MergeMethod[]).map((m) => ({ label: `Merge (${m === "merge" ? "merge commit" : m})`, onClick: () => merge(m) }))
+          ? (ov?.pr?.mergeMethods?.length ? ov.pr.mergeMethods : (["squash", "merge", "rebase"] as MergeMethod[])).map((m) => ({ label: `Merge (${m === "merge" ? "merge commit" : m})`, onClick: () => merge(m) }))
           : []),
         ...(pr ? [{ label: `Open PR #${pr.number} on GitHub`, onClick: () => void api.openUrl(pr.url) }] : []),
         ...(ov?.strategy === "tag" ? [{ label: "Tag a release…", onClick: () => setTagging(true) }] : []),
