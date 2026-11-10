@@ -1095,6 +1095,12 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      repeated every 5 minutes while the Run tab is open; Sign in runs `az
      login --tenant` into the store (the browser opens). Starting a program
      whose tenant is not signed in offers to sign in first.
+195. **Linking a repo to Jira is first-level.** A repo with no issue of its
+     own has a key box in its status line, next to the main action (a PR
+     wants the key): type or paste, Enter. Agents get a LinkJira tool and are
+     told a repo is linked only once it succeeds; before, a chat could only
+     write "linked" in the log, which linked nothing. The window re-reads the
+     links whenever the overview refreshes, so an agent's link shows up.
 
 ## Answered (2026-11-05)
 

@@ -97,7 +97,8 @@ export function RepoRow(props: {
   const [tagging, setTagging] = useState(false);
   const apps = useApps();
 
-  async function act(label: string, fn: () => Promise<{ ok: boolean; error?: string } | void>) {
+  /** Runs an action, showing `label` meanwhile; false when it failed (and said why). */
+  async function act(label: string, fn: () => Promise<{ ok: boolean; error?: string } | void>): Promise<boolean> {
     setBusy(label);
     const r = await fn();
     setBusy(null);
@@ -105,6 +106,7 @@ export function RepoRow(props: {
     refresh();
     props.onJiraChanged();
     props.onChanged();
+    return !r || r.ok;
   }
 
   async function askAgent(message: string) {
@@ -278,6 +280,14 @@ export function RepoRow(props: {
         >
           Fix CI
         </button>
+      )}
+      {props.jiraLevel !== "off" && !props.subtask && !feature.archived && (
+        <JiraLinkBox
+          repo={repo.name}
+          task={props.hasTask ? props.jiraKey : undefined}
+          disabled={!!busy}
+          onLink={(key) => act("Linking…", () => api.setRepoSubtask(feature.id, repo.name, key))}
+        />
       )}
       {primary && (
         <button className={primary.ready ? "primary merge-ready" : "primary"} onClick={primary.run} disabled={!!busy} title={primary.title}>
@@ -486,7 +496,7 @@ async function renameBranch(feature: Feature, repo: FeatureRepo, done: () => voi
   done();
 }
 
-async function linkSubtask(feature: Feature, repo: FeatureRepo, act: (label: string, fn: () => Promise<{ ok: boolean; error?: string }>) => Promise<void>) {
+async function linkSubtask(feature: Feature, repo: FeatureRepo, act: (label: string, fn: () => Promise<{ ok: boolean; error?: string }>) => Promise<unknown>) {
   const key = await askText({ title: `Link a Jira subtask to ${repo.name}`, label: "Its key or URL", placeholder: "e.g. ABC-1234", ok: "Link" });
   if (key) await act("Saving…", () => api.setRepoSubtask(feature.id, repo.name, key));
 }
@@ -659,5 +669,32 @@ function CopilotIcon({ pr, busy, onRequest }: { pr: PrDetails; busy: boolean; on
         </>
       )}
     </span>
+  );
+}
+
+/**
+ * A repo with no Jira issue of its own: type its key (or paste its URL) and
+ * press Enter. Right in the status line, next to the main action, because a
+ * PR wants its key.
+ */
+function JiraLinkBox({ repo, task, disabled, onLink }: { repo: string; task?: string; disabled: boolean; onLink: (key: string) => Promise<boolean> }) {
+  const [key, setKey] = useState("");
+  const link = async () => {
+    if (key.trim() && (await onLink(key.trim()))) setKey("");
+  };
+  return (
+    <input
+      className="jira-link-box"
+      value={key}
+      disabled={disabled}
+      placeholder={task ? "Jira subtask" : "Jira key"}
+      title={`Link ${repo} to its Jira issue: type its key (ABC-123) or paste its URL, then Enter.${task ? ` Until then it goes by the feature's task, ${task}.` : ""}`}
+      onChange={(e) => setKey(e.target.value)}
+      onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") void link();
+        if (e.key === "Escape") setKey("");
+      }}
+    />
   );
 }

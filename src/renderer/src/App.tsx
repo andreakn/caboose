@@ -496,7 +496,8 @@ function FeatureView(props: {
 
   const [jira, setJira] = useState<FeatureJira>({ subtasks: {} });
   const loadJira = () => api.featureJira(f.id).then(setJira);
-  useEffect(() => void loadJira(), [f.id]);
+  // Again whenever the overview refreshes: an agent may have linked an issue (LinkJira).
+  useEffect(() => void loadJira(), [f.id, overview.ov]);
 
   const runs = useRunOverview(f, props.terminals, tab === "run" || (Boolean(scopeRepo) && repoTab === "run"));
   const running = runs.ov?.repos.reduce((n, r) => n + r.scripts.filter((x) => x.state === "running").length, 0) ?? 0;

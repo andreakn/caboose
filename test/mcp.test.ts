@@ -58,3 +58,18 @@ test("SetComponents: the repo chat's repo (or the only one) by default; an empty
   assert.deepEqual(calls, [["w1", "app", ["orders"]], ["w1", "app", null]]);
   assert.match(h.setComponents({ components: ["x"] }), /cannot be set from here/);
 });
+
+test("LinkJira: links the repo chat's repo (or the only one); a bad key or repo is said, not linked", () => {
+  const calls: [string, string, string | null][] = [];
+  const withLink = cabooseHandlers(() => feature, comments, undefined, {
+    linkJira: (f, r, k) => (calls.push([f, r, k]), /^[A-Z]+-\d+$/.test(k ?? "") ? { ok: true, value: undefined } : { ok: false, error: `"${k}" is not a Jira key.` }),
+  });
+  assert.match(withLink.linkJira({ key: "NWP-8303" }), /app is now linked to NWP-8303/);
+  assert.match(withLink.linkJira({ key: "soon" }), /is not a Jira key/);
+  assert.match(withLink.linkJira({ key: "NWP-1", repo: "nope" }), /No repo "nope"/);
+  assert.deepEqual(calls, [
+    ["w1", "app", "NWP-8303"],
+    ["w1", "app", "soon"],
+  ]);
+  assert.match(h.linkJira({ key: "NWP-1" }), /cannot be set from here/);
+});

@@ -43,6 +43,8 @@ export type ToolContext = {
   runner?: ProgramRunner;
   /** Records which components (monikers) of a repo the feature touches; null: all of them. */
   setComponents?: (featureId: string, repo: string, components: string[] | null) => Result<void>;
+  /** Links a repo to its Jira issue (a subtask, usually); null unlinks. */
+  linkJira?: (featureId: string, repo: string, key: string | null) => Result<void>;
 };
 
 /** The tool handlers, separate from the MCP wrapper so they can be tested directly. */
@@ -307,6 +309,14 @@ export function cabooseHandlers(feature: () => Feature, comments: Comments, term
         : `${repo}: all its components count again.`;
     },
 
+    linkJira(args: { key: string; repo?: string }): string {
+      if (!ctx.linkJira) return "Jira links cannot be set from here.";
+      const repo = programRepo(args.repo);
+      if (typeof repo !== "string") return repo.error;
+      const r = ctx.linkJira(feature().id, repo, args.key);
+      return r.ok ? `${repo} is now linked to ${args.key.trim()}: Caboose shows its status on the repo and uses its key for the PR.` : r.error;
+    },
+
     setFeatureTitle(args: { title: string }): string {
       if (!coord) return noCoord;
       const r = coord.setTitle(feature().id, args.title);
@@ -513,6 +523,17 @@ const TOOLS: ToolDef[] = [
     run: (h, a: { repo?: string; components: string[] }) => h.setComponents(a),
   },
   {
+    claude: "LinkJira",
+    copilot: "caboose_link_jira",
+    description:
+      "Links a repo of the feature to its Jira issue (usually a subtask of the feature's task), so Caboose shows the issue's status on the repo and uses its key for the branch and PR. Use it when the user says which issue a repo belongs to, or after creating one. Until this succeeds the repo is NOT linked: do not say it is.",
+    shape: {
+      key: z.string().describe("The issue's key (ABC-123) or its URL"),
+      repo: repoArg.optional(),
+    },
+    run: (h, a: { key: string; repo?: string }) => h.linkJira(a),
+  },
+  {
     claude: "GetRepoChat",
     copilot: "caboose_get_repo_chat",
     description: "What a repo's chat is doing (working, waiting for the user, idle) and its last reply.",
@@ -565,6 +586,7 @@ export function cabooseInstructions(f: Feature, agent: "claude" | "copilot" = "c
   const mine = chat?.repo ? f.repos.find((r) => r.name === chat.repo) : undefined;
   const common = [
     jira.task ? `The feature is Jira task ${jira.task} (see jira.txt in the feature folder); each repo's branch carries its own subtask key.` : "",
+    "To link a repo to its Jira issue, use the LinkJira tool; a repo is only linked once it succeeds.",
     ...(f.continuedFrom
       ? [
           `This feature continues ${f.continuedFrom.name}, which was archived on ${f.continuedFrom.archivedAt.slice(0, 10)} (its branches were deleted; these are new ones). Its chats are in ${f.folder}/history/ (one markdown file per chat, the repo in its name): read the ones you need for what was decided and done before. The user sees that earlier conversation above yours.`,

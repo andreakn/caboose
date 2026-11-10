@@ -173,6 +173,7 @@ const toolContext = (chat: Chat, f: Feature) => ({
   coord: coordinator,
   runner,
   setComponents: (featureId: string, repo: string, components: string[] | null) => features.setComponents(featureId, repo, components),
+  linkJira: (featureId: string, repo: string, key: string | null) => features.setSubtask(featureId, repo, key),
 });
 const claude = new ClaudeProvider(query, (chat, f) => ({
   mcpServers: { caboose: cabooseMcp(toolContext(chat, f)) },
