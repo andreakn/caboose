@@ -1055,6 +1055,11 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
      list --status waiting`); if there is none, the repo's Actions list of
      waiting runs. Never another run: a waiting run of another service's tag
      is not this release's.
+189. **A check run again counts by its latest run.** GitHub keeps every run
+     of a check on a commit (a PR title fixed, a job re-run), so an old
+     failure stayed in the list and the PR read as failing. Both ways
+     Caboose reads checks (`gh pr view`, the PR details query) keep only each
+     check's latest run, by when it started.
 
 ## Answered (2026-11-05)
 

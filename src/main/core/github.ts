@@ -1,6 +1,6 @@
 // A workspace's branch and PR status, and the GitHub actions Caboose runs
 // itself, through the git and gh command lines (gh owns the GitHub login).
-import type { BranchStatus, Check, CheckState, GitHubStatus, MergeMethod, MergeOutcome, PullRequest } from "../../shared/github.ts";
+import { type BranchStatus, type Check, type CheckState, type GitHubStatus, latestRuns, type MergeMethod, type MergeOutcome, type PullRequest } from "../../shared/github.ts";
 import { git, run } from "./run.ts";
 
 export type Runner = (file: string, args: string[], cwd: string) => Promise<string>;
@@ -164,12 +164,14 @@ type RawCheck = {
   detailsUrl?: string;
   targetUrl?: string;
   workflowName?: string;
+  startedAt?: string;
 };
 type RawPr = Omit<PullRequest, "checks"> & { statusCheckRollup?: RawCheck[] };
 
 export function normalizePr(raw: RawPr): PullRequest {
   const { statusCheckRollup, ...pr } = raw;
-  return { ...pr, checks: (statusCheckRollup ?? []).map(normalizeCheck) };
+  const runs = latestRuns(statusCheckRollup ?? [], (c) => normalizeCheck(c).name, (c) => c.startedAt);
+  return { ...pr, checks: runs.map(normalizeCheck) };
 }
 
 function normalizeCheck(c: RawCheck): Check {

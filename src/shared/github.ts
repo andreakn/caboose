@@ -180,3 +180,20 @@ export function checksSummary(checks: Check[]): { failed: number; pending: numbe
     passed: checks.filter((c) => c.state === "success").length,
   };
 }
+
+/**
+ * Only each check's latest run: a check run again on the same commit (a PR
+ * title fixed, a job re-run) leaves its earlier run in GitHub's list, and an
+ * old failure there is not a failure any more. Runs of the same name are
+ * told apart by when they started (else their order in the list).
+ */
+export function latestRuns<T>(runs: T[], nameOf: (r: T) => string, startedOf: (r: T) => string | undefined): T[] {
+  const best = new Map<string, { run: T; at: string; i: number }>();
+  runs.forEach((run, i) => {
+    const name = nameOf(run);
+    const at = startedOf(run) ?? "";
+    const prev = best.get(name);
+    if (!prev || at > prev.at || (at === prev.at && i > prev.i)) best.set(name, { run, at, i });
+  });
+  return [...best.values()].sort((a, b) => a.i - b.i).map((x) => x.run);
+}

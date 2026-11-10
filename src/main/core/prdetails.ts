@@ -1,7 +1,7 @@
 // Everything about a feature's pull requests in one GitHub GraphQL call (via
 // `gh api graphql`): per repo the newest PR on its branch, with review threads,
 // reviews, checks, merge state and size. Cached 60 s; refresh bypasses it.
-import { type CopilotReview, copilotVerdict, type PrDetails, type PrThread } from "../../shared/github.ts";
+import { type CopilotReview, copilotVerdict, latestRuns, type PrDetails, type PrThread } from "../../shared/github.ts";
 import { git, run } from "./run.ts";
 
 export type Runner = (file: string, args: string[], cwd?: string) => Promise<string>;
@@ -34,8 +34,8 @@ const FIELDS = `number title url state isDraft reviewDecision mergeable mergeSta
   reviewRequests(first: 20) { nodes { requestedReviewer { ... on User { login } ... on Bot { login } } } }
   commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 100) { nodes {
     __typename
-    ... on CheckRun { name conclusion status detailsUrl checkSuite { workflowRun { workflow { name } } } }
-    ... on StatusContext { context state targetUrl } } } } } } }`;
+    ... on CheckRun { name conclusion status detailsUrl startedAt checkSuite { workflowRun { workflow { name } } } }
+    ... on StatusContext { context state targetUrl createdAt } } } } } } }`;
 
 export function buildQuery(qs: PrQuery[]): string {
   const parts = qs.map((q, i) => {
@@ -56,11 +56,13 @@ export function shape(repo: string, pr: Raw): PrDetails {
       return { path: t.path, line: t.line ?? null, outdated: Boolean(t.isOutdated), author: c.author?.login ?? "", body: String(c.body ?? "").slice(0, 500), url: c.url ?? pr.url, replies: Math.max(0, (t.comments?.totalCount ?? 1) - 1) };
     });
   const contexts: Raw[] = pr.commits?.nodes?.[0]?.commit?.statusCheckRollup?.contexts?.nodes ?? [];
-  const checks = contexts.map((c) =>
+  const allRuns = contexts.map((c) =>
     c.__typename === "CheckRun"
-      ? { name: c.checkSuite?.workflowRun?.workflow?.name ? `${c.checkSuite.workflowRun.workflow.name} / ${c.name}` : c.name, url: c.detailsUrl ?? undefined, result: String(c.conclusion || c.status || "") }
-      : { name: c.context, url: c.targetUrl ?? undefined, result: String(c.state ?? "") },
+      ? { name: c.checkSuite?.workflowRun?.workflow?.name ? `${c.checkSuite.workflowRun.workflow.name} / ${c.name}` : c.name, url: c.detailsUrl ?? undefined, result: String(c.conclusion || c.status || ""), at: c.startedAt as string | undefined }
+      : { name: c.context, url: c.targetUrl ?? undefined, result: String(c.state ?? ""), at: c.createdAt as string | undefined },
   );
+  // A check run again (a PR title fixed, a job re-run): only its latest run counts.
+  const checks = latestRuns(allRuns, (c) => c.name, (c) => c.at);
   const failed = checks.filter((c) => FAILED.includes(c.result));
   const pending = checks.filter((c) => !FAILED.includes(c.result) && !PASSED.includes(c.result));
   const reviews = (pr.latestReviews?.nodes ?? []).map((r: Raw) => ({ state: r.state as string, author: r.author?.login as string }));

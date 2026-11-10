@@ -138,3 +138,18 @@ test("approving a prod deploy: the waiting run the release's tag started, else t
   });
   assert.equal(await broken.approvalUrl("/w", "o/r", []), "https://github.com/o/r/actions?query=is%3Awaiting");
 });
+
+test("a check run again on the same commit counts by its latest run (a fixed PR title is not a failure any more)", async () => {
+  const { latestRuns } = await import("../src/shared/github.ts");
+  const { normalizePr } = await import("../src/main/core/github.ts");
+  const pr = normalizePr({
+    number: 1121, url: "u", title: "t", state: "OPEN", isDraft: false, mergeable: "MERGEABLE", reviewDecision: null, baseRefName: "master",
+    statusCheckRollup: [
+      { __typename: "CheckRun", name: "PR title", status: "COMPLETED", conclusion: "FAILURE", startedAt: "2026-11-10T10:42:37Z" },
+      { __typename: "CheckRun", name: "build", status: "COMPLETED", conclusion: "SUCCESS", startedAt: "2026-11-10T10:43:59Z" },
+      { __typename: "CheckRun", name: "PR title", status: "COMPLETED", conclusion: "SUCCESS", startedAt: "2026-11-10T10:44:10Z" },
+    ],
+  } as never);
+  assert.deepEqual(pr.checks.map((c) => [c.name, c.state]).sort(), [["PR title", "success"], ["build", "success"]]);
+  assert.deepEqual(latestRuns([{ n: "a", v: 1 }, { n: "a", v: 2 }], (x) => x.n, () => undefined), [{ n: "a", v: 2 }], "no times: the later in the list");
+});
