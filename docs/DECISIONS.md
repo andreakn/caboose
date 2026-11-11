@@ -1134,6 +1134,13 @@ See `docs/CROSS_CONDUCTOR_PLAN.md` for the plan and Andreas's answers.
 199. **🤖💭 in the sidebar while Copilot reviews** one of a feature's open
      PRs (it was asked and has not answered), gently pulsing (still for
      reduced motion); the tooltip names the repos and PRs.
+200. **What runs can be a commit, not only a tag.** Some repos deploy every
+     push to the main line untagged and version it by its short sha, which
+     running.sh then reports. A version no tag matches that is 7 to 40 hex
+     digits (then the end, or something that cannot continue it) is resolved
+     as a commit, and checked for the merge commit like a tag. Tags still
+     win. Components can stand for anything deployed on its own, such as one
+     app per brand, so a partial rollout shows per component.
 
 ## Answered (2026-11-05)
 

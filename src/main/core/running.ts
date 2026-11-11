@@ -53,6 +53,14 @@ export function tagOf(version: string, tags: string[]): string | undefined {
   return best;
 }
 
+/**
+ * The commit a version names, for releases that are not tagged (a deploy of
+ * every push to the main line, say, versioned by its short sha): 7 to 40 hex
+ * digits, then the end or something that cannot continue it (0acc5774,
+ * 0acc5774-build.3). Only asked when no tag matches.
+ */
+export const commitOf = (version: string): string | undefined => /^([0-9a-f]{7,40})(?![0-9a-z])/i.exec(version)?.[1];
+
 export type RunningReport = { versions: RunningVersion[]; error?: string };
 
 /** A feature's worktree, when the script may be its own: it is, if the feature changed running.sh. */
@@ -110,21 +118,25 @@ export async function resolveRunning(source: string, versions: RunningVersion[],
   if (!versions.length) return versions;
   const list = async () => (await git(source, "tag", "--list")).split("\n").filter(Boolean);
   let tags = await list().catch(() => [] as string[]);
-  // A release cut since the last fetch: fetch its tags once.
+  // A release cut since the last fetch (or a commit not fetched yet): fetch once.
   if (versions.some((v) => !tagOf(v.version, tags))) {
     await git(source, "fetch", "--quiet", "--tags", "origin").catch(() => "");
     tags = await list().catch(() => tags);
   }
+  const has = (ref: string) =>
+    git(source, "merge-base", "--is-ancestor", mergeCommit!, ref).then(
+      () => true,
+      () => false,
+    );
   return Promise.all(
     versions.map(async (v) => {
       const tag = tagOf(v.version, tags);
-      if (!tag) return v;
-      if (!mergeCommit) return { ...v, tag };
-      const contains = await git(source, "merge-base", "--is-ancestor", mergeCommit, tag).then(
-        () => true,
-        () => false,
-      );
-      return { ...v, tag, contains };
+      if (tag) return mergeCommit ? { ...v, tag, contains: await has(tag) } : { ...v, tag };
+      // No tag: a version that is a commit (an untagged deploy of the main line).
+      const short = commitOf(v.version);
+      const commit = short ? await git(source, "rev-parse", "--verify", "--quiet", `${short}^{commit}`).catch(() => "") : "";
+      if (!commit) return v;
+      return mergeCommit ? { ...v, commit, contains: await has(commit) } : { ...v, commit };
     }),
   );
 }

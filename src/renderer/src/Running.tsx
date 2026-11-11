@@ -75,7 +75,7 @@ function RunningTable({ versions }: { versions: RunningVersion[] }) {
             {envs.map((e) => {
               const v = versions.find((x) => x.component === c && x.env === e);
               return (
-                <td key={e} className={v?.contains === true ? "add" : v?.contains === false ? "muted" : ""} title={v?.tag ? `release tag ${v.tag}` : v ? "no tag found for this version" : undefined}>
+                <td key={e} className={v?.contains === true ? "add" : v?.contains === false ? "muted" : ""} title={v?.tag ? `release tag ${v.tag}` : v?.commit ? `commit ${v.commit.slice(0, 12)} (untagged)` : v ? "no tag or commit found for this version" : undefined}>
                   {v ? `${mark(v)} ${v.version}` : ""}
                 </td>
               );

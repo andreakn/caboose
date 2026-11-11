@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { loadRepoConfig } from "../src/main/core/config.ts";
-import { parseRunning, readRunning, resolveRunning, tagOf } from "../src/main/core/running.ts";
+import { commitOf, parseRunning, readRunning, resolveRunning, tagOf } from "../src/main/core/running.ts";
 import { runnables } from "../src/main/core/runscripts.ts";
 import { deployProgress, relevantVersions } from "../src/shared/stages.ts";
 
@@ -104,4 +104,34 @@ test("a repo's .caboose folder: its config, and run scripts there run from the r
   );
   assert.deepEqual(list[1].urls, [{ url: "http://localhost:4000/" }]);
   assert.equal(runnables(repo, [{ name: "orders", command: "./.caboose/run_orders.sh" }]).length, 2, "a configured script calling it is that script");
+});
+
+test("an untagged version that is a commit (a deploy of every push, by short sha) is checked for the change too", async () => {
+  assert.equal(commitOf("0acc5774"), "0acc5774");
+  assert.equal(commitOf("0acc5774-build.3"), "0acc5774");
+  assert.equal(commitOf("0acc57"), undefined, "too short to be a commit");
+  assert.equal(commitOf("0acc5774x"), undefined);
+  assert.equal(commitOf("bff@1.0.15"), undefined);
+
+  const repo = join(tmp, "bff");
+  mkdirSync(repo, { recursive: true });
+  const sh = (...args: string[]) => execFileSync("git", args, { cwd: repo, encoding: "utf8", stdio: "pipe" }).trim();
+  sh("init", "-q", "-b", "master");
+  const commit = (msg: string) => (sh("-c", "user.email=t@e", "-c", "user.name=T", "commit", "-q", "--allow-empty", "-m", msg), sh("rev-parse", "HEAD"));
+  const before = commit("before");
+  sh("tag", "bff@1.0.15");
+  const merge = commit("the feature's merge commit");
+  const after = commit("after");
+  const v = (component: string, env: string, version: string) => ({ component, env, version });
+  const versions = await resolveRunning(
+    repo,
+    [v("carlings", "test", after.slice(0, 8)), v("cubus", "test", before.slice(0, 8)), v("carlings", "prod", "bff@1.0.15"), v("volt", "test", "ffffffff")],
+    merge,
+  );
+  assert.deepEqual(versions, [
+    { ...v("carlings", "test", after.slice(0, 8)), commit: after, contains: true },
+    { ...v("cubus", "test", before.slice(0, 8)), commit: before, contains: false },
+    { ...v("carlings", "prod", "bff@1.0.15"), tag: "bff@1.0.15", contains: false },
+    v("volt", "test", "ffffffff"),
+  ]);
 });

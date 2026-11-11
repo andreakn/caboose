@@ -125,7 +125,12 @@ orders  prod  orders_PROD_v1.430+build.12
 ```
 
 A version starts with the git tag that made its release; Caboose finds that
-tag and checks with git whether it has a feature's merge commit. Each repo
+tag and checks with git whether it has a feature's merge commit. A release
+that is not tagged (every push to the main line deployed, versioned by its
+short sha) can be reported by its commit instead: `carlings test 0acc5774`.
+Components can be anything deployed on its own (services, or the same app per
+brand or region), so a change that runs for some and not yet for others shows
+as such. Each repo
 shows what runs in each environment; once its PR is merged, ✓ where the change
 runs. Where a repo has the script, a feature's deploy progress and
 announcements count what runs, not just tags. Caboose runs the script as it

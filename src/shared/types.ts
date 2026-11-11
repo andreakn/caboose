@@ -19,10 +19,11 @@ export type StageRelease = { stage: string; tags: string[] };
 /**
  * What runs in an environment, from the repo's .caboose/running.sh: one
  * component (a moniker; "" for a repo with one) in one environment. `tag` is
- * the release tag the version starts with; `contains`, once a PR is merged,
+ * the release tag the version starts with (`commit`: the commit, for an
+ * untagged version that is a commit sha); `contains`, once a PR is merged,
  * whether that release has its merge commit.
  */
-export type RunningVersion = { component: string; env: string; version: string; tag?: string; contains?: boolean };
+export type RunningVersion = { component: string; env: string; version: string; tag?: string; commit?: string; contains?: boolean };
 /** A repo's running.sh answer; `error` when it could not tell (which is not "nothing runs"). */
 export type Running = { versions: RunningVersion[]; error?: string };
 
