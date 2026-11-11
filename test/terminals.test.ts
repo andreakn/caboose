@@ -23,7 +23,8 @@ after(async () => {
   rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
 });
 
-const until = async (fn: () => boolean, ms = 10_000) => {
+// Generous: on Windows runners a shell (PowerShell, Git Bash) can take many seconds to start.
+const until = async (fn: () => boolean, ms = 30_000) => {
   const end = Date.now() + ms;
   while (!fn()) {
     if (Date.now() > end) throw new Error("timed out");
